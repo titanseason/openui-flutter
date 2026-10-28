@@ -8,6 +8,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'controller.dart';
 import 'extra_widgets.dart';
 import 'lang.dart';
+import 'primitives.dart';
 import 'registry.dart';
 import 'theme.dart';
 
@@ -448,6 +449,30 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'Table':
         final cols = node.nodesOf('columns');
         if (cols.isEmpty) return const SizedBox.shrink();
+        // A failed Query inside the columns used to degrade to an
+        // empty column (an __QueryError node has no label/values).
+        // Surface the error instead, consistently with the
+        // __QueryError view for direct dependents: the theme error
+        // builder when supplied, else the same failure text.
+        ElementNode? failedCol;
+        for (final c in cols) {
+          if (c.component == '__QueryError') {
+            failedCol = c;
+            break;
+          }
+        }
+        if (failedCol != null) {
+          final tool = failedCol.stringOf('tool');
+          if (_theme.errorBuilder != null) {
+            return _theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
+          }
+          return Text('数据加载失败：$tool');
+        }
+        // A loading Query inside the columns becomes a __Skeleton
+        // placeholder node; render a table-shaped skeleton instead
+        // of an empty DataTable. (A Col with genuinely empty values
+        // is not a skeleton and still renders a normal table.)
+        if (cols.any((c) => c.component == '__Skeleton')) return const TableSkeleton();
         final rows = cols.map((c) => (c.props['values'] as List?) ?? const []).toList();
         final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
         return SingleChildScrollView(
