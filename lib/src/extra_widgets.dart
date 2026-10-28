@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'extra_charts.dart';
 import 'lang.dart';
 
-/// Icon name to Material icon. Unknown names fall back to a neutral dot
-/// icon instead of failing the whole component.
-IconData iconByName(String name) {
-  switch (name.toLowerCase()) {
+/// Icon name to Material icon. React names are lucide kebab-case
+/// (e.g. 'circle-check'); they are normalized to snake_case for the
+/// lookup. When a name does not resolve, React falls back to the
+/// category's representative icon (categoryFallbacks), then to a
+/// generic dot; this port maps those fallbacks to Material icons
+/// instead of failing the whole component.
+IconData iconByName(String name, [String? category]) {
+  switch (name.toLowerCase().replaceAll('-', '_')) {
     case 'search':
       return Icons.search;
     case 'home':
@@ -63,7 +67,102 @@ IconData iconByName(String name) {
     case 'chevron_right':
       return Icons.chevron_right;
     default:
+      return _iconByCategory(category) ?? Icons.circle;
+  }
+}
+
+/// React's categoryFallbacks (lucide names) mapped to Material icons.
+/// Used only when the requested name does not resolve.
+IconData? _iconByCategory(String? category) {
+  switch (category?.trim().toLowerCase()) {
+    case 'accessibility':
+      return Icons.accessibility;
+    case 'account':
+      return Icons.person;
+    case 'animals':
+      return Icons.pets;
+    case 'arrows':
+      return Icons.arrow_forward;
+    case 'brands':
+      return Icons.inventory;
+    case 'buildings':
+      return Icons.business;
+    case 'charts':
+      return Icons.show_chart;
+    case 'communication':
+      return Icons.message;
+    case 'connectivity':
+      return Icons.wifi;
+    case 'cursors':
+      return Icons.mouse;
+    case 'design':
+      return Icons.palette;
+    case 'development':
+      return Icons.code;
+    case 'devices':
+      return Icons.smartphone;
+    case 'emoji':
+      return Icons.emoji_emotions;
+    case 'files':
+      return Icons.description;
+    case 'finance':
+      return Icons.attach_money;
+    case 'food-beverage':
+      return Icons.restaurant;
+    case 'gaming':
+      return Icons.sports_esports;
+    case 'home':
+      return Icons.home;
+    case 'layout':
+      return Icons.dashboard;
+    case 'mail':
+      return Icons.mail;
+    case 'math':
+      return Icons.calculate;
+    case 'medical':
+      return Icons.monitor_heart;
+    case 'multimedia':
+      return Icons.music_note;
+    case 'nature':
+      return Icons.park;
+    case 'navigation':
+      return Icons.location_on;
+    case 'notifications':
+      return Icons.notifications;
+    case 'people':
+      return Icons.group;
+    case 'photography':
+      return Icons.camera_alt;
+    case 'science':
+      return Icons.science;
+    case 'seasons':
+      return Icons.wb_sunny;
+    case 'security':
+      return Icons.shield;
+    case 'shapes':
       return Icons.circle;
+    case 'shopping':
+      return Icons.shopping_cart;
+    case 'social':
+      return Icons.share;
+    case 'sports':
+      return Icons.emoji_events;
+    case 'sustainability':
+      return Icons.eco;
+    case 'text':
+      return Icons.text_fields;
+    case 'time':
+      return Icons.access_time;
+    case 'tools':
+      return Icons.build;
+    case 'transportation':
+      return Icons.directions_car;
+    case 'travel':
+      return Icons.flight;
+    case 'weather':
+      return Icons.cloud;
+    default:
+      return null;
   }
 }
 

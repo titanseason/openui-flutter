@@ -394,19 +394,35 @@ class FlScatterChartWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    final spots = <ScatterSpot>[];
-    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
+    // First pass: bounds and the largest z. A point's z scales its
+    // bubble (area proportional to z, as in a bubble chart); points
+    // without z keep the default radius.
+    final points = <({double x, double y, double? z, int si})>[];
+    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity, maxZ = 0.0;
     for (var si = 0; si < series.length; si++) {
       for (final p in series[si].nodesOf('points')) {
         final x = p.numOf('x');
         final y = p.numOf('y');
+        final z = p.props['z'] is num ? (p.props['z'] as num).toDouble() : null;
         minX = math.min(minX, x);
         maxX = math.max(maxX, x);
         minY = math.min(minY, y);
         maxY = math.max(maxY, y);
-        spots.add(ScatterSpot(x, y, dotPainter: FlDotCirclePainter(radius: 6, color: _colorAt(palette, si))));
+        if (z != null) maxZ = math.max(maxZ, z);
+        points.add((x: x, y: y, z: z, si: si));
       }
     }
+    final spots = <ScatterSpot>[
+      for (final p in points)
+        ScatterSpot(
+          p.x,
+          p.y,
+          dotPainter: FlDotCirclePainter(
+            radius: p.z == null ? 6 : (maxZ > 0 ? 4 + 8 * math.sqrt(p.z! / maxZ) : 4),
+            color: _colorAt(palette, p.si),
+          ),
+        ),
+    ];
     if (spots.isEmpty) {
       minX = 0;
       maxX = 1;

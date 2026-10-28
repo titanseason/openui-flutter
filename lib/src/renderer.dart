@@ -770,11 +770,13 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'Separator':
-        // decorative is accepted but has no visible effect.
-        if (node.stringOf('orientation', 'horizontal') == 'vertical') {
-          return Center(child: Container(width: 1, height: 24, color: Colors.grey.shade300));
-        }
-        return const Divider(height: 24);
+        // decorative separators are hidden from assistive tech, as
+        // React's aria-hidden decorative separators.
+        final Widget divider = node.stringOf('orientation', 'horizontal') == 'vertical'
+            ? Center(child: Container(width: 1, height: 24, color: Colors.grey.shade300))
+            : const Divider(height: 24);
+        if (node.props['decorative'] == true) return ExcludeSemantics(child: divider);
+        return divider;
       case 'Modal':
         // A real overlay dialog: the node itself renders nothing
         // inline; _ModalWidget shows the dialog once on first build
@@ -989,8 +991,9 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'Icon':
-        // category is accepted but has no visible effect in this port.
-        return Icon(iconByName(node.stringOf('name')));
+        // category picks the fallback icon when the name does not
+        // resolve, as in React's categoryFallbacks.
+        return Icon(iconByName(node.stringOf('name'), node.props['category'] is String ? node.stringOf('category') : null));
       // ---- Data (remaining) ----
       case 'EditableTable':
         // React shape: name/columns objects/data rows. Cell edits
@@ -1148,16 +1151,25 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       case 'EntityList':
         // rows are {left, right, rightVariant?} maps; rightVariant
-        // number vs text is semantic only in this port (both render
-        // as the trailing text). header/footer are row objects.
+        // 'number' renders the trailing value in tabular figures, as
+        // in React. header/footer are row objects.
         final entityDense = node.stringOf('size', 'default') == 'small';
         Widget entityRow(Map map, {bool bold = false}) {
-          final style = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
+          // rightVariant styles only the trailing value, as in React;
+          // the left title never gets tabular figures.
+          final isNumber = map['rightVariant'] == 'number';
+          final titleStyle = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
+          final trailingStyle = (bold || isNumber)
+              ? TextStyle(
+                  fontWeight: bold ? FontWeight.bold : null,
+                  fontFeatures: isNumber ? const [FontFeature.tabularFigures()] : null,
+                )
+              : null;
           return ListTile(
             dense: entityDense,
             leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),
-            title: Text(map['left'] is String ? map['left'] as String : '', style: style),
-            trailing: Text(map['right'] is String ? map['right'] as String : (map['right'] == null ? '' : '${map['right']}'), style: style),
+            title: Text(map['left'] is String ? map['left'] as String : '', style: titleStyle),
+            trailing: Text(map['right'] is String ? map['right'] as String : (map['right'] == null ? '' : '${map['right']}'), style: trailingStyle),
           );
         }
 
@@ -1380,7 +1392,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       // ---- Composite cards ----
       // Blocks share items/layout/responsive/action/gap (React 0.18.1
-      // schemas); `responsive` is accepted with no visible effect.
+      // schemas); `responsive` switches the grid between container
+      // breakpoints (see _cardGrid).
       case 'SnippetCardBlock':
       case 'OverviewCardBlock':
       case 'ContextCardBlock':
@@ -1461,8 +1474,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   Widget _cardBlock(ElementNode node) {
-    // SnippetCardBlock is grid-only in React; a carousel layout on it
-    // falls back to grid.
+    // SnippetCardBlock is grid-only in React; the mapper records a
+    // type-mismatch for a carousel layout and falls back to grid.
     final layout = node.stringOf('layout', 'grid');
     final effectiveLayout = node.component == 'SnippetCardBlock' && layout == 'carousel' ? 'grid' : layout;
     final gap = _cardGap(node);
@@ -1474,27 +1487,94 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [for (final w in items) Padding(padding: EdgeInsets.only(right: gap), child: SizedBox(width: 280, child: w))]),
       );
     } else {
-      content = LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth.isFinite ? (constraints.maxWidth - gap) / 2 : 280.0;
-          return Wrap(spacing: gap, runSpacing: gap, children: [for (final w in items) SizedBox(width: width, child: w)]);
-        },
-      );
+      content = _cardGrid(items, gap, node.props['responsive'] != false);
     }
     final Widget block = Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: content);
-    // `responsive` is accepted with no visible effect (see library).
     if (node.props['action'] != null) {
       return InkWell(onTap: () => _dispatch(node.props['action']), child: block);
     }
     return block;
   }
 
+  /// React's card-block grid (CardBlockLayout + small/medium scss).
+  /// Responsive (the default) uses container breakpoints: 1 column
+  /// under 30rem (480), 2 under 48rem (768), rows above that.
+  /// Non-responsive always uses rows. Rows hold at most 3 cards,
+  /// balanced so the grid never ends with a lonely single card.
+  /// Carousel items are 280 wide (React's 17.5rem); the grid's
+  /// unbounded-width fallback keeps the old 280-wide Wrap.
+  Widget _cardGrid(List<Widget> items, double gap, bool responsive) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        if (!width.isFinite) {
+          return Wrap(spacing: gap, runSpacing: gap, children: [for (final w in items) SizedBox(width: 280, child: w)]);
+        }
+        if (responsive && width < 480) {
+          return Wrap(spacing: gap, runSpacing: gap, children: [for (final w in items) SizedBox(width: width, child: w)]);
+        }
+        if (responsive && width < 768) {
+          final colWidth = (width - gap) / 2;
+          return Wrap(spacing: gap, runSpacing: gap, children: [for (final w in items) SizedBox(width: colWidth, child: w)]);
+        }
+        final rows = _rowConfiguration(items.length, 3);
+        final rowWidgets = <Widget>[];
+        var index = 0;
+        for (final count in rows) {
+          final rowItems = items.sublist(index, index + count);
+          index += count;
+          rowWidgets.add(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < rowItems.length; i++) ...[
+                  if (i > 0) SizedBox(width: gap),
+                  Expanded(child: rowItems[i]),
+                ],
+              ],
+            ),
+          );
+        }
+        final spaced = <Widget>[];
+        for (var i = 0; i < rowWidgets.length; i++) {
+          if (i > 0) spaced.add(SizedBox(height: gap));
+          spaced.add(rowWidgets[i]);
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: spaced);
+      },
+    );
+  }
+
+  /// Port of React's smallCardBlockUtils.getRowConfiguration: splits
+  /// n items into rows of at most maxPerRow, avoiding a lonely single
+  /// card in the last row when possible.
+  List<int> _rowConfiguration(int n, int maxPerRow) {
+    if (n <= 0) return [];
+    if (n == 1) return [1];
+    if (maxPerRow == 2) {
+      final fullRows = n ~/ 2;
+      final result = List<int>.filled(fullRows, 2, growable: true);
+      if (n % 2 == 1) result.add(1);
+      return result;
+    }
+    if (n % 3 == 0) return List<int>.filled(n ~/ 3, 3);
+    if (n % 3 == 2) {
+      final threes = n ~/ 3;
+      final result = List<int>.filled(threes, 3, growable: true);
+      result.insert((result.length / 2).ceil(), 2);
+      return result;
+    }
+    final threes = (n - 4) ~/ 3;
+    return [...List<int>.filled(threes, 3), 2, 2];
+  }
+
   /// Card item with an optional gray background or background image.
   /// With a bg image the content sits on a translucent white scrim so
-  /// text stays readable; the image itself is decorative (alt text is
-  /// not surfaced, matching the previous alt handling for card items).
+  /// text stays readable; bgImageAlt (when given) is the image's
+  /// semantic label, as React's img alt.
   Widget _bgCardItem(ElementNode node, Widget content) {
     final bgImage = node.props['bgImageSrc'] is String ? node.stringOf('bgImageSrc') : null;
+    final bgAlt = node.props['bgImageAlt'] is String ? node.stringOf('bgImageAlt') : null;
     final gray = node.stringOf('bgColor') == 'gray';
     if (bgImage == null) {
       return Card(
@@ -1504,13 +1584,14 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         child: Padding(padding: const EdgeInsets.all(12), child: content),
       );
     }
+    final image = Image.network(bgImage, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox.shrink());
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
       margin: const EdgeInsets.all(4),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(child: Image.network(bgImage, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox.shrink())),
+          Positioned.fill(child: bgAlt != null ? Semantics(label: bgAlt, child: image) : image),
           Container(color: Colors.white.withValues(alpha: 0.75), padding: const EdgeInsets.all(12), child: content),
         ],
       ),
@@ -1823,8 +1904,8 @@ class _SelectWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    // No selection yet shows the placeholder (when given) rather than
-    // pre-selecting the first item.
+    // No selection yet shows the placeholder rather than pre-selecting
+    // the first item; React defaults the placeholder to "Select...".
     final values = items.map((o) => o.props['value']).toList();
     final current = stateValue != null && values.contains(stateValue) ? stateValue : null;
     final fontSize = switch (size) {
@@ -1837,7 +1918,7 @@ class _SelectWidget extends StatelessWidget {
       child: DropdownButtonFormField<Object>(
         initialValue: current,
         style: TextStyle(fontSize: fontSize),
-        decoration: InputDecoration(hintText: placeholder, border: const OutlineInputBorder()),
+        decoration: InputDecoration(hintText: placeholder ?? 'Select...', border: const OutlineInputBorder()),
         items: [for (final o in items) DropdownMenuItem(value: o.props['value'], child: Text(o.stringOf('label')))],
         onChanged: enabled ? (v) => onChanged(stateKey, v) : null,
       ),

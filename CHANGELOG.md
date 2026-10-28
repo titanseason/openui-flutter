@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- React 0.18.1 full alignment (general library): props that were
+  accepted with no visible effect now do what React does — `Icon`
+  `category` picks the fallback icon when the name does not resolve
+  (lucide kebab-case names are normalized first); `Separator`
+  `decorative` hides the divider from assistive tech; `Point` `z`
+  scales the scatter bubble radius; `EntityList` `rightVariant`
+  `"number"` renders the trailing value in tabular figures;
+  card-block `responsive` switches the grid between container
+  breakpoints (1 column under 480, 2 under 768, balanced rows
+  above, porting React's getRowConfiguration); `bgImageAlt` is the
+  background image's semantic label; `Select` without a placeholder
+  shows `"Select..."` as React does. The stale "accepted but no
+  visible effect" comments are updated, and the card-block grid
+  test now sets the viewport width (a SizedBox cannot shrink
+  below the scroll viewport's width).
+
 - BREAKING, React 0.18.1 full alignment (general library): `Text` /
   `BoldText` now use React's schema order, `variant` (default
   `"text"`) first and `value` second — the order React has used

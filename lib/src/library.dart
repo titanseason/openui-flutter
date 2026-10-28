@@ -80,7 +80,7 @@ List<ComponentDef> _baseComponents() => [
         PropDef('children', _l, required: true),
         PropDef('variant', _s),
       ]),
-      const ComponentDef('Separator', 'Divider line between blocks. orientation: horizontal/vertical; decorative is accepted but has no visible effect.', [
+      const ComponentDef('Separator', 'Divider line between blocks. orientation: horizontal/vertical; decorative hides it from assistive tech.', [
         PropDef('orientation', _s),
         PropDef('decorative', _b),
       ]),
@@ -184,7 +184,7 @@ List<ComponentDef> _baseComponents() => [
         PropDef('heading', _s, required: true),
         PropDef('description', _s),
       ]),
-      const ComponentDef('Icon', 'Icon by name like "search". category is accepted but has no visible effect in this port.', [
+      const ComponentDef('Icon', 'Icon by name like "search" (lucide kebab-case). category picks the fallback icon when the name does not resolve, as in React.', [
         PropDef('name', _s, required: true),
         PropDef('category', _s),
       ]),
@@ -192,7 +192,7 @@ List<ComponentDef> _baseComponents() => [
       const ComponentDef('Table', 'Columnar table; pass Col nodes as a list.', [
         PropDef('columns', _nodes, required: true),
       ]),
-      const ComponentDef('Col', 'One table column: label, cell data, optional type (string/number/action; accepted but has no visible effect in this port).', [
+      const ComponentDef('Col', 'One table column: label, cell data, optional type (string/number/action; a display hint React\'s Table renderer also ignores).', [
         PropDef('label', _s, required: true),
         PropDef('data', _l, required: true),
         PropDef('type', _s),
@@ -268,7 +268,7 @@ List<ComponentDef> _baseComponents() => [
         PropDef('name', _s, required: true),
         PropDef('points', _nodes, required: true),
       ]),
-      const ComponentDef('Point', 'One scatter point: x and y numbers, optional z (accepted but not rendered in this 2D port).', [
+      const ComponentDef('Point', 'One scatter point: x and y numbers, optional z scaling the bubble radius.', [
         PropDef('x', _n, required: true),
         PropDef('y', _n, required: true),
         PropDef('z', _n),
@@ -472,12 +472,12 @@ List<ComponentDef> _baseComponents() => [
       // Props follow the @openuidev/react-ui 0.18.1 Zod schemas in
       // declaration order (see docs/react-1.0-diff/react-source-props.md
       // §2, "Card blocks"). All five blocks share items/layout/
-      // responsive/action/gap and have NO title prop. React's
-      // items `.min(2)` constraint is NOT enforced here: no min-length
-      // machinery exists in the mapper (documented deviation).
-      // `layout` is grid by default; SnippetCardBlock is grid-only in
-      // React, so a carousel layout on it falls back to grid in the
-      // renderer. `responsive` is accepted but has no visible effect.
+      // responsive/action/gap and have NO title prop. items `.min(2)`
+      // and the matching item type are enforced by the mapper, as is
+      // SnippetCardBlock's grid-only layout (other layouts error and
+      // fall back to grid). `layout` is grid by default; `responsive`
+      // (default true) switches the grid between container
+      // breakpoints (1 column under 480, 2 under 768, rows above).
       const ComponentDef('SnippetCardBlock', 'Snippet card block; pass SnippetCardItem nodes.', [
         PropDef('items', _nodes, required: true),
         PropDef('layout', _s, defaultValue: 'grid'),

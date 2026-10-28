@@ -141,6 +141,14 @@ void main() {
   });
 
   testWidgets('card-block grid without gap uses 12', (tester) async {
+    // 500 wide viewport: responsive grid is 2 columns, so the gap
+    // shows up as the Wrap spacing (at 800 wide the same grid uses
+    // rows instead). The width must come from the viewport: a
+    // SizedBox cannot shrink below the scroll viewport's width.
+    tester.view.physicalSize = const Size(500, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
         home: SingleChildScrollView(
