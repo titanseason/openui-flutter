@@ -72,8 +72,8 @@ void main() {
 
   const basic = '''
 root = Stack([a, b, c])
-a = Text("hello")
-b = BoldText("world")
+a = Text("text", "hello")
+b = BoldText("text", "world")
 c = Tag("tag", "star")
 ''';
 
@@ -85,10 +85,10 @@ c = Tag("tag", "star")
 
   const forwardAndRedefine = '''
 root = Stack([a, b, later])
-a = Text("one")
-b = Text("two")
-a = Text("last wins")
-later = Text("forward ref ok")
+a = Text("text", "one")
+b = Text("text", "two")
+a = Text("text", "last wins")
+later = Text("text", "forward ref ok")
 ''';
 
   test('forward references and last-wins redefinition match', () {
@@ -129,7 +129,7 @@ root = Stack([TextContent(q.status)])
   test('form state change re-evaluates without re-parsing lines', () {
     const text = r'''
 $city = "Tokyo"
-root = Stack([Text($city)])
+root = Stack([Text("text", $city)])
 ''';
     final parser = IncrementalOpenUIParser(library);
     final before = parser.parse(text, streaming: false);
@@ -146,7 +146,7 @@ root = Stack([a, b, missing, bad, cyc1])
 a = UnknownComponent("x")
 b = Text(42)
 missing = Nope("x")
-bad = Text("unclosed
+bad = Text("text", "unclosed
 cyc1 = Stack([cyc2])
 cyc2 = Stack([cyc1])
 this is not a statement
@@ -160,7 +160,7 @@ this is not a statement
   const expressions = '''
 rows = [{"priority": "P0"}, {"priority": "P1"}]
 tags = @Each(rows, "t", TextContent(t.priority))
-cond = true ? Text("yes") : Text("no")
+cond = true ? Text("text", "yes") : Text("text", "no")
 total = 2 + 3 * 4
 label = "total=" + total
 root = Stack([tags, cond, Text(label)])
@@ -175,18 +175,18 @@ root = Stack([tags, cond, Text(label)])
 ]]>openui:context
 {"formState": {"city": "Tokyo"}}
 }
-root = Stack([Text("after")])
+root = Stack([Text("text", "after")])
 ''';
 
   test('context markers and fallback roots match', () {
     expectIncrementalEqualsFull(contextMarkers, lineCuts(contextMarkers));
     expectIncrementalEqualsFull(contextMarkers, charCuts(contextMarkers));
     const fallback = '''
-main = Stack([Text("fallback")])
+main = Stack([Text("text", "fallback")])
 ''';
     expectIncrementalEqualsFull(fallback, lineCuts(fallback));
     const noRoot = '''
-a = Text("no root here")
+a = Text("text", "no root here")
 ''';
     expectIncrementalEqualsFull(noRoot, lineCuts(noRoot));
     const rootNonNode = '''
@@ -208,7 +208,7 @@ fol = FollowUpBlock([FollowUpItem("追问")])
   test('StreamingParser finish matches a full parse', () {
     const text = '''
 root = Stack([a, q])
-a = Text("hello")
+a = Text("text", "hello")
 q = Query("list_tools", {"x": 1}, "init")
 ''';
     final sp = StreamingParser(library);
@@ -224,7 +224,7 @@ q = Query("list_tools", {"x": 1}, "init")
   test('StreamingParser intermediate pushes match stable/display parses', () {
     const text = '''
 root = Stack([a, q])
-a = Text("hello")
+a = Text("text", "hello")
 q = Query("list_tools", {"x": 1}, "init")
 ''';
     final sp = StreamingParser(library);
@@ -251,7 +251,7 @@ q = Query("list_tools", {"x": 1}, "init")
   test('stats prove incrementality on a long program', () {
     final lines = <String>['root = Stack([${List.generate(60, (i) => 's$i').join(', ')}])'];
     for (var i = 0; i < 60; i++) {
-      lines.add('s$i = Text("item $i")');
+      lines.add('s$i = Text("text", "item $i")');
     }
     final text = '${lines.join('\n')}\n';
     final parser = IncrementalOpenUIParser(library);

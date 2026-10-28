@@ -46,7 +46,7 @@ void main() {
   });
 
   test('Text value-first deviation: one-arg call binds to value', () {
-    final r = parseOpenUI('root = Stack([t])\nt = Text("hello")', library);
+    final r = parseOpenUI('root = Stack([t])\nt = Text("text", "hello")', library);
     expect(r.errors, isEmpty);
     final node = r.root!.nodesOf('children').single;
     expect(node.stringOf('value'), 'hello');

@@ -109,21 +109,19 @@ List<ComponentDef> _baseComponents() => [
         PropDef('text', _s, required: true),
         PropDef('size', _s),
       ]),
-      // DOCUMENTED DEVIATION: React schema order is
-      // variant/value/subtext/subtextVariant/size, but a one-arg
-      // positional call would then bind to variant, not the text.
-      // This library puts value first so Text("...") works; the
-      // remaining props follow schema order.
+      // React schema order (0.16-0.18, zod key order): variant first
+      // (default "text"), then value. A one-arg positional call binds
+      // to variant, so programs must write Text("text", "...").
       const ComponentDef('Text', 'Plain inline text. variant: text/number; size: xs/sm/md/lg.', [
-        PropDef('value', _s, required: true),
         PropDef('variant', _s, defaultValue: 'text'),
+        PropDef('value', _s, required: true),
         PropDef('subtext', _s),
         PropDef('subtextVariant', _s, defaultValue: 'text'),
         PropDef('size', _s, defaultValue: 'sm'),
       ]),
-      const ComponentDef('BoldText', 'Bold inline text. Same props as Text, value first (see Text note).', [
-        PropDef('value', _s, required: true),
+      const ComponentDef('BoldText', 'Bold inline text. Same props as Text, variant first (see Text note).', [
         PropDef('variant', _s, defaultValue: 'text'),
+        PropDef('value', _s, required: true),
         PropDef('subtext', _s),
         PropDef('subtextVariant', _s, defaultValue: 'text'),
         PropDef('size', _s, defaultValue: 'sm'),

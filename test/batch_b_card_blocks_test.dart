@@ -44,13 +44,13 @@ void main() {
   });
 
   testWidgets('SnippetCardBlock renders lhs/rhs nodes', (tester) async {
-    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "左标题"), Text("右文本"))])');
+    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "左标题"), Text("text", "右文本"))])');
     expect(find.text('左标题'), findsOneWidget);
     expect(find.text('右文本'), findsOneWidget);
   });
 
   testWidgets('OverviewCardBlock renders top/bottom nodes', (tester) async {
-    await _pumpCard(tester, 'OverviewCardBlock([OverviewCardItem(null, Text("顶部"), MetricIndicatorInline("100", "收入"))])');
+    await _pumpCard(tester, 'OverviewCardBlock([OverviewCardItem(null, Text("text", "顶部"), MetricIndicatorInline("100", "收入"))])');
     expect(find.text('顶部'), findsOneWidget);
     expect(find.text('100'), findsOneWidget);
   });
@@ -72,7 +72,7 @@ void main() {
             library: library,
             response: '''
 root = Stack([c])
-c = CompositeCardBlock([CompositeCardItem(null, Text("头"), [Text("体一"), Text("体二")], {"price": BoldText("¥9"), "button": Button("买", @ToAssistant("buy"))})])
+c = CompositeCardBlock([CompositeCardItem(null, Text("text", "头"), [Text("text", "体一"), Text("text", "体二")], {"price": BoldText("text", "¥9"), "button": Button("买", @ToAssistant("buy"))})])
 ''',
             onAction: (e) => seen = e,
           ),
@@ -89,16 +89,16 @@ c = CompositeCardBlock([CompositeCardItem(null, Text("头"), [Text("体一"), Te
   });
 
   testWidgets('VisualCardItem renders body, tag and bg image', (tester) async {
-    await _pumpCard(tester, 'VisualCardBlock([VisualCardItem(BoldText("视觉体"), null, "https://example.com/bg.png", Tag("视觉标"))])');
+    await _pumpCard(tester, 'VisualCardBlock([VisualCardItem(BoldText("text", "视觉体"), null, "https://example.com/bg.png", Tag("视觉标"))])');
     expect(find.text('视觉体'), findsOneWidget);
     expect(find.text('视觉标'), findsOneWidget);
   });
 
   testWidgets('grid is default; carousel scrolls horizontally', (tester) async {
-    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, Text("一")), SnippetCardItem(null, Text("二"))])');
+    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, Text("text", "一")), SnippetCardItem(null, Text("text", "二"))])');
     expect(find.text('一'), findsOneWidget);
     expect(find.text('二'), findsOneWidget);
-    await _pumpCard(tester, 'OverviewCardBlock([OverviewCardItem(null, Text("一")), OverviewCardItem(null, Text("二"))], "carousel")');
+    await _pumpCard(tester, 'OverviewCardBlock([OverviewCardItem(null, Text("text", "一")), OverviewCardItem(null, Text("text", "二"))], "carousel")');
     final scroller = find.byWidgetPredicate((w) => w is SingleChildScrollView && w.scrollDirection == Axis.horizontal);
     expect(scroller, findsOneWidget);
     expect(find.text('一'), findsOneWidget);
@@ -106,7 +106,7 @@ c = CompositeCardBlock([CompositeCardItem(null, Text("头"), [Text("体一"), Te
   });
 
   testWidgets('SnippetCardBlock carousel falls back to grid', (tester) async {
-    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, Text("一"))], "carousel")');
+    await _pumpCard(tester, 'SnippetCardBlock([SnippetCardItem(null, Text("text", "一"))], "carousel")');
     final scroller = find.byWidgetPredicate((w) => w is SingleChildScrollView && w.scrollDirection == Axis.horizontal);
     expect(scroller, findsNothing);
     expect(find.text('一'), findsOneWidget);
@@ -121,7 +121,7 @@ c = CompositeCardBlock([CompositeCardItem(null, Text("头"), [Text("体一"), Te
             library: library,
             response: '''
 root = Stack([b])
-b = SnippetCardBlock([SnippetCardItem(null, Text("点我块"))], "grid", true, @ToAssistant("blocktap"))
+b = SnippetCardBlock([SnippetCardItem(null, Text("text", "点我块"))], "grid", true, @ToAssistant("blocktap"))
 ''',
             onAction: (e) => seen = e,
           ),

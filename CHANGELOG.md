@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- BREAKING, React 0.18.1 full alignment (general library): `Text` /
+  `BoldText` now use React's schema order, `variant` (default
+  `"text"`) first and `value` second — the order React has used
+  since these components appeared (0.16-0.18, zod key order).
+  Programs must write `Text("text", "...")`; a one-arg call now
+  binds to `variant`. All in-repo programs and tests migrated.
 - Token-level incremental parsing: `StreamingParser.push` no longer
   runs two full parses per chunk. Two `IncrementalOpenUIParser`
   instances (stable lines, display text) cache line parses by line

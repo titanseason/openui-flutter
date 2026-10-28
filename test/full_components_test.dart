@@ -59,8 +59,8 @@ void main() {
       'a4 = Separator()',
       'a5 = Modal("弹窗", true, [TextContent("内")])',
       'a6 = ListBlock([ListItem("列表项")])',
-      'c1 = Text("普通")',
-      'c2 = BoldText("加粗")',
+      'c1 = Text("text", "普通")',
+      'c2 = BoldText("text", "加粗")',
       'c3 = TextCallout("warning", "注意", "请注意")',
       'c4 = ImageBlock("https://example.com/a.png", "说明")',
       'c5 = ImageGallery(["https://example.com/a.png"])',
@@ -94,11 +94,11 @@ void main() {
       'x1 = Buttons([Button("点", @ToAssistant("hi"))])',
       'x2 = IconButton("搜索", "search", @ToAssistant("hi"))',
       'g1 = ListBlock([ListItem("第一条")])',
-      'h1 = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("摘要右"))])',
+      'h1 = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右"))])',
       'h2 = OverviewCardBlock([OverviewCardItem(null, IconText("search", null, null, "概览顶"), MetricIndicatorInline("100", "收入"))])',
       'h3 = ContextCardBlock([ContextCardItem(null, "上下文标题", "上下文正文")])',
-      'h4 = CompositeCardBlock([CompositeCardItem(null, Text("组合头"), [Text("组合体")], {"price": BoldText("¥9"), "button": Button("买", @ToAssistant("buy"))})])',
-      'h5 = VisualCardBlock([VisualCardItem(BoldText("视觉体"), null, null, Tag("视觉标"))])',
+      'h4 = CompositeCardBlock([CompositeCardItem(null, Text("text", "组合头"), [Text("text", "组合体")], {"price": BoldText("text", "¥9"), "button": Button("买", @ToAssistant("buy"))})])',
+      'h5 = VisualCardBlock([VisualCardItem(BoldText("text", "视觉体"), null, null, Tag("视觉标"))])',
     ];
     final ids = snippets.map((s) => s.split(' = ').first).toList();
     final program = 'root = Stack([${ids.join(', ')}])\n${snippets.join('\n')}\n';
@@ -141,8 +141,8 @@ acc = Accordion([AccordionItem("acc", "折叠标题", [TextContent("折叠内容
 steps = Steps([StepsItem("第一步", "步骤内容")])
 sep = Separator()
 modal = Modal("弹窗标题", true, [TextContent("弹窗内容")])
-txt = Text("普通文本")
-bold = BoldText("加粗文本")
+txt = Text("text", "普通文本")
+bold = BoldText("text", "加粗文本")
 call = TextCallout("warning", "注意", "注意内容")
 code = CodeBlock("python", "print(1)")
 head = InlineHeader("行内标题")
@@ -175,7 +175,7 @@ tags = TagBlock(["标签"])
 ents = EntityList([{"left": "张三", "right": "详情"}])
 m1 = MetricIndicatorInline("100", "收入", {"direction": "up", "value": 10})
 m2 = MetricIndicatorWithStrikethrough("100", "收入", "120")
-snip = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("摘要右"))])
+snip = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右"))])
 lst = ListBlock([ListItem("列表第一条")])
 btns = Buttons([Button("点我", @ToAssistant("hi"))])
 ''',
