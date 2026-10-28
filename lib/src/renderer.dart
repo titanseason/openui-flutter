@@ -5,26 +5,17 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import 'controller.dart';
 import 'extra_widgets.dart';
 import 'lang.dart';
 import 'registry.dart';
-
-class ActionEvent {
-  const ActionEvent(this.type, this.args, this.formState);
-  final String type;
-  final List<Object?> args;
-  final Map<String, Object?> formState;
-}
-
-/// Runs a Query or Mutation tool: `tool` is the first argument of the
-/// Query/Mutation statement, `params` is its (object) second argument.
-typedef OpenUIToolProvider = Future<Object?> Function(String tool, Map<String, Object?> params);
+import 'theme.dart';
 
 class OpenUIRenderer extends StatefulWidget {
   const OpenUIRenderer({
     super.key,
     required this.library,
-    required this.response,
+    this.response,
     this.isStreaming = false,
     this.onAction,
     this.onStateUpdate,
@@ -32,6 +23,7 @@ class OpenUIRenderer extends StatefulWidget {
     this.toolProvider,
     this.onToolError,
     this.registry,
+    this.controller,
   });
   final OpenUILibrary library;
   final String? response;
@@ -42,6 +34,13 @@ class OpenUIRenderer extends StatefulWidget {
   final OpenUIToolProvider? toolProvider;
   final void Function(String tool, Object error)? onToolError;
   final ComponentRegistry? registry;
+
+  /// Controller mode: when supplied, the controller wins over
+  /// [response], [onAction], [onStateUpdate], [toolProvider] and
+  /// [initialState] — the renderer displays the controller's parsed
+  /// result and delegates form changes and actions to it. The old
+  /// parameters keep working on their own, unchanged.
+  final OpenUIController? controller;
 
   @override
   State<OpenUIRenderer> createState() => _OpenUIRendererState();
@@ -63,6 +62,46 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   void initState() {
     super.initState();
     _state = Map.of(widget.initialState);
+    widget.controller?.addListener(_onControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant OpenUIRenderer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onControllerChanged);
+      widget.controller?.addListener(_onControllerChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _controllerMode => widget.controller != null;
+  bool get _effectiveStreaming => _controllerMode ? widget.controller!.isStreaming : widget.isStreaming;
+  OpenUIThemeData get _theme => widget.controller?.effectiveTheme ?? OpenUIThemeData.light();
+  ComponentRegistry? get _effectiveRegistry => widget.registry ?? widget.controller?.registry;
+
+  /// Form-state access that reads the controller in controller mode
+  /// and the local map otherwise, so every bound widget (Input,
+  /// Select, Chips, groups, DatePicker, Slider) works in both modes
+  /// without duplicating its build code.
+  Object? _stateValue(String key) => _controllerMode ? widget.controller!.formState[key] : _state[key];
+  bool _stateHas(String key) => _controllerMode ? widget.controller!.formState.containsKey(key) : _state.containsKey(key);
+  Map<String, Object?> _stateSnapshot() => _controllerMode ? widget.controller!.formState : Map.of(_state);
+  void _setValue(String key, Object? value) {
+    if (_controllerMode) {
+      widget.controller!.setFormValue(key, value);
+    } else {
+      _updateState(key, value);
+    }
   }
 
   void _updateState(String key, Object? value) {
@@ -141,6 +180,10 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   Future<void> _dispatch(Object? action) async {
+    if (_controllerMode) {
+      await widget.controller!.runAction(action);
+      return;
+    }
     if (action is List) {
       for (final a in action) {
         final ok = await _dispatchSingle(a);
@@ -221,19 +264,31 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 
   @override
   Widget build(BuildContext context) {
-    final result = parseOpenUI(
-      widget.response ?? '',
-      widget.library,
-      state: _state,
-      queryData: _queryData,
-      streaming: widget.isStreaming,
-    );
-    _lastQueries = result.queries;
-    _lastMutations = result.mutations;
-    _scheduleFetches(result.queries);
+    ParseResult result;
+    bool streaming;
+    if (_controllerMode) {
+      // parseCurrent re-parses with the controller's form state and
+      // Query data and schedules fetches; it does not notify, so
+      // calling it during build is safe (fetch completion notifies).
+      result = widget.controller!.parseCurrent();
+      streaming = widget.controller!.isStreaming;
+    } else {
+      result = parseOpenUI(
+        widget.response ?? '',
+        widget.library,
+        state: _state,
+        queryData: _queryData,
+        streaming: widget.isStreaming,
+      );
+      _lastQueries = result.queries;
+      _lastMutations = result.mutations;
+      _scheduleFetches(result.queries);
+      streaming = widget.isStreaming;
+    }
     final root = result.root;
     if (root == null) {
-      if (widget.isStreaming) return const _Skeleton();
+      if (streaming) return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
+      if (_theme.errorBuilder != null) return _theme.errorBuilder!(context, const OpenUIError('no-root', '暂无可显示的界面'));
       return const Text('暂无可显示的界面');
     }
     // Material ancestor: several components (ListTile, Chip, TextField,
@@ -245,11 +300,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   Widget _buildNode(ElementNode node) {
     // Lookup order: explicit registry builder first, built-in switch
     // second, the switch's default last (never a crash).
-    final builder = widget.registry?.lookup(node.component);
+    final builder = _effectiveRegistry?.lookup(node.component);
     if (builder != null) return builder(context, node, _buildNode);
     switch (node.component) {
       case '__Skeleton':
-        return const _Skeleton();
+        return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
       case 'Stack':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -257,6 +312,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       case 'Card':
         return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
           margin: const EdgeInsets.symmetric(vertical: 6),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -340,11 +396,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'BarChart':
-        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['categories']), series: node.nodesOf('series'));
+        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['categories']), series: node.nodesOf('series'));
+        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'PieChart':
-        return _PieWidget(slices: node.nodesOf('slices'));
+        return _PieWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
       case 'Form':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,12 +408,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       case 'Input':
         final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final initial = bind != null && _state.containsKey(bind) ? '${_state[bind]}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+        final initial = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: TextFormField(
             initialValue: initial,
-            enabled: !widget.isStreaming,
+            enabled: !_effectiveStreaming,
             decoration: InputDecoration(
               labelText: node.stringOf('label'),
               hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
@@ -372,17 +428,17 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return _SelectWidget(
           options: node.nodesOf('options'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'Button':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: ElevatedButton(
-            onPressed: widget.isStreaming ? null : () => _dispatch(node.props['action']),
+            onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']),
             child: Text(node.stringOf('label')),
           ),
         );
@@ -390,10 +446,10 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return _ChipsWidget(
           items: node.nodesOf('items'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'FollowUpBlock':
@@ -402,7 +458,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           children: [
             for (final item in node.nodesOf('items'))
               OutlinedButton(
-                onPressed: () => widget.onAction?.call(ActionEvent('toAssistant', [item.stringOf('text')], Map.of(_state))),
+                onPressed: () => _controllerMode ? _dispatch(ActionValue('ToAssistant', [item.stringOf('text')])) : widget.onAction?.call(ActionEvent('toAssistant', [item.stringOf('text')], _stateSnapshot())),
                 child: Text(item.stringOf('text')),
               ),
           ],
@@ -443,6 +499,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return const Divider(height: 24);
       case 'Modal':
         return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
           margin: const EdgeInsets.symmetric(vertical: 6),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -524,11 +581,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['categories']), series: node.nodesOf('series'));
+        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'RadarChart':
         return RadarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'));
       case 'HorizontalBarChart':
-        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['categories']), series: node.nodesOf('series'));
+        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'RadialChart':
         return RadialChartWidget(slices: node.nodesOf('slices'));
       case 'SingleStackedBarChart':
@@ -564,13 +621,13 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontWeight: FontWeight.bold)));
       case 'TextArea':
         final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final initial = bind != null && _state.containsKey(bind) ? '${_state[bind]}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+        final initial = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: TextFormField(
             initialValue: initial,
             maxLines: 4,
-            enabled: !widget.isStreaming,
+            enabled: !_effectiveStreaming,
             decoration: InputDecoration(labelText: node.stringOf('label'), hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
             onChanged: (v) {
               if (bind != null) _updateState(bind, v);
@@ -579,76 +636,76 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       case 'DatePicker':
         final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final value = bind != null && _state.containsKey(bind) ? '${_state[bind]}' : (node.props['value'] is String ? node.stringOf('value') : null);
+        final value = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] is String ? node.stringOf('value') : null);
         return DatePickerField(
           label: node.stringOf('label'),
           bind: bind,
           value: value,
-          enabled: !widget.isStreaming,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'Slider':
         final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final value = bind != null && _state.containsKey(bind) && _state[bind] is num ? (_state[bind] as num).toDouble() : (node.props['value'] is num ? (node.props['value'] as num).toDouble() : (node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0));
+        final value = bind != null && _stateHas(bind) && _stateValue(bind) is num ? (_stateValue(bind) as num).toDouble() : (node.props['value'] is num ? (node.props['value'] as num).toDouble() : (node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0));
         return SliderField(
           label: node.stringOf('label'),
           bind: bind,
           value: value,
           min: node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0,
           max: node.props['max'] is num ? (node.props['max'] as num).toDouble() : 100,
-          enabled: !widget.isStreaming,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'CheckBoxGroup':
         return MultiSelectGroupWidget(
           items: node.nodesOf('items'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'SwitchGroup':
         return SwitchGroupWidget(
           items: node.nodesOf('items'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'RadioGroup':
         return SingleSelectGroupWidget(
           items: node.nodesOf('items'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       case 'OptionCards':
         return SingleSelectGroupWidget(
           items: node.nodesOf('items'),
           bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _state[node.props['bind'] as String] : null,
-          enabled: !widget.isStreaming,
+          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          enabled: !_effectiveStreaming,
           asCards: true,
           onChanged: (k, v) {
-            if (k != null) _updateState(k, v);
+            if (k != null) _setValue(k, v);
           },
         );
       // ---- Actions (remaining) ----
       case 'Buttons':
         return Wrap(spacing: 8, children: [for (final c in node.nodesOf('children')) _buildNode(c)]);
       case 'IconButton':
-        return IconButton(icon: Icon(iconByName(node.stringOf('icon'))), onPressed: widget.isStreaming ? null : () => _dispatch(node.props['action']));
+        return IconButton(icon: Icon(iconByName(node.stringOf('icon'))), onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']));
       // ---- Dialogue (remaining) ----
       case 'ListBlock':
         return Column(children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
@@ -661,6 +718,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'CompositeBlock':
       case 'VisualBlock':
         return Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
           margin: const EdgeInsets.symmetric(vertical: 6),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -885,10 +943,11 @@ enum _ChartKind { bar, line, area, hbar }
 const _palette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
 
 class _ChartWidget extends StatelessWidget {
-  const _ChartWidget({required this.kind, required this.categories, required this.series});
+  const _ChartWidget({required this.kind, required this.categories, required this.series, this.palette = _palette});
   final _ChartKind kind;
   final List<String> categories;
   final List<ElementNode> series;
+  final List<Color> palette;
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -898,10 +957,10 @@ class _ChartWidget extends StatelessWidget {
       decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
-          Expanded(child: CustomPaint(painter: _ChartPainter(kind: kind, categories: categories, series: series), size: Size.infinite)),
+          Expanded(child: CustomPaint(painter: _ChartPainter(kind: kind, categories: categories, series: series, palette: palette), size: Size.infinite)),
           Wrap(
             spacing: 12,
-            children: [for (var i = 0; i < series.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 4), Text(series[i].stringOf('label'))])],
+            children: [for (var i = 0; i < series.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: palette[i % palette.length]), const SizedBox(width: 4), Text(series[i].stringOf('label'))])],
           ),
         ],
       ),
@@ -910,10 +969,11 @@ class _ChartWidget extends StatelessWidget {
 }
 
 class _ChartPainter extends CustomPainter {
-  _ChartPainter({required this.kind, required this.categories, required this.series});
+  _ChartPainter({required this.kind, required this.categories, required this.series, this.palette = _palette});
   final _ChartKind kind;
   final List<String> categories;
   final List<ElementNode> series;
+  final List<Color> palette;
   @override
   void paint(Canvas canvas, Size size) {
     final values = <List<double>>[];
@@ -937,7 +997,7 @@ class _ChartPainter extends CustomPainter {
           if (ci >= values[si].length) continue;
           final h = values[si][ci] / maxV * plotH;
           final rect = Rect.fromLTWH(16 + ci * stepX + (stepX - groupW) / 2 + si * barW + 1, 8 + plotH - h, barW - 2, h);
-          canvas.drawRect(rect, Paint()..color = _palette[si % _palette.length]);
+          canvas.drawRect(rect, Paint()..color = palette[si % palette.length]);
         }
       }
     } else if (kind == _ChartKind.hbar) {
@@ -949,13 +1009,13 @@ class _ChartPainter extends CustomPainter {
           if (ci >= values[si].length) continue;
           final w = values[si][ci] / maxV * plotW;
           final rect = Rect.fromLTWH(16, 8 + ci * rowH + (rowH - groupH) / 2 + si * barH + 1, w, barH - 2);
-          canvas.drawRect(rect, Paint()..color = _palette[si % _palette.length]);
+          canvas.drawRect(rect, Paint()..color = palette[si % palette.length]);
         }
       }
     } else {
       for (var si = 0; si < values.length; si++) {
         final paint = Paint()
-          ..color = _palette[si % _palette.length]
+          ..color = palette[si % palette.length]
           ..strokeWidth = 2
           ..style = PaintingStyle.stroke;
         final path = Path();
@@ -968,7 +1028,7 @@ class _ChartPainter extends CustomPainter {
           } else {
             path.lineTo(x, y);
           }
-          canvas.drawCircle(Offset(x, y), 3, Paint()..color = _palette[si % _palette.length]);
+          canvas.drawCircle(Offset(x, y), 3, Paint()..color = palette[si % palette.length]);
         }
         if (kind == _ChartKind.area && categories.isNotEmpty) {
           final fill = Path.from(path);
@@ -977,7 +1037,7 @@ class _ChartPainter extends CustomPainter {
           fill.lineTo(lastX, 8 + plotH);
           fill.lineTo(firstX, 8 + plotH);
           fill.close();
-          canvas.drawPath(fill, Paint()..color = _palette[si % _palette.length].withValues(alpha: 0.2));
+          canvas.drawPath(fill, Paint()..color = palette[si % palette.length].withValues(alpha: 0.2));
         }
         canvas.drawPath(path, paint);
       }
@@ -990,12 +1050,13 @@ class _ChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ChartPainter old) => old.kind != kind || old.categories != categories || old.series != series;
+  bool shouldRepaint(covariant _ChartPainter old) => old.kind != kind || old.categories != categories || old.series != series || old.palette != palette;
 }
 
 class _PieWidget extends StatelessWidget {
-  const _PieWidget({required this.slices});
+  const _PieWidget({required this.slices, this.palette = _palette});
   final List<ElementNode> slices;
+  final List<Color> palette;
   @override
   Widget build(BuildContext context) {
     final total = slices.fold<double>(0, (s, n) => s + n.numOf('value'));
@@ -1005,9 +1066,9 @@ class _PieWidget extends StatelessWidget {
       decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
-          SizedBox(height: 180, child: CustomPaint(painter: _PiePainter(slices: slices, total: total == 0 ? 1 : total), size: Size.infinite)),
+          SizedBox(height: 180, child: CustomPaint(painter: _PiePainter(slices: slices, total: total == 0 ? 1 : total, palette: palette), size: Size.infinite)),
           for (var i = 0; i < slices.length; i++)
-            Row(children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
+            Row(children: [Container(width: 10, height: 10, color: palette[i % palette.length]), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
         ],
       ),
     );
@@ -1015,9 +1076,10 @@ class _PieWidget extends StatelessWidget {
 }
 
 class _PiePainter extends CustomPainter {
-  _PiePainter({required this.slices, required this.total});
+  _PiePainter({required this.slices, required this.total, this.palette = _palette});
   final List<ElementNode> slices;
   final double total;
+  final List<Color> palette;
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
@@ -1025,11 +1087,11 @@ class _PiePainter extends CustomPainter {
     var start = -math.pi / 2;
     for (var i = 0; i < slices.length; i++) {
       final sweep = slices[i].numOf('value') / total * math.pi * 2;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, true, Paint()..color = _palette[i % _palette.length]);
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, true, Paint()..color = palette[i % palette.length]);
       start += sweep;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _PiePainter old) => old.slices != slices || old.total != total;
+  bool shouldRepaint(covariant _PiePainter old) => old.slices != slices || old.total != total || old.palette != palette;
 }
