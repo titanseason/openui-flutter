@@ -36,7 +36,7 @@ class OpenUIController extends ChangeNotifier {
     this.registry,
     Map<String, Object?> initialState = const {},
   }) : _formState = Map.of(initialState) {
-    _parser = StreamingParser(library, state: _formState, queryData: _queryData);
+    _parser = StreamingParser(library, state: _formState, queryData: _queryData, failedQueries: _failedQueries);
   }
 
   final OpenUILibrary library;
@@ -58,6 +58,12 @@ class OpenUIController extends ChangeNotifier {
   final Map<String, String> _queryParams = {};
   final Map<String, String> _fetchingParams = {};
   final Map<String, String> _failedParams = {};
+
+  /// Statement names whose Query failed, mirrored from
+  /// [_failedParams] for the parser: a failed Query with no data
+  /// and no initial value evaluates to QueryFailed, so its
+  /// dependent component renders the Query-error view.
+  final Set<String> _failedQueries = {};
   final Map<String, Object> _queryErrors = {};
   final Map<String, QueryRequest> _pendingFetches = {};
   late final StreamingParser _parser;
@@ -145,6 +151,7 @@ class OpenUIController extends ChangeNotifier {
       _queryParams[req.statementName] = key;
       _queryErrors.remove(req.statementName);
       _failedParams.remove(req.statementName);
+      _failedQueries.remove(req.statementName);
       _fetchingParams.remove(req.statementName);
       _notify();
     } catch (e) {
@@ -152,6 +159,7 @@ class OpenUIController extends ChangeNotifier {
       _pendingFetches.remove(req.statementName);
       _fetchingParams.remove(req.statementName);
       _failedParams[req.statementName] = key;
+      _failedQueries.add(req.statementName);
       _queryErrors[req.statementName] = e;
       _errorController.add(OpenUIError('tool-error', '${req.tool}: $e'));
       _notify();
@@ -164,6 +172,7 @@ class OpenUIController extends ChangeNotifier {
       _queryData.remove(req.statementName);
       _queryParams.remove(req.statementName);
       _failedParams.remove(req.statementName);
+      _failedQueries.remove(req.statementName);
       _queryErrors.remove(req.statementName);
     }
     _scheduleFetches(current);
@@ -232,6 +241,7 @@ class OpenUIController extends ChangeNotifier {
           _queryData.remove(query.statementName);
           _queryParams.remove(query.statementName);
           _failedParams.remove(query.statementName);
+          _failedQueries.remove(query.statementName);
           _queryErrors.remove(query.statementName);
           _scheduleFetches([query]);
           _actionController.add(ActionEvent('run', action.args, Map.of(_formState)));

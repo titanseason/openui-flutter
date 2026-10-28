@@ -148,8 +148,9 @@ OpenUILibrary openUIMvpLibrary({String root = 'Stack', List<FunctionDef> functio
         PropDef('label', _s, required: true),
         PropDef('values', _l, required: true),
       ]),
-      const ComponentDef('EditableTable', 'Table whose cells are editable text fields.', [
+      const ComponentDef('EditableTable', 'Table whose cells are editable text fields. bind: when true, each cell writes to form state under "<statementId>:<columnLabel>:<row>".', [
         PropDef('columns', _nodes, required: true),
+        PropDef('bind', PropType.boolean),
       ]),
       const ComponentDef('BarChart', 'Bar chart: categories plus Series nodes.', [
         PropDef('categories', _l, required: true),

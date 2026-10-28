@@ -16,6 +16,8 @@
 // map) carries widget builders. See the Task 3 report for the
 // trade-off discussion.
 
+import 'dart:convert';
+
 import 'registry.dart';
 
 enum PropType { string, number, boolean, list, node, nodeList, any, action, actionList }
@@ -59,6 +61,40 @@ class QueryLoading {
 }
 
 const queryLoading = QueryLoading();
+
+/// A Query whose tool call failed. It is a [QueryLoading] so it
+/// propagates through field access, operators and functions exactly
+/// like a still-loading value, but it carries the tool name so the
+/// component that directly depends on it can render as a Query-error
+/// node (`__QueryError`) instead of a skeleton.
+class QueryFailed extends QueryLoading {
+  const QueryFailed(this.tool);
+  final String tool;
+}
+
+/// Find the first failed Query inside a value (deep, through lists
+/// and maps), or null when the value is merely still loading.
+QueryFailed? _findFailed(Object? value) {
+  if (value is QueryFailed) return value;
+  if (value is List) {
+    for (final e in value) {
+      final found = _findFailed(e);
+      if (found != null) return found;
+    }
+  }
+  if (value is Map) {
+    for (final e in value.values) {
+      final found = _findFailed(e);
+      if (found != null) return found;
+    }
+  }
+  return null;
+}
+
+/// Preserve a failure through a propagation site: a failed value
+/// stays failed (so its tool survives), a merely loading value stays
+/// the plain loading sentinel.
+Object? _preserveLoading(Object? value) => _findFailed(value) ?? queryLoading;
 
 bool isQueryLoading(Object? value) {
   if (value is QueryLoading) return true;
@@ -105,6 +141,8 @@ class ElementNode {
     for (final e in list) {
       if (e is ElementNode) {
         out.add(e);
+      } else if (e is QueryFailed) {
+        out.add(ElementNode('__QueryError', {'tool': e.tool}, ''));
       } else if (e is QueryLoading) {
         out.add(const ElementNode('__Skeleton', {}, ''));
       } else if (e is List) {
@@ -739,13 +777,19 @@ class _Statement {
 }
 
 class _Evaluator {
-  _Evaluator(this.library, this.statements, this.state, this.errors, this.unresolved, {this.queryData = const {}});
+  _Evaluator(this.library, this.statements, this.state, this.errors, this.unresolved, {this.queryData = const {}, this.failedQueries = const {}});
   final OpenUILibrary library;
   final Map<String, _Statement> statements;
   final Map<String, Object?> state;
   final List<OpenUIError> errors;
   final Set<String> unresolved;
   final Map<String, Object?> queryData;
+
+  /// Statement names whose Query tool call failed. A failed Query
+  /// with no data and no initial value evaluates to [QueryFailed]
+  /// instead of the loading sentinel, so its dependent component
+  /// renders a Query-error view rather than a skeleton forever.
+  final Set<String> failedQueries;
   final List<QueryRequest> queries = [];
   final List<MutationRequest> mutations = [];
   final Set<String> _seenRequests = {};
@@ -764,13 +808,14 @@ class _Evaluator {
     }
     if (_visiting.contains(name)) return null; // cycle: render as nothing
     _visiting.add(name);
-    final Object? v;
-    if (stmt.expr is QueryExpr) {
-      v = _evalQuery(name, stmt.expr as QueryExpr);
-    } else {
-      v = evalExpr(stmt.expr, false);
-    }
+    var v = stmt.expr is QueryExpr ? _evalQuery(name, stmt.expr as QueryExpr) : evalExpr(stmt.expr, false);
     _visiting.remove(name);
+    // Stamp the statement name onto its node, so the renderer can
+    // build per-statement keys (Modal dialog guard, EditableTable
+    // cell keys). Inline (non-statement) nodes keep ''.
+    if (v is ElementNode && v.statementId.isEmpty) {
+      v = ElementNode(v.component, v.props, name);
+    }
     _memo[name] = v;
     return v;
   }
@@ -801,6 +846,7 @@ class _Evaluator {
     }
     if (queryData.containsKey(name)) return queryData[name];
     if (hasInitial) return initial;
+    if (failedQueries.contains(name)) return QueryFailed(toolValue);
     return queryLoading;
   }
 
@@ -826,15 +872,15 @@ class _Evaluator {
     if (e is VarExpr) return evalVar(e.name);
     if (e is FieldAccessExpr) {
       final base = evalExpr(e.base, false);
-      if (isQueryLoading(base)) return queryLoading;
+      if (isQueryLoading(base)) return _preserveLoading(base);
       if (base is Map) return base[e.field];
       return null;
     }
     if (e is IndexExpr) {
       final base = evalExpr(e.base, false);
-      if (isQueryLoading(base)) return queryLoading;
+      if (isQueryLoading(base)) return _preserveLoading(base);
       final index = evalExpr(e.index, false);
-      if (isQueryLoading(index)) return queryLoading;
+      if (isQueryLoading(index)) return _preserveLoading(index);
       if (base is List && index is int) {
         return index >= 0 && index < base.length ? base[index] : null;
       }
@@ -849,12 +895,12 @@ class _Evaluator {
     }
     if (e is TernaryExpr) {
       final cond = evalExpr(e.cond, false);
-      if (isQueryLoading(cond)) return queryLoading;
+      if (isQueryLoading(cond)) return _preserveLoading(cond);
       return evalExpr(cond == true ? e.thenExpr : e.elseExpr, expectAction);
     }
     if (e is UnaryExpr) {
       final v = evalExpr(e.expr, false);
-      if (isQueryLoading(v)) return queryLoading;
+      if (isQueryLoading(v)) return _preserveLoading(v);
       if (e.op == '!') return v != true;
       if (e.op == '-' && v is num) return -v;
       return null;
@@ -862,7 +908,7 @@ class _Evaluator {
     if (e is BinaryExpr) {
       final l = evalExpr(e.left, false);
       final r = evalExpr(e.right, false);
-      if (isQueryLoading(l) || isQueryLoading(r)) return queryLoading;
+      if (isQueryLoading(l) || isQueryLoading(r)) return _findFailed(l) ?? _findFailed(r) ?? queryLoading;
       return switch (e.op) {
         '+' => (l is String || r is String) ? '${_str(l)}${_str(r)}' : (l is num && r is num ? l + r : null),
         '-' => l is num && r is num ? l - r : null,
@@ -960,7 +1006,7 @@ class _Evaluator {
         continue;
       }
       final value = evalExpr(e.args[i], false);
-      if (isQueryLoading(value)) return queryLoading;
+      if (isQueryLoading(value)) return _preserveLoading(value);
       if (value == null) {
         if (param.required) {
           errors.add(OpenUIError('runtime-error', 'null required param ${param.name} for @${def.name}'));
@@ -1013,7 +1059,7 @@ class _Evaluator {
       }
       final raw = e.args[i];
       final value = evalExpr(raw, false);
-      if (isQueryLoading(value)) return queryLoading;
+      if (isQueryLoading(value)) return _preserveLoading(value);
       if (value == null) {
         if (raw is LiteralExpr) {
           if (param.required) {
@@ -1065,7 +1111,7 @@ class _Evaluator {
     if (e.name == 'Each') {
       if (e.args.length < 3) return null;
       final array = evalExpr(e.args[0], false);
-      if (isQueryLoading(array)) return queryLoading;
+      if (isQueryLoading(array)) return _preserveLoading(array);
       final varName = evalExpr(e.args[1], false);
       if (array is! List || varName is! String) return null;
       final template = e.args[2];
@@ -1085,7 +1131,7 @@ class _Evaluator {
       return out;
     }
     final args = [for (final a in e.args) evalExpr(a, false)];
-    if (args.any(isQueryLoading)) return queryLoading;
+    if (args.any(isQueryLoading)) return _preserveLoading(args);
     Object? first = args.isEmpty ? null : args[0];
     List listOf(Object? v) => v is List ? v : const [];
     double? toNum(Object? v) {
@@ -1218,15 +1264,23 @@ class _Evaluator {
         value = evalExpr(e.args[i], isActionProp);
         if (prop.type == PropType.actionList && value is ActionValue) value = [value];
         if (isQueryLoading(value)) {
+          final failed = _findFailed(value);
           if (prop.type == PropType.nodeList) {
             // A loading child list becomes a skeleton placeholder;
-            // a list containing loading elements is handled by
-            // _flattenNodes below, which inserts skeletons.
+            // a failed one becomes an error placeholder; a list
+            // containing loading elements is handled by
+            // _flattenNodes below, which inserts skeletons (or
+            // error nodes for failed elements).
+            if (failed != null) {
+              props[prop.name] = [ElementNode('__QueryError', {'tool': failed.tool}, '')];
+              continue;
+            }
             if (value is QueryLoading) {
               props[prop.name] = [const ElementNode('__Skeleton', {}, '')];
               continue;
             }
           } else {
+            if (failed != null) return ElementNode('__QueryError', {'tool': failed.tool}, '');
             return const ElementNode('__Skeleton', {}, '');
           }
         }
@@ -1283,7 +1337,7 @@ class _Evaluator {
       };
 }
 
-ParseResult parseOpenUI(String text, OpenUILibrary library, {Map<String, Object?> state = const {}, Map<String, Object?> queryData = const {}, bool streaming = false}) {
+ParseResult parseOpenUI(String text, OpenUILibrary library, {Map<String, Object?> state = const {}, Map<String, Object?> queryData = const {}, bool streaming = false, Set<String> failedQueries = const {}}) {
   final errors = <OpenUIError>[];
   final unresolved = <String>{};
   // Stored-message markers: skip marker lines; JSON context after
@@ -1322,7 +1376,7 @@ ParseResult parseOpenUI(String text, OpenUILibrary library, {Map<String, Object?
       errors.add(OpenUIError('parse-failed', 'cannot parse statement $name'));
     }
   }
-  final evaluator = _Evaluator(library, statements, Map.of(state), errors, unresolved, queryData: queryData);
+  final evaluator = _Evaluator(library, statements, Map.of(state), errors, unresolved, queryData: queryData, failedQueries: failedQueries);
   // Evaluate $variable defaults eagerly so Reset can restore them.
   for (final name in order) {
     if (name.startsWith(r'$')) evaluator.evalVar(name.substring(1));
@@ -1411,10 +1465,15 @@ String autoCloseOpenUI(String text) {
 }
 
 class StreamingParser {
-  StreamingParser(this.library, {this.state = const {}, this.queryData = const {}});
+  StreamingParser(this.library, {this.state = const {}, this.queryData = const {}, this.failedQueries = const {}});
   final OpenUILibrary library;
   final Map<String, Object?> state;
   final Map<String, Object?> queryData;
+
+  /// Statement names whose Query failed (a mutable set the host
+  /// updates as fetches fail and retry; read on every parse, so a
+  /// failure that lands mid-stream shows as an error view).
+  final Set<String> failedQueries;
   var _buffer = '';
   var _pending = '';
 
@@ -1428,10 +1487,10 @@ class StreamingParser {
     final parts = _buffer.split('\n');
     _pending = parts.removeLast();
     final complete = parts.join('\n');
-    final stable = parseOpenUI(complete, library, state: state, queryData: queryData, streaming: true);
+    final stable = parseOpenUI(complete, library, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
     if (_pending.trim().isEmpty) return stable;
     final displayText = complete.isEmpty ? autoCloseOpenUI(_pending) : '$complete\n${autoCloseOpenUI(_pending)}';
-    final display = parseOpenUI(displayText, library, state: state, queryData: queryData, streaming: true);
+    final display = parseOpenUI(displayText, library, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
     return ParseResult(
       root: display.root,
       errors: display.errors,
@@ -1443,6 +1502,96 @@ class StreamingParser {
 
   ParseResult finish() {
     _pending = '';
-    return parseOpenUI(_buffer, library, state: state, queryData: queryData, streaming: false);
+    return parseOpenUI(_buffer, library, state: state, queryData: queryData, streaming: false, failedQueries: failedQueries);
   }
+}
+
+/// A stored assistant message, split into its parts: the prose, the
+/// last fenced OpenUI Lang program (last-program-wins), and the form
+/// state restored from the `]]>openui:context` JSON block.
+class StoredMessage {
+  const StoredMessage({required this.prose, required this.result, required this.formState});
+  final String prose;
+  final ParseResult result;
+  final Map<String, Object?> formState;
+}
+
+/// Parse a stored message. Sections are delimited by markers and
+/// fenced blocks:
+///
+/// ```text
+/// Prose text.
+/// ]]>openui:content
+/// More prose.
+/// ```openui
+/// root = Stack([TextContent("first")])
+/// ```
+/// ```openui
+/// root = Stack([TextContent("second")])
+/// ```
+/// ]]>openui:context
+/// {"formState": {"city": "Tokyo"}}
+/// ```
+///
+/// Text outside fences is prose (both before and after a
+/// `]]>openui:content` marker); the last fenced program wins; the
+/// context JSON's `formState` map is returned separately and also
+/// merged into the parse state, so `$variables` in the program
+/// resolve to the restored values. With no fenced program, the
+/// remaining Lang lines are parsed directly (markers and context
+/// stripped, as [parseOpenUI] already does). Malformed context JSON
+/// is ignored: it is host data, not a Lang error.
+StoredMessage parseStoredMessage(String text, OpenUILibrary library, {Map<String, Object?> state = const {}, Map<String, Object?> queryData = const {}}) {
+  final proseLines = <String>[];
+  final programs = <String>[];
+  final contextLines = <String>[];
+  var section = 'prose';
+  var inFence = false;
+  final fenceLines = <String>[];
+  for (final raw in text.split('\n')) {
+    final line = raw.trim();
+    if (inFence) {
+      if (line.startsWith('```')) {
+        inFence = false;
+        programs.add(fenceLines.join('\n'));
+        fenceLines.clear();
+      } else {
+        fenceLines.add(raw);
+      }
+      continue;
+    }
+    if (line.startsWith('```')) {
+      inFence = true;
+      continue;
+    }
+    if (line.startsWith(']]>openui:')) {
+      section = line.startsWith(']]>openui:context') ? 'context' : 'prose';
+      continue;
+    }
+    if (section == 'context') {
+      contextLines.add(raw);
+    } else {
+      proseLines.add(raw);
+    }
+  }
+  if (inFence && fenceLines.isNotEmpty) programs.add(fenceLines.join('\n'));
+  final formState = <String, Object?>{};
+  final contextText = contextLines.join('\n').trim();
+  if (contextText.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(contextText);
+      if (decoded is Map && decoded['formState'] is Map) {
+        for (final entry in (decoded['formState'] as Map).entries) {
+          formState['${entry.key}'] = entry.value;
+        }
+      }
+    } catch (_) {
+      // Malformed context JSON: host data, not a Lang error.
+    }
+  }
+  final mergedState = {...state, ...formState};
+  final result = programs.isNotEmpty
+      ? parseOpenUI(programs.last, library, state: mergedState, queryData: queryData)
+      : parseOpenUI(proseLines.join('\n'), library, state: mergedState, queryData: queryData);
+  return StoredMessage(prose: proseLines.join('\n').trim(), result: result, formState: formState);
 }

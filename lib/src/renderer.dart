@@ -24,6 +24,8 @@ class OpenUIRenderer extends StatefulWidget {
     this.onToolError,
     this.registry,
     this.controller,
+    this.onParseResult,
+    this.onError,
   });
   final OpenUILibrary library;
   final String? response;
@@ -34,6 +36,14 @@ class OpenUIRenderer extends StatefulWidget {
   final OpenUIToolProvider? toolProvider;
   final void Function(String tool, Object error)? onToolError;
   final ComponentRegistry? registry;
+
+  /// Fired once with a parse's errors when streaming ends (or once
+  /// for a non-streaming parse), never per frame during streaming.
+  final void Function(List<OpenUIError>)? onParseResult;
+
+  /// Fired at the same point as [onParseResult], once per
+  /// non-warning error in that parse.
+  final void Function(OpenUIError)? onError;
 
   /// Controller mode: when supplied, the controller wins over
   /// [response], [onAction], [onStateUpdate], [toolProvider] and
@@ -57,6 +67,43 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   var _fetchScheduled = false;
   var _lastQueries = <QueryRequest>[];
   var _lastMutations = <MutationRequest>[];
+  // Parse-callback bookkeeping: callbacks are scheduled post-frame
+  // (never fired during build), once per parse result, and never
+  // while streaming — only when streaming ends.
+  var _seenStreaming = false;
+  var _parseCallbackScheduled = false;
+  ParseResult? _parseCallbackPending;
+  String? _parseCallbackKey;
+
+  void _maybeFireParseCallbacks(ParseResult result, bool streaming) {
+    if (widget.onParseResult == null && widget.onError == null) return;
+    if (streaming) {
+      _seenStreaming = true;
+      return;
+    }
+    final key = '${result.root?.statementId}|${result.root?.component}|${result.errors.map((e) => '${e.code}:${e.message}').join(',')}';
+    if (_seenStreaming) {
+      // Streaming just ended: fire even if the key matches a
+      // previous parse, because this is a new completion.
+      _seenStreaming = false;
+    } else if (key == _parseCallbackKey) {
+      return;
+    }
+    _parseCallbackKey = key;
+    _parseCallbackPending = result;
+    if (_parseCallbackScheduled) return;
+    _parseCallbackScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _parseCallbackScheduled = false;
+      final pending = _parseCallbackPending;
+      _parseCallbackPending = null;
+      if (!mounted || pending == null) return;
+      widget.onParseResult?.call(pending.errors);
+      for (final e in pending.errors) {
+        if (!e.warning) widget.onError?.call(e);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -284,12 +331,14 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         state: _state,
         queryData: _queryData,
         streaming: widget.isStreaming,
+        failedQueries: _failedParams.keys.toSet(),
       );
       _lastQueries = result.queries;
       _lastMutations = result.mutations;
       _scheduleFetches(result.queries);
       streaming = widget.isStreaming;
     }
+    _maybeFireParseCallbacks(result, streaming);
     final root = result.root;
     if (root == null) {
       if (streaming) return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
@@ -311,6 +360,16 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     switch (node.component) {
       case '__Skeleton':
         return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
+      case '__QueryError':
+        // A Query failed and has no data and no initial value. The
+        // tool call itself still reports through onToolError (old
+        // mode) / the controller's onError stream exactly once per
+        // failed fetch; this is only the view.
+        final tool = node.stringOf('tool');
+        if (_theme.errorBuilder != null) {
+          return _theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
+        }
+        return Text('数据加载失败：$tool');
       case 'Stack':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -504,17 +563,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'Separator':
         return const Divider(height: 24);
       case 'Modal':
-        return Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), for (final c in node.nodesOf('children')) _buildNode(c)],
-            ),
-          ),
-        );
+        // A real overlay dialog: the node itself renders nothing
+        // inline; _ModalWidget shows the dialog once on first build
+        // and never re-opens it after close for this render. When
+        // the node leaves the tree its state is disposed, so a
+        // Modal that re-enters the tree opens again.
+        return _ModalWidget(node: node, buildNode: _buildNode);
       case 'SectionBlock':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -576,13 +630,33 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         if (cols.isEmpty) return const SizedBox.shrink();
         final rows = cols.map((c) => (c.props['values'] as List?) ?? const []).toList();
         final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
+        // Bound cells (bind == true) read/write form state under
+        // "<statementId>:<columnLabel>:<row>"; unbound cells keep
+        // the previous local-only behaviour.
+        final bound = node.props['bind'] == true;
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
             columns: [for (final c in cols) DataColumn(label: Text(c.stringOf('label')))],
             rows: [
               for (var r = 0; r < rowCount; r++)
-                DataRow(cells: [for (var ci = 0; ci < cols.length; ci++) DataCell(SizedBox(width: 120, child: TextFormField(initialValue: ci < rows.length && r < rows[ci].length ? '${rows[ci][r]}' : '', decoration: const InputDecoration(border: InputBorder.none))))]),
+                DataRow(cells: [
+                  for (var ci = 0; ci < cols.length; ci++)
+                    DataCell(SizedBox(
+                      width: 120,
+                      child: Builder(builder: (context) {
+                        final key = '${node.statementId}:${cols[ci].stringOf('label')}:$r';
+                        final initial = bound && _stateHas(key)
+                            ? '${_stateValue(key)}'
+                            : (ci < rows.length && r < rows[ci].length ? '${rows[ci][r]}' : '');
+                        return TextFormField(
+                          initialValue: initial,
+                          decoration: const InputDecoration(border: InputBorder.none),
+                          onChanged: bound ? (v) => _setValue(key, v) : null,
+                        );
+                      }),
+                    )),
+                ]),
             ],
           ),
         );
@@ -775,6 +849,67 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     if (v is List) return v.map((e) => '$e').toList();
     return const [];
   }
+}
+
+/// A Modal node renders nothing inline and shows its content as a
+/// real overlay dialog once, on first build. The dialog is shown
+/// from a post-frame callback (never during build); the shown and
+/// dismissed flags live in this widget's state, so they reset only
+/// when the Modal node leaves the tree and this state is disposed,
+/// and a closed dialog never re-opens on a later rebuild.
+class _ModalWidget extends StatefulWidget {
+  const _ModalWidget({required this.node, required this.buildNode});
+  final ElementNode node;
+  final Widget Function(ElementNode) buildNode;
+  @override
+  State<_ModalWidget> createState() => _ModalWidgetState();
+}
+
+class _ModalWidgetState extends State<_ModalWidget> {
+  var _dialogShown = false;
+  var _dismissed = false;
+  var _showScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleShow();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ModalWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleShow();
+  }
+
+  void _scheduleShow() {
+    if (_dismissed || _dialogShown || _showScheduled) return;
+    _showScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showScheduled = false;
+      if (!mounted || _dismissed || _dialogShown) return;
+      _dialogShown = true;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: widget.node.props['title'] is String ? Text(widget.node.stringOf('title')) : null,
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [for (final c in widget.node.nodesOf('children')) widget.buildNode(c)],
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭'))],
+        ),
+      ).then((_) {
+        if (mounted) setState(() => _dismissed = true);
+        _dialogShown = false;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _Skeleton extends StatelessWidget {

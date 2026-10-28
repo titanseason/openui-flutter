@@ -1,0 +1,221 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openui_flutter/openui_flutter.dart';
+
+void main() {
+  final library = openUIMvpLibrary();
+
+  test('stored message restores form state and last program wins', () {
+    const stored = '''
+Here is the forecast.
+]]>openui:content
+Some prose after the content marker.
+```openui
+root = Stack([TextContent("first")])
+```
+```openui
+root = Stack([TextContent("second"), TextContent(\$city)])
+```
+]]>openui:context
+{"formState": {"city": "Tokyo"}}
+''';
+    final storedMessage = parseStoredMessage(stored, library);
+    expect(storedMessage.prose, contains('forecast'));
+    expect(storedMessage.formState['city'], 'Tokyo');
+    final children = storedMessage.result.root!.nodesOf('children');
+    expect(children[0].stringOf('text'), 'second');
+    expect(children[1].stringOf('text'), 'Tokyo');
+  });
+
+  test('stored message with pretty-printed context JSON restores form state', () {
+    const stored = '''
+Prose.
+]]>openui:context
+{
+  "formState": {
+    "city": "Osaka"
+  }
+}
+''';
+    final storedMessage = parseStoredMessage(stored, library);
+    expect(storedMessage.formState['city'], 'Osaka');
+  });
+
+  test('stored message without a fenced program falls back to Lang lines', () {
+    const stored = '''
+Prose.
+]]>openui:content
+root = TextContent("plain")
+''';
+    final storedMessage = parseStoredMessage(stored, library);
+    expect(storedMessage.result.root!.stringOf('text'), 'plain');
+  });
+
+  testWidgets('failed Query shows error view and @Run retries it', (tester) async {
+    var calls = 0;
+    var toolErrors = 0;
+    Future<Object?> provider(String tool, Map<String, Object?> params) async {
+      calls++;
+      if (calls == 1) throw StateError('boom');
+      return {'rows': [1, 2]};
+    }
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: '''
+root = Stack([count, btn])
+count = TextContent("" + @Count(tickets.rows))
+tickets = Query("list_tickets", {})
+btn = Button("重试", Action([@Run(tickets)]))
+''',
+          toolProvider: provider,
+          onToolError: (tool, error) => toolErrors++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('数据加载失败：list_tickets'), findsOneWidget);
+    expect(toolErrors, 1);
+    expect(calls, 1);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('2'), findsOneWidget);
+    expect(calls, 2);
+  });
+
+  testWidgets('failed Query in controller mode renders theme errorBuilder', (tester) async {
+    Future<Object?> provider(String tool, Map<String, Object?> params) async => throw StateError('boom');
+    final theme = OpenUIThemeData(
+      colors: OpenUIThemeData.light().colors,
+      chartPalette: OpenUIThemeData.light().chartPalette,
+      errorBuilder: (context, error) => Text('custom-error:${error.code}'),
+    );
+    final controller = OpenUIController(library: library, toolProvider: provider, theme: theme);
+    addTearDown(controller.dispose);
+    controller.push('''
+root = TextContent("" + @Count(tickets.rows))
+tickets = Query("list_tickets", {})
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(home: OpenUIRenderer(library: library, controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('custom-error:tool-error'), findsOneWidget);
+  });
+
+  testWidgets('Modal opens as a dialog and does not reopen after close', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: '''
+root = Stack([m])
+m = Modal("标题", [TextContent("弹窗内容")])
+''',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('弹窗内容'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.pump();
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('bound EditableTable writes cells to form state', (tester) async {
+    final states = <Map<String, Object?>>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: '''
+root = Stack([t])
+t = EditableTable([Col("名", ["a", "b"])], true)
+''',
+          onStateUpdate: states.add,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'zhang');
+    await tester.pump();
+    expect(states, isNotEmpty);
+    expect(states.last['t:名:0'], 'zhang');
+  });
+
+  testWidgets('unbound EditableTable keeps cells local only', (tester) async {
+    final states = <Map<String, Object?>>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: '''
+root = Stack([t])
+t = EditableTable([Col("名", ["a", "b"])])
+''',
+          onStateUpdate: states.add,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'zhang');
+    await tester.pump();
+    expect(states.every((s) => !s.containsKey('t:名:0')), isTrue);
+  });
+
+  testWidgets('parse callbacks fire once when streaming ends, not per frame', (tester) async {
+    var parseResults = 0;
+    var parseErrors = 0;
+    final widget = OpenUIRenderer(
+      library: library,
+      response: 'root = Stack([Nope("x")])',
+      isStreaming: true,
+      onParseResult: (errors) => parseResults++,
+      onError: (error) => parseErrors++,
+    );
+    await tester.pumpWidget(MaterialApp(home: widget));
+    await tester.pump();
+    expect(parseResults, 0);
+    expect(parseErrors, 0);
+    // Streaming ends: same response, isStreaming false.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: 'root = Stack([Nope("x")])',
+          isStreaming: false,
+          onParseResult: (errors) => parseResults++,
+          onError: (error) => parseErrors++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(parseResults, 1);
+    expect(parseErrors, 1);
+    await tester.pump();
+    expect(parseResults, 1);
+    expect(parseErrors, 1);
+  });
+
+  testWidgets('parse callbacks fire once for a non-streaming response', (tester) async {
+    var parseResults = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OpenUIRenderer(
+          library: library,
+          response: 'root = TextContent("hi")',
+          onParseResult: (errors) => parseResults++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(parseResults, 1);
+    await tester.pump();
+    expect(parseResults, 1);
+  });
+}
