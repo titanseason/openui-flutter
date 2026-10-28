@@ -97,6 +97,27 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   IncrementalOpenUIParser? _incrementalParser;
   String _incrementalFingerprint = '';
 
+  // Subtree memoization: _buildNode results cached by node identity.
+  // The incremental parser returns the same ElementNode objects for
+  // unchanged statements, so a rebuild after a streaming push (or a
+  // form edit elsewhere) reuses the identical Widget for every pure
+  // subtree — and Flutter's element update short-circuits identical
+  // widgets without rebuilding below them. A subtree is cached only
+  // when its build read no form state and ran no custom registry
+  // builder (a host builder may close over mutable state). Theme and
+  // streaming changes clear the cache; Query results arrive as new
+  // nodes, so they miss naturally. Bounded: the cache clears at 1000
+  // entries, so a long session cannot grow it without limit.
+  final Map<ElementNode, Widget> _buildCache = {};
+  var _stateReads = 0;
+  var _customBuilderUsed = false;
+  OpenUIColorScheme? _lastThemeColors;
+  double _lastThemeCardRadius = -1;
+  List<Color>? _lastThemePalette;
+  WidgetBuilder? _lastThemeSkeletonBuilder;
+  Widget Function(BuildContext context, OpenUIError error)? _lastThemeErrorBuilder;
+  var _lastStreaming = false;
+
   String _libraryFingerprint(OpenUILibrary library) {
     return [library.root, ...library.components.map((c) => c.name), ...library.functions.map((f) => f.name), ...library.actions.map((a) => a.name)].join('|');
   }
@@ -144,6 +165,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onControllerChanged);
       widget.controller?.addListener(_onControllerChanged);
+      // A new controller parses with its own parser and state.
+      _buildCache.clear();
     }
   }
 
@@ -171,8 +194,17 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   /// and the local map otherwise, so every bound widget (Input,
   /// Select, Chips, groups, DatePicker, Slider) works in both modes
   /// without duplicating its build code.
-  Object? _stateValue(String key) => _controllerMode ? widget.controller!.formState[key] : _state[key];
-  bool _stateHas(String key) => _controllerMode ? widget.controller!.formState.containsKey(key) : _state.containsKey(key);
+  Object? _stateValue(String key) {
+    // Counts as a state read for memoization: a subtree that read
+    // form state during build is never cached (see _buildNode).
+    _stateReads++;
+    return _controllerMode ? widget.controller!.formState[key] : _state[key];
+  }
+
+  bool _stateHas(String key) {
+    _stateReads++;
+    return _controllerMode ? widget.controller!.formState.containsKey(key) : _state.containsKey(key);
+  }
   Map<String, Object?> _stateSnapshot() => _controllerMode ? widget.controller!.formState : Map.of(_state);
   void _setValue(String key, Object? value) {
     if (_controllerMode) {
@@ -355,6 +387,9 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       if (_incrementalParser == null || fingerprint != _incrementalFingerprint) {
         _incrementalParser = IncrementalOpenUIParser(widget.library);
         _incrementalFingerprint = fingerprint;
+        // A new parser means all-new node identities; drop the cache
+        // rather than leaking entries that can never hit again.
+        _buildCache.clear();
       }
       result = _incrementalParser!.parse(
         widget.response ?? '',
@@ -375,6 +410,26 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       if (_theme.errorBuilder != null) return _theme.errorBuilder!(context, const OpenUIError('no-root', '暂无可显示的界面'));
       return const Text('暂无可显示的界面');
     }
+    // Memoization invalidation, before any _buildNode call: theme
+    // (compared field-wise — the const light/dark themes are
+    // identical objects, while a host rebuilding an equal theme from
+    // new objects clears conservatively) and streaming (enabled
+    // flags flip when it ends).
+    final theme = _theme;
+    if (!identical(theme.colors, _lastThemeColors) ||
+        theme.cardRadius != _lastThemeCardRadius ||
+        !identical(theme.chartPalette, _lastThemePalette) ||
+        !identical(theme.skeletonBuilder, _lastThemeSkeletonBuilder) ||
+        !identical(theme.errorBuilder, _lastThemeErrorBuilder) ||
+        _lastStreaming != streaming) {
+      _buildCache.clear();
+      _lastThemeColors = theme.colors;
+      _lastThemeCardRadius = theme.cardRadius;
+      _lastThemePalette = theme.chartPalette;
+      _lastThemeSkeletonBuilder = theme.skeletonBuilder;
+      _lastThemeErrorBuilder = theme.errorBuilder;
+      _lastStreaming = streaming;
+    }
     // Material ancestor: several components (ListTile, Chip, TextField,
     // CheckboxListTile, SwitchListTile) require one, and a host may place
     // the renderer under MaterialApp without a Scaffold.
@@ -382,11 +437,32 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   Widget _buildNode(ElementNode node) {
+    final cached = _buildCache[node];
+    if (cached != null) return cached;
+    final readsBefore = _stateReads;
+    final customBefore = _customBuilderUsed;
+    final built = _buildNodeInner(node);
+    // A read anywhere inside (including a descendant) poisons the
+    // whole subtree: the next build re-runs it and re-checks.
+    if (_stateReads == readsBefore && _customBuilderUsed == customBefore) {
+      if (_buildCache.length >= 1000) _buildCache.clear();
+      _buildCache[node] = built;
+    }
+    return built;
+  }
+
+  Widget _buildNodeInner(ElementNode node) {
     // Lookup order: explicit registry first, controller/library
     // registry second (see _effectiveRegistry), built-in switch
     // third, the switch's default last (never a crash).
     final builder = _effectiveRegistry?.lookup(node.component);
-    if (builder != null) return builder(context, node, _buildNode);
+    if (builder != null) {
+      // A subtree that ran a custom builder is never cached, since
+      // the builder may close over host state; its pure built-in
+      // children can still be cached via their own _buildNode calls.
+      _customBuilderUsed = true;
+      return builder(context, node, _buildNode);
+    }
     switch (node.component) {
       case '__Skeleton':
         return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
@@ -767,18 +843,22 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         }
         if (slides.isEmpty) return const SizedBox.shrink();
         final sunk = node.stringOf('variant', 'card') == 'sunk';
+        // PageView.builder: slide widgets are built on demand for the
+        // pages the viewport asks for, instead of all slides up front
+        // on every build (the previous PageView children list).
         return SizedBox(
           height: 220,
-          child: PageView(
-            children: [
-              for (final slide in slides)
-                Container(
-                  color: sunk ? Colors.grey.shade100 : null,
-                  child: SingleChildScrollView(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final c in slide) _buildNode(c)]),
-                  ),
+          child: PageView.builder(
+            itemCount: slides.length,
+            itemBuilder: (context, index) {
+              final slide = slides[index];
+              return Container(
+                color: sunk ? Colors.grey.shade100 : null,
+                child: SingleChildScrollView(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final c in slide) _buildNode(c)]),
                 ),
-            ],
+              );
+            },
           ),
         );
       case 'Separator':

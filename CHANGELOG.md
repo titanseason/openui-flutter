@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Renderer incrementality: `_buildNode` results are memoized by
+  node identity, so a rebuild after a streaming push (or a host
+  rebuild) reuses the identical Widget for every pure subtree,
+  and Flutter's element update short-circuits identical widgets
+  without rebuilding below them. A subtree is cached only when
+  its build read no form state and ran no custom registry
+  builder; theme and streaming changes clear the cache, Query
+  results arrive as new nodes and miss naturally, and the cache
+  clears at 1000 entries. `Carousel` now uses `PageView.builder`,
+  so slide widgets are built on demand instead of all up front.
+  Known limit, unchanged from before: the parser re-evaluates
+  every statement when form state changes, so a form edit still
+  rebuilds the whole tree — memoization's win is streaming
+  appends and host rebuilds, not form edits.
 - React 0.18.1 full alignment (general library): `IconText` and
   `IconButton` `icon` accept an Icon node (React Icon ref) as
   well as the string name shorthand, completing the icon-ref
