@@ -69,7 +69,7 @@ OpenUILibrary openUIMvpLibrary({String root = 'Stack', List<FunctionDef> functio
         PropDef('children', _nodes, required: true),
       ]),
       const ComponentDef('Separator', 'Divider line between blocks.', []),
-      const ComponentDef('Modal', 'Dialog-style container; rendered inline as a titled card.', [
+      const ComponentDef('Modal', 'Dialog-style container; renders as a real AlertDialog.', [
         PropDef('title', _s),
         PropDef('children', _nodes, required: true),
       ]),
