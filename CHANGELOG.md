@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Token-level incremental parsing: `StreamingParser.push` no longer
+  runs two full parses per chunk. Two `IncrementalOpenUIParser`
+  instances (stable lines, display text) cache line parses by line
+  text and statement evaluations by dependency: a push only parses
+  new lines and re-evaluates statements whose dependencies changed
+  (tracked edges cover forward references, redefinitions, variables
+  and unresolved names). The standalone renderer uses the same
+  parser across builds, so a growing response is parsed
+  incrementally there too. Results match one-shot `parseOpenUI`
+  exactly (roots, error multisets, unresolved sets, request sets;
+  error order may differ). `IncrementalStats` (`parseCalls`,
+  `linesParsed`, `freshEvaluations`) proves it: a 61-line program
+  fed line by line parses 61 lines and evaluates ~121 statements,
+  not 61 x 61. Form state / Query data / failure changes still
+  re-evaluate everything (line parses reused), since any value could
+  depend on them.
 - Library split, as in React: `openUIStandardLibrary()` is now the
   general library (root `Stack`, 91 names) and `openUIChatLibrary()`
   is the chat library (root `Card`, 93 names: everything except

@@ -850,8 +850,12 @@ class _Evaluator {
   final OpenUILibrary library;
   final Map<String, _Statement> statements;
   final Map<String, Object?> state;
-  final List<OpenUIError> errors;
-  final Set<String> unresolved;
+
+  /// Mutable so the incremental parser can swap in fresh collections
+  /// per top-level evaluation and attribute errors/unresolved to the
+  /// top level that produced them. One-shot parsing never swaps.
+  List<OpenUIError> errors;
+  Set<String> unresolved;
   final Map<String, Object?> queryData;
 
   /// Statement names whose Query tool call failed. A failed Query
@@ -868,7 +872,83 @@ class _Evaluator {
   // Loop-variable scope for @Each templates (e.g. `t` in @Each(rows, "t", ...)).
   final Map<String, Object?> _scope = {};
 
+  /// Dependency bookkeeping for incremental parsing (unused by
+  /// one-shot parsing): the evaluation stack, forward edges
+  /// (parent -> statements it resolved) and the reverse map
+  /// (child -> parents). Edges are recorded on every resolution,
+  /// including memo hits, because a freshly evaluated parent clears
+  /// its old edges first and must re-record them.
+  final List<String> _evalStack = [];
+  final Map<String, Set<String>> _dependencies = {};
+  final Map<String, Set<String>> _dependents = {};
+
+  /// Cumulative fresh evaluations (memo misses). One-shot parsing
+  /// ignores this; the incremental parser reports it in its stats.
+  var freshEvaluations = 0;
+
+  /// Errors attributed to the statement being evaluated when they
+  /// were recorded (innermost frame), reset on each fresh evaluation
+  /// of that statement. The incremental parser assembles its error
+  /// list from this map, so a memo-hit statement's errors survive
+  /// while a re-evaluated statement's errors are replaced. One-shot
+  /// parsing populates but never reads it.
+  final Map<String, List<OpenUIError>> errorsByStatement = {};
+
+  /// Statements freshly evaluated since the incremental parser last
+  /// cleared this set (one parse's top-level evaluations).
+  final Set<String> freshStatements = {};
+
+  void _err(OpenUIError e) {
+    errors.add(e);
+    if (_evalStack.isNotEmpty) {
+      (errorsByStatement[_evalStack.last] ??= []).add(e);
+    } else {
+      (errorsByStatement[''] ??= []).add(e);
+    }
+  }
+
+  void _recordEdge(String child) {
+    if (_evalStack.isEmpty) return;
+    final parent = _evalStack.last;
+    (_dependencies[parent] ??= {}).add(child);
+    (_dependents[child] ??= {}).add(parent);
+  }
+
+  void _clearEdges(String parent) {
+    final old = _dependencies[parent];
+    if (old != null) {
+      for (final child in old) {
+        _dependents[child]?.remove(parent);
+      }
+    }
+    _dependencies[parent] = {};
+  }
+
+  /// Drop the cached value, variable default and requests of one
+  /// statement, so its next evaluation is fresh. Callers invalidate
+  /// transitive dependents separately via [_dependents].
+  void invalidate(String name) {
+    _memo.remove(name);
+    if (name.startsWith(r'$')) varDefaults.remove(name.substring(1));
+    queries.removeWhere((q) => q.statementName == name);
+    mutations.removeWhere((m) => m.statementName == name);
+    _seenRequests.remove('q:$name');
+    _seenRequests.remove('m:$name');
+  }
+
+  /// Drop every cached value (line parses are unaffected: this is a
+  /// re-evaluation, not a re-parse). Used when form state, Query data
+  /// or failure state changed, since any value could depend on them.
+  void invalidateAll() {
+    _memo.clear();
+    varDefaults.clear();
+    queries.clear();
+    mutations.clear();
+    _seenRequests.clear();
+  }
+
   Object? evalStatement(String name) {
+    _recordEdge(name);
     if (_memo.containsKey(name)) return _memo[name];
     final stmt = statements[name];
     if (stmt == null) {
@@ -876,8 +956,14 @@ class _Evaluator {
       return null;
     }
     if (_visiting.contains(name)) return null; // cycle: render as nothing
+    _clearEdges(name);
+    errorsByStatement[name] = [];
+    freshStatements.add(name);
+    freshEvaluations++;
     _visiting.add(name);
+    _evalStack.add(name);
     var v = stmt.expr is QueryExpr ? _evalQuery(name, stmt.expr as QueryExpr) : evalExpr(stmt.expr, false);
+    _evalStack.removeLast();
     _visiting.remove(name);
     // Stamp the statement name onto its node, so the renderer can
     // build per-statement keys (Modal dialog guard, EditableTable
@@ -922,12 +1008,24 @@ class _Evaluator {
   Object? evalVar(String name) {
     if (state.containsKey(name)) return state[name];
     if (varDefaults.containsKey(name)) return varDefaults[name];
+    _recordEdge('\$$name');
     final stmt = statements['\$$name'];
     if (stmt == null) {
       unresolved.add('\$$name');
       return null;
     }
+    // A top-level variable evaluation gets its own frame, so nested
+    // resolutions are attributed to the variable. A nested call keeps
+    // the outer frame: attributing inner edges to the outer parent
+    // over-invalidates but never under-invalidates.
+    final topLevel = _evalStack.isEmpty;
+    _clearEdges('\$$name');
+    errorsByStatement['\$$name'] = [];
+    freshStatements.add('\$$name');
+    freshEvaluations++;
+    if (topLevel) _evalStack.add('\$$name');
     final v = evalExpr(stmt.expr, false);
+    if (topLevel) _evalStack.removeLast();
     varDefaults[name] = v;
     return v;
   }
@@ -998,7 +1096,7 @@ class _Evaluator {
     if (e is QueryExpr) {
       // Query/Mutation used inline (not as its own statement) evaluates
       // to nothing, per the specification's `inline-reserved` rule.
-      errors.add(const OpenUIError('inline-reserved', 'Query/Mutation used inline'));
+      _err(const OpenUIError('inline-reserved', 'Query/Mutation used inline'));
       return null;
     }
     if (e is ActionListExpr) {
@@ -1047,7 +1145,7 @@ class _Evaluator {
       final args = [for (final a in e.args) evalExpr(a, false)];
       return ActionValue(e.name, args);
     }
-    errors.add(OpenUIError('unknown-function', 'unknown function ${e.name}'));
+    _err(OpenUIError('unknown-function', 'unknown function ${e.name}'));
     return null;
   }
 
@@ -1058,7 +1156,7 @@ class _Evaluator {
   // instead of failing. Undeclared action names never reach here.
   Object? _evalCustomAction(ActionDef def, AtCallExpr e) {
     if (e.args.length > def.params.length) {
-      errors.add(OpenUIError('runtime-error', 'too many args for @${def.name}'));
+      _err(OpenUIError('runtime-error', 'too many args for @${def.name}'));
       return null;
     }
     final args = <Object?>[];
@@ -1067,7 +1165,7 @@ class _Evaluator {
       final param = def.params[i];
       if (i >= e.args.length) {
         if (param.required) {
-          errors.add(OpenUIError('runtime-error', 'missing required param ${param.name} for @${def.name}'));
+          _err(OpenUIError('runtime-error', 'missing required param ${param.name} for @${def.name}'));
           failed = true;
         } else if (param.defaultValue != null) {
           args.add(param.defaultValue);
@@ -1078,7 +1176,7 @@ class _Evaluator {
       if (isQueryLoading(value)) return _preserveLoading(value);
       if (value == null) {
         if (param.required) {
-          errors.add(OpenUIError('runtime-error', 'null required param ${param.name} for @${def.name}'));
+          _err(OpenUIError('runtime-error', 'null required param ${param.name} for @${def.name}'));
           failed = true;
         } else if (param.defaultValue != null) {
           args.add(param.defaultValue);
@@ -1088,7 +1186,7 @@ class _Evaluator {
         continue;
       }
       if (!_typeOk(param.type, value)) {
-        errors.add(OpenUIError('runtime-error', 'wrong type for ${param.name} for @${def.name}'));
+        _err(OpenUIError('runtime-error', 'wrong type for ${param.name} for @${def.name}'));
         failed = true;
         continue;
       }
@@ -1107,7 +1205,7 @@ class _Evaluator {
   // default; an optional argument with no default is left out.
   Object? _evalCustomFunction(FunctionDef def, AtCallExpr e) {
     if (e.args.length > def.params.length) {
-      errors.add(OpenUIError('excess-args', 'too many args for @${def.name}'));
+      _err(OpenUIError('excess-args', 'too many args for @${def.name}'));
     }
     final args = <String, Object?>{};
     var failed = false;
@@ -1118,7 +1216,7 @@ class _Evaluator {
           if (param.defaultValue != null) {
             args[param.name] = param.defaultValue;
           } else {
-            errors.add(OpenUIError('missing-required', 'missing required param ${param.name} for @${def.name}'));
+            _err(OpenUIError('missing-required', 'missing required param ${param.name} for @${def.name}'));
             failed = true;
           }
         } else if (param.defaultValue != null) {
@@ -1132,7 +1230,7 @@ class _Evaluator {
       if (value == null) {
         if (raw is LiteralExpr) {
           if (param.required) {
-            errors.add(OpenUIError('null-required', 'null required param ${param.name} for @${def.name}'));
+            _err(OpenUIError('null-required', 'null required param ${param.name} for @${def.name}'));
             failed = true;
           } else if (param.defaultValue != null) {
             args[param.name] = param.defaultValue;
@@ -1150,10 +1248,10 @@ class _Evaluator {
       if (!_typeOk(param.type, value)) {
         final isLiteral = raw is LiteralExpr || raw is ListExpr || raw is ObjectExpr;
         if (param.required) {
-          errors.add(OpenUIError(isLiteral ? 'type-mismatch' : 'runtime-error', 'wrong type for ${param.name} for @${def.name}'));
+          _err(OpenUIError(isLiteral ? 'type-mismatch' : 'runtime-error', 'wrong type for ${param.name} for @${def.name}'));
           failed = true;
         } else {
-          errors.add(OpenUIError(isLiteral ? 'type-mismatch' : 'runtime-error', 'wrong type for ${param.name} for @${def.name}'));
+          _err(OpenUIError(isLiteral ? 'type-mismatch' : 'runtime-error', 'wrong type for ${param.name} for @${def.name}'));
           if (param.defaultValue != null) args[param.name] = param.defaultValue;
         }
         continue;
@@ -1165,11 +1263,11 @@ class _Evaluator {
     try {
       result = def.fn(args);
     } catch (err) {
-      errors.add(OpenUIError('runtime-error', '@${def.name} threw: $err'));
+      _err(OpenUIError('runtime-error', '@${def.name} threw: $err'));
       return null;
     }
     if (def.returns != null && result != null && !_typeOk(def.returns!, result)) {
-      errors.add(OpenUIError('runtime-error', '@${def.name} result does not match returns'));
+      _err(OpenUIError('runtime-error', '@${def.name} result does not match returns'));
       return null;
     }
     return result;
@@ -1315,11 +1413,11 @@ class _Evaluator {
   Object? _evalComponent(CallExpr e) {
     final def = library.byName[e.name];
     if (def == null) {
-      errors.add(OpenUIError('unknown-component', 'unknown component ${e.name}'));
+      _err(OpenUIError('unknown-component', 'unknown component ${e.name}'));
       return null;
     }
     if (e.args.length > def.props.length) {
-      errors.add(OpenUIError('excess-args', 'too many args for ${e.name}'));
+      _err(OpenUIError('excess-args', 'too many args for ${e.name}'));
     }
     final props = <String, Object?>{};
     var dropped = false;
@@ -1356,7 +1454,7 @@ class _Evaluator {
       }
       if (value == null && present) {
         if (prop.required && prop.defaultValue == null) {
-          errors.add(OpenUIError('null-required', 'null required prop ${prop.name} on ${e.name}'));
+          _err(OpenUIError('null-required', 'null required prop ${prop.name} on ${e.name}'));
           dropped = true;
           continue;
         }
@@ -1364,14 +1462,14 @@ class _Evaluator {
       }
       if (!present) {
         if (prop.required && prop.defaultValue == null) {
-          errors.add(OpenUIError('missing-required', 'missing required prop ${prop.name} on ${e.name}'));
+          _err(OpenUIError('missing-required', 'missing required prop ${prop.name} on ${e.name}'));
           dropped = true;
           continue;
         }
         value = prop.defaultValue;
       }
       if (value != null && !_typeOk(prop.type, value)) {
-        errors.add(OpenUIError('type-mismatch', 'wrong type for ${prop.name} on ${e.name}'));
+        _err(OpenUIError('type-mismatch', 'wrong type for ${prop.name} on ${e.name}'));
         if (prop.defaultValue != null) {
           value = prop.defaultValue;
         } else if (!prop.required) {
@@ -1533,8 +1631,16 @@ String autoCloseOpenUI(String text) {
   return buf.toString();
 }
 
+/// Incremental streaming: two [IncrementalOpenUIParser] instances,
+/// one for the complete lines (stable) and one for the display text
+/// (complete lines plus the autoclosed pending line). Previously each
+/// push ran two full parses of the whole response; now each push only
+/// parses new lines and re-evaluates changed statements.
 class StreamingParser {
-  StreamingParser(this.library, {this.state = const {}, this.queryData = const {}, this.failedQueries = const {}});
+  StreamingParser(this.library, {this.state = const {}, this.queryData = const {}, this.failedQueries = const {}}) {
+    _stable = IncrementalOpenUIParser(library);
+    _display = IncrementalOpenUIParser(library);
+  }
   final OpenUILibrary library;
   final Map<String, Object?> state;
   final Map<String, Object?> queryData;
@@ -1545,6 +1651,8 @@ class StreamingParser {
   final Set<String> failedQueries;
   var _buffer = '';
   var _pending = '';
+  late final IncrementalOpenUIParser _stable;
+  late final IncrementalOpenUIParser _display;
 
   /// Push the next chunk. Complete lines are parsed as-is; the pending
   /// (last, unterminated) line is parsed after autoclosing, so a
@@ -1556,10 +1664,10 @@ class StreamingParser {
     final parts = _buffer.split('\n');
     _pending = parts.removeLast();
     final complete = parts.join('\n');
-    final stable = parseOpenUI(complete, library, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
+    final stable = _stable.parse(complete, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
     if (_pending.trim().isEmpty) return stable;
     final displayText = complete.isEmpty ? autoCloseOpenUI(_pending) : '$complete\n${autoCloseOpenUI(_pending)}';
-    final display = parseOpenUI(displayText, library, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
+    final display = _display.parse(displayText, state: state, queryData: queryData, streaming: true, failedQueries: failedQueries);
     return ParseResult(
       root: display.root,
       errors: display.errors,
@@ -1571,8 +1679,349 @@ class StreamingParser {
 
   ParseResult finish() {
     _pending = '';
-    return parseOpenUI(_buffer, library, state: state, queryData: queryData, streaming: false, failedQueries: failedQueries);
+    return _stable.parse(_buffer, state: state, queryData: queryData, streaming: false, failedQueries: failedQueries);
   }
+}
+
+/// Cumulative counters for an [IncrementalOpenUIParser]: how many
+/// parses ran, how many lines were actually tokenized and parsed, and
+/// how many statements were freshly evaluated (memo misses). On a
+/// long stream these stay near the number of lines/statements, while
+/// a full re-parse per push would multiply them by the push count.
+class IncrementalStats {
+  const IncrementalStats({this.parseCalls = 0, this.linesParsed = 0, this.freshEvaluations = 0});
+  final int parseCalls;
+  final int linesParsed;
+  final int freshEvaluations;
+}
+
+/// The parse outcome of one processed line, cached by line text:
+/// either a statement (name + expression) or a parse failure.
+class _LineParse {
+  const _LineParse({this.name, this.expr, this.error});
+  final String? name;
+  final Expr? expr;
+  final String? error;
+}
+
+/// One processed (post-filter) line, with the raw-line index it came
+/// from, so suffix updates can drop exactly the lines that changed.
+class _ProcessedLine {
+  const _ProcessedLine(this.rawIndex, this.text, this.parse);
+  final int rawIndex;
+  final String text;
+  final _LineParse parse;
+}
+
+/// One definition of a statement name, in line order. A name's stack
+/// holds every definition still present; the last one wins.
+class _DefEntry {
+  const _DefEntry(this.rawIndex, this.stmt);
+  final int rawIndex;
+  final _Statement stmt;
+}
+
+/// An incremental OpenUI Lang parser: the same result as [parseOpenUI]
+/// for the same text, but repeated parses of a growing text only redo
+/// the work that changed.
+///
+/// Two caches make this work. Lines are parsed once per line text
+/// (tokenize + expression parse) and statements are evaluated once
+/// per version: the evaluator's memo is kept across parses, and a
+/// dependency graph (parent -> resolved statements, recorded during
+/// evaluation, including memo hits and unresolved references) tells
+/// the parser which statements go stale when a definition is added,
+/// changed or removed. A statement that goes stale is re-evaluated
+/// with its dependents; everything else reuses its node, so unchanged
+/// subtrees keep identical [ElementNode] instances across pushes.
+///
+/// What is NOT incremental, deliberately: each parse still scans the
+/// text once to split lines and find the common line prefix, and
+/// assembling the result walks the (small) error buckets. Form state,
+/// Query data and failure state are compared by snapshot on every
+/// parse; when any of them changed, every value is re-evaluated
+/// (line parses are still reused), because any value could depend on
+/// them. Those changes come from user input and fetch completions,
+/// not from token pushes, so the streaming path stays incremental.
+/// Errors are assembled per statement in definition order (evaluation
+/// errors are attributed to the statement being evaluated), so error
+/// order can differ from a full parse; error multisets, roots,
+/// unresolved sets and request sets match exactly.
+///
+/// A throwing custom function leaves the evaluator's in-progress
+/// stack dirty; the parser resets that stack and rethrows, but the
+/// instance should be discarded after a throw, as with any crash.
+class IncrementalOpenUIParser {
+  IncrementalOpenUIParser(this.library) {
+    _evaluator = _Evaluator(library, _statements, _evaluatorState, [], {}, queryData: _evaluatorQueryData, failedQueries: _evaluatorFailedQueries);
+  }
+
+  final OpenUILibrary library;
+
+  static final _stmtRe = RegExp(r'^([A-Za-z_][A-Za-z0-9_]*|\$[A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$');
+
+  IncrementalStats get stats => IncrementalStats(parseCalls: _parseCalls, linesParsed: _linesParsed, freshEvaluations: _evaluator.freshEvaluations);
+
+  var _parseCalls = 0;
+  var _linesParsed = 0;
+
+  // Line cache: raw lines, the context-filter state after each one,
+  // and the processed lines derived from them.
+  final List<String> _rawLines = [];
+  final List<bool> _contextAfter = [];
+  final List<_ProcessedLine> _processed = [];
+  final Map<String, _LineParse> _lineParseCache = {};
+
+  // Statement state, maintained incrementally from [_processed].
+  final Map<String, _Statement> _statements = {};
+  final Map<String, List<_DefEntry>> _definitions = {};
+  final Map<String, int> _firstLine = {};
+  final List<String> _order = [];
+  final List<String> _varNames = [];
+  final List<OpenUIError> _parseErrors = [];
+
+  // Evaluation state: one persistent evaluator, per-top-level
+  // unresolved buckets (top level = a $variable, or the root), and
+  // per-statement error entries (see _Evaluator.errorsByStatement).
+  // Unresolved names are re-encountered on every evaluation, so a
+  // replaced bucket stays correct; errors only occur on fresh
+  // evaluations, which is why they need per-statement attribution.
+  late final _Evaluator _evaluator;
+  final Map<String, Object?> _evaluatorState = {};
+  final Map<String, Object?> _evaluatorQueryData = {};
+  final Set<String> _evaluatorFailedQueries = {};
+  final Map<String, Set<String>> _unresolvedBuckets = {};
+  String? _lastRootName;
+  String? _fallbackName;
+
+  // Snapshots for change detection.
+  Map<String, Object?> _lastState = {};
+  Map<String, Object?> _lastQueryData = {};
+  Set<String> _lastFailedQueries = {};
+
+  ParseResult parse(String text, {Map<String, Object?> state = const {}, Map<String, Object?> queryData = const {}, bool streaming = false, Set<String> failedQueries = const {}}) {
+    _parseCalls++;
+    final rawLines = text.split('\n');
+    var prefix = 0;
+    while (prefix < rawLines.length && prefix < _rawLines.length && rawLines[prefix] == _rawLines[prefix]) {
+      prefix++;
+    }
+    var changed = <String>{};
+    if (prefix < _rawLines.length || prefix < rawLines.length) {
+      changed = _applyLineSuffix(prefix, rawLines);
+    }
+    if (!_mapsEqual(state, _lastState) || !_mapsEqual(queryData, _lastQueryData) || !_setsEqual(failedQueries, _lastFailedQueries)) {
+      changed = _statements.keys.toSet();
+      _evaluator.invalidateAll();
+      _unresolvedBuckets.clear();
+      _evaluatorState
+        ..clear()
+        ..addAll(state);
+      _evaluatorQueryData
+        ..clear()
+        ..addAll(queryData);
+      _evaluatorFailedQueries
+        ..clear()
+        ..addAll(failedQueries);
+    }
+    _lastState = Map.of(state);
+    _lastQueryData = Map.of(queryData);
+    _lastFailedQueries = Set.of(failedQueries);
+
+    // Dirty closure over the reverse dependency graph.
+    final dirty = <String>{};
+    final queue = [...changed];
+    while (queue.isNotEmpty) {
+      final name = queue.removeLast();
+      if (!dirty.add(name)) continue;
+      final parents = _evaluator._dependents[name];
+      if (parents != null) queue.addAll(parents);
+    }
+    for (final name in dirty) {
+      _evaluator.invalidate(name);
+    }
+
+    // Top levels, in full-parse order: $variables first, then root.
+    // (A fallback candidate can itself be a $variable; full parsing
+    // evaluates it twice with the second call a memo hit, so dedupe.)
+    final topLevels = <String>[..._varNames];
+    final rootName = _resolveRootName();
+    if (rootName != null && !topLevels.contains(rootName)) topLevels.add(rootName);
+    _unresolvedBuckets.removeWhere((k, _) => !topLevels.contains(k));
+    _evaluator.freshStatements.clear();
+
+    Object? rootValue;
+    for (final top in topLevels) {
+      final isRoot = top == rootName;
+      final topDirty = dirty.contains(top) || (isRoot && top != _lastRootName);
+      if (topDirty) {
+        _evaluator.errors = [];
+        _evaluator.unresolved = {};
+        try {
+          if (top.startsWith(r'$')) {
+            final v = _evaluator.evalVar(top.substring(1));
+            if (isRoot) rootValue = v;
+          } else {
+            rootValue = _evaluator.evalStatement(top);
+          }
+        } catch (e) {
+          _evaluator._evalStack.clear();
+          _evaluator._visiting.clear();
+          rethrow;
+        }
+        _unresolvedBuckets[top] = _evaluator.unresolved;
+      } else if (isRoot) {
+        // Clean root: statement values come from the memo, variable
+        // values from varDefaults/state (a cache hit appends nothing,
+        // so buckets are untouched).
+        rootValue = top.startsWith(r'$') ? _evaluator.evalVar(top.substring(1)) : _evaluator._memo[top];
+      }
+    }
+    _lastRootName = rootName;
+
+    // Drop error entries of invalidated statements that were not
+    // freshly evaluated this parse (they are unreachable now, so a
+    // full parse would not report their errors either).
+    for (final name in dirty) {
+      if (!_evaluator.freshStatements.contains(name)) {
+        _evaluator.errorsByStatement.remove(name);
+      }
+    }
+
+    final errors = <OpenUIError>[..._parseErrors];
+    for (final name in _order) {
+      errors.addAll(_evaluator.errorsByStatement[name] ?? const []);
+    }
+    errors.addAll(_evaluator.errorsByStatement[''] ?? const []);
+    final rootNode = rootValue is ElementNode ? rootValue : null;
+    if (!_statements.containsKey('root')) {
+      if (streaming) {
+        errors.add(rootNode == null ? const OpenUIError('no-root', 'no root statement', warning: true) : const OpenUIError('no-root', 'no root statement, using fallback', warning: true));
+      }
+    }
+    final unresolved = streaming ? <String>[] : _unresolvedBuckets.values.expand((s) => s).toSet().toList();
+    return ParseResult(root: rootNode, errors: errors, unresolved: unresolved, queries: List.of(_evaluator.queries), mutations: List.of(_evaluator.mutations));
+  }
+
+  /// Reprocess raw lines from [prefix] onward: drop processed lines
+  /// from the old suffix (popping definitions, in last-wins order)
+  /// and process the new suffix through the context filter. Returns
+  /// the statement names whose definitions changed.
+  Set<String> _applyLineSuffix(int prefix, List<String> rawLines) {
+    final changed = <String>{};
+    while (_processed.isNotEmpty && _processed.last.rawIndex >= prefix) {
+      final entry = _processed.removeLast();
+      if (entry.parse.error != null) _parseErrors.removeLast();
+      final name = entry.parse.name;
+      if (name != null && entry.parse.expr != null) {
+        changed.add(name);
+        final stack = _definitions[name];
+        while (stack != null && stack.isNotEmpty && stack.last.rawIndex >= prefix) {
+          stack.removeLast();
+        }
+        if (stack == null || stack.isEmpty) {
+          _definitions.remove(name);
+          _statements.remove(name);
+          if ((_firstLine[name] ?? -1) >= prefix) {
+            _firstLine.remove(name);
+            _order.remove(name);
+            _varNames.remove(name);
+          }
+        } else {
+          _statements[name] = stack.last.stmt;
+        }
+      }
+    }
+    _rawLines.length = prefix;
+    _contextAfter.length = prefix;
+    var inContext = prefix == 0 ? false : _contextAfter[prefix - 1];
+    for (var i = prefix; i < rawLines.length; i++) {
+      final raw = rawLines[i];
+      final line = raw.trim();
+      if (line.startsWith(']]>openui:')) {
+        inContext = line.startsWith(']]>openui:context');
+        _rawLines.add(raw);
+        _contextAfter.add(inContext);
+        continue;
+      }
+      if (inContext) {
+        if (line.startsWith('}')) inContext = false;
+        _rawLines.add(raw);
+        _contextAfter.add(inContext);
+        continue;
+      }
+      if (line.isEmpty) {
+        _rawLines.add(raw);
+        _contextAfter.add(inContext);
+        continue;
+      }
+      _rawLines.add(raw);
+      _contextAfter.add(inContext);
+      var lp = _lineParseCache[line];
+      if (lp == null) {
+        lp = _parseLine(line);
+        _lineParseCache[line] = lp;
+        _linesParsed++;
+      }
+      _processed.add(_ProcessedLine(i, line, lp));
+      if (lp.error != null) _parseErrors.add(OpenUIError('parse-failed', lp.error!));
+      final name = lp.name;
+      if (name != null && lp.expr != null) {
+        changed.add(name);
+        final stack = _definitions.putIfAbsent(name, () => []);
+        stack.add(_DefEntry(i, _Statement(name, lp.expr!)));
+        _statements[name] = stack.last.stmt;
+        if (!_firstLine.containsKey(name)) {
+          _firstLine[name] = i;
+          _order.add(name);
+          if (name.startsWith(r'$')) _varNames.add(name);
+        }
+      }
+    }
+    return changed;
+  }
+
+  _LineParse _parseLine(String line) {
+    final m = _stmtRe.firstMatch(line);
+    if (m == null) return _LineParse(error: 'not a statement: $line');
+    final name = m.group(1)!;
+    final exprText = m.group(2)!;
+    try {
+      final expr = _ExprParser(_tokenize(exprText)).parse();
+      return _LineParse(name: name, expr: expr);
+    } catch (_) {
+      return _LineParse(name: name, error: 'cannot parse statement $name');
+    }
+  }
+
+  String? _resolveRootName() {
+    if (_statements.containsKey('root')) return 'root';
+    if (_fallbackName != null) {
+      final stmt = _statements[_fallbackName];
+      if (stmt != null && stmt.expr is CallExpr && (stmt.expr as CallExpr).name == library.root) {
+        return _fallbackName;
+      }
+      _fallbackName = null;
+    }
+    for (final name in _order) {
+      final stmt = _statements[name]!;
+      if (stmt.expr is CallExpr && (stmt.expr as CallExpr).name == library.root) {
+        _fallbackName = name;
+        return name;
+      }
+    }
+    return null;
+  }
+
+  bool _mapsEqual(Map<String, Object?> a, Map<String, Object?> b) {
+    if (a.length != b.length) return false;
+    for (final k in a.keys) {
+      if (!b.containsKey(k) || b[k] != a[k]) return false;
+    }
+    return true;
+  }
+
+  bool _setsEqual(Set<String> a, Set<String> b) => a.length == b.length && a.containsAll(b);
 }
 
 /// A stored assistant message, split into its parts: the prose, the

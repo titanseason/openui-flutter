@@ -77,6 +77,19 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   ParseResult? _parseCallbackPending;
   String? _parseCallbackKey;
 
+  // Incremental parsing for standalone mode: the State owns one
+  // parser per library content, so a growing response is parsed
+  // incrementally across builds instead of fully re-parsed on every
+  // build. The fingerprint covers names, not function implementations;
+  // a host swapping implementations under the same names should
+  // rebuild with a new widget key.
+  IncrementalOpenUIParser? _incrementalParser;
+  String _incrementalFingerprint = '';
+
+  String _libraryFingerprint(OpenUILibrary library) {
+    return [library.root, ...library.components.map((c) => c.name), ...library.functions.map((f) => f.name), ...library.actions.map((a) => a.name)].join('|');
+  }
+
   void _maybeFireParseCallbacks(ParseResult result, bool streaming) {
     if (widget.onParseResult == null && widget.onError == null) return;
     if (streaming) {
@@ -327,9 +340,13 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       result = widget.controller!.parseCurrent();
       streaming = widget.controller!.isStreaming;
     } else {
-      result = parseOpenUI(
+      final fingerprint = _libraryFingerprint(widget.library);
+      if (_incrementalParser == null || fingerprint != _incrementalFingerprint) {
+        _incrementalParser = IncrementalOpenUIParser(widget.library);
+        _incrementalFingerprint = fingerprint;
+      }
+      result = _incrementalParser!.parse(
         widget.response ?? '',
-        widget.library,
         state: _state,
         queryData: _queryData,
         streaming: widget.isStreaming,
