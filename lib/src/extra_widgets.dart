@@ -495,6 +495,48 @@ class DatePickerField extends StatelessWidget {
   }
 }
 
+/// Range-mode date picker: the value is a {from, to} map of
+/// yyyy-MM-dd strings, mirroring React's DateRange {from, to} shape.
+/// Displays "from → to", either side alone, or 未选择 when empty.
+class DateRangeField extends StatelessWidget {
+  const DateRangeField({required this.stateKey, required this.value, required this.onChanged, this.enabled = true});
+  final String? stateKey;
+  final Map? value;
+  final void Function(String?, Object?) onChanged;
+  final bool enabled;
+  @override
+  Widget build(BuildContext context) {
+    final from = value?['from'] is String ? value!['from'] as String : null;
+    final to = value?['to'] is String ? value!['to'] as String : null;
+    final display = switch ((from, to)) {
+      (String f, String t) => '$f → $t',
+      (String f, null) => '$f → ?',
+      (null, String t) => '? → $t',
+      _ => '未选择',
+    };
+    String iso(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(display)),
+          OutlinedButton(
+            onPressed: enabled
+                ? () async {
+                    final picked = await showDateRangePicker(context: context, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) {
+                      onChanged(stateKey, {'from': iso(picked.start), 'to': iso(picked.end)});
+                    }
+                  }
+                : null,
+            child: const Text('选择日期范围'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SliderField extends StatelessWidget {
   const SliderField({required this.label, required this.stateKey, required this.value, required this.min, required this.max, this.divisions, required this.onChanged, this.enabled = true});
   final String? label;

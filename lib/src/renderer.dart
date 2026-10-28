@@ -13,6 +13,17 @@ import 'primitives.dart';
 import 'registry.dart';
 import 'theme.dart';
 
+/// Resolves an icon prop that may be a string name (this port's
+/// shorthand) or an Icon node (React's Icon ref, whose name and
+/// category fallback both apply). Anything else yields null.
+IconData? _iconFromProp(Object? value) {
+  if (value is String) return iconByName(value);
+  if (value is ElementNode && value.component == 'Icon') {
+    return iconByName(value.stringOf('name'), value.props['category'] is String ? value.stringOf('category') : null);
+  }
+  return null;
+}
+
 class OpenUIRenderer extends StatefulWidget {
   const OpenUIRenderer({
     super.key,
@@ -611,7 +622,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'LineChart':
         return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'PieChart':
-        return _PieWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
+        final pie = _sliceData(node);
+        return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
       case 'Form':
         // Fields render in order, then the Buttons node. `name` is the
         // form identifier and renders nothing by itself.
@@ -1114,9 +1126,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'HorizontalBarChart':
         return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
       case 'RadialChart':
-        return RadialChartWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), palette: _theme.chartPalette);
+        final radial = _sliceData(node);
+        return RadialChartWidget(labels: radial.labels, values: radial.values, palette: _theme.chartPalette);
       case 'SingleStackedBarChart':
-        return SingleStackedBarWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), palette: _theme.chartPalette);
+        final stacked = _sliceData(node);
+        return SingleStackedBarWidget(labels: stacked.labels, values: stacked.values, palette: _theme.chartPalette);
       case 'ScatterChart':
         return _LabeledChart(
           xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null,
@@ -1131,7 +1145,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         };
         return Wrap(spacing: 8, children: [for (final tag in _strings(node.props['tags'])) Chip(label: Text(tag, style: TextStyle(fontSize: tagSize)))]);
       case 'Tag':
-        // icon is a string name in this port (React takes an Icon ref).
+        // icon is an Icon node (React Icon ref) or a string name.
         final tagColor = switch (node.stringOf('variant', 'neutral')) {
           'info' => Colors.blue.shade100,
           'success' => Colors.green.shade100,
@@ -1146,7 +1160,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         };
         return Chip(
           label: Text(node.stringOf('text'), style: TextStyle(fontSize: tagFontSize)),
-          avatar: node.props['icon'] is String ? Icon(iconByName(node.stringOf('icon')), size: 18) : null,
+          avatar: _iconFromProp(node.props['icon']) != null ? Icon(_iconFromProp(node.props['icon'])!, size: 18) : null,
           backgroundColor: tagColor,
         );
       case 'EntityList':
@@ -1240,10 +1254,21 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'DatePicker':
-        // mode range is accepted but renders as the single-date
-        // picker: no range UI is built in this port (documented
-        // deviation).
+        // mode range uses showDateRangePicker and stores a
+        // {from, to} map of yyyy-MM-dd strings, mirroring React's
+        // DateRange {from, to} value shape.
         final dateKey = node.stringOf('name');
+        if (node.stringOf('mode', 'single') == 'range') {
+          final raw = _stateHas(dateKey) ? _stateValue(dateKey) : node.props['value'];
+          return DateRangeField(
+            stateKey: dateKey,
+            value: raw is Map ? raw : null,
+            enabled: !_effectiveStreaming,
+            onChanged: (k, v) {
+              if (k != null) _setValue(k, v);
+            },
+          );
+        }
         final value = _stateHas(dateKey) ? '${_stateValue(dateKey)}' : (node.props['value'] is String ? node.stringOf('value') : null);
         return DatePickerField(
           stateKey: dateKey,
@@ -1603,6 +1628,22 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     return const [];
   }
 
+  /// React's PieChart.ts buildSliceData fallback: when `values` is
+  /// absent and `labels` holds Slice nodes, each Slice contributes
+  /// its category and value. This runs before _strings, which would
+  /// otherwise stringify the nodes. Applies to Pie, Radial and
+  /// SingleStackedBar charts alike.
+  ({List<String> labels, List<double> values}) _sliceData(ElementNode node) {
+    final values = _numbers(node.props['values']);
+    if (values.isNotEmpty) return (labels: _strings(node.props['labels']), values: values);
+    final slices = [for (final n in node.nodesOf('labels')) if (n.component == 'Slice') n];
+    if (slices.isEmpty) return (labels: _strings(node.props['labels']), values: values);
+    return (
+      labels: [for (final s in slices) s.stringOf('category')],
+      values: [for (final s in slices) s.numOf('value')],
+    );
+  }
+
   /// Object props arrive as Map<dynamic, dynamic> from the Lang
   /// evaluator; normalize keys to strings for column/row objects.
   Map<String, Object?> _stringMap(Object? v) {
@@ -1959,9 +2000,8 @@ class _ChipsWidgetState extends State<_ChipsWidget> {
         for (final item in widget.items)
           ChoiceChip(
             label: Text(item.stringOf('label')),
-            // icon is a string name in this port (React takes an Icon
-            // ref); see the ChipItem def in library.dart.
-            avatar: item.props['icon'] is String ? Icon(iconByName(item.stringOf('icon')), size: 18) : null,
+            // icon is an Icon node (React Icon ref) or a string name.
+            avatar: _iconFromProp(item.props['icon']) != null ? Icon(_iconFromProp(item.props['icon'])!, size: 18) : null,
             selected: multi ? selectedSet.contains(item.props['value']) : selectedSingle == item.props['value'],
             onSelected: (widget.enabled && item.props['disabled'] != true)
                 ? (v) {

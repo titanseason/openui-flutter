@@ -241,21 +241,21 @@ List<ComponentDef> _baseComponents() => [
         PropDef('category', _s, required: true),
         PropDef('values', _l, required: true),
       ]),
-      const ComponentDef('PieChart', 'Pie chart: labels plus values arrays. variant: pie/donut; appearance: circular/semiCircular.', [
+      const ComponentDef('PieChart', 'Pie chart: labels plus values arrays, or Slice nodes in labels when values is absent (React buildSliceData fallback). variant: pie/donut; appearance: circular/semiCircular.', [
         PropDef('labels', _l, required: true),
-        PropDef('values', _l, required: true),
+        PropDef('values', _l),
         PropDef('variant', _s),
         PropDef('appearance', _s),
       ]),
-      const ComponentDef('RadialChart', 'Radial chart: labels plus values arrays.', [
+      const ComponentDef('RadialChart', 'Radial chart: labels plus values arrays, or Slice nodes in labels when values is absent (React buildSliceData fallback).', [
         PropDef('labels', _l, required: true),
-        PropDef('values', _l, required: true),
+        PropDef('values', _l),
       ]),
-      const ComponentDef('SingleStackedBarChart', 'One segmented bar: labels plus values arrays.', [
+      const ComponentDef('SingleStackedBarChart', 'One segmented bar: labels plus values arrays, or Slice nodes in labels when values is absent (React buildSliceData fallback).', [
         PropDef('labels', _l, required: true),
-        PropDef('values', _l, required: true),
+        PropDef('values', _l),
       ]),
-      const ComponentDef('Slice', 'One pie/radial/stacked slice: category and numeric value. A virtual component: charts now take labels/values arrays, so Slice is only meaningful as data, not as a rendered node.', [
+      const ComponentDef('Slice', 'One pie/radial/stacked slice: category and numeric value. A virtual component: not rendered on its own, but a chart with no values reads Slice nodes from its labels (React\'s buildSliceData fallback).', [
         PropDef('category', _s, required: true),
         PropDef('value', _n, required: true),
       ]),
@@ -277,9 +277,9 @@ List<ComponentDef> _baseComponents() => [
         PropDef('tags', _l, required: true),
         PropDef('size', _s),
       ]),
-      const ComponentDef('Tag', 'One tag chip. icon is an optional icon name string (React takes an Icon ref; this port keeps the string name). size: sm/md/lg; variant: neutral/info/success/warning/danger.', [
+      const ComponentDef('Tag', 'One tag chip. icon is an Icon node (React Icon ref) or a string name shorthand. size: sm/md/lg; variant: neutral/info/success/warning/danger.', [
         PropDef('text', _s, required: true),
-        PropDef('icon', _s),
+        PropDef('icon', _any),
         PropDef('size', _s),
         PropDef('variant', _s),
       ]),
@@ -349,7 +349,7 @@ List<ComponentDef> _baseComponents() => [
         PropDef('value', _s, required: true),
         PropDef('label', _s, required: true),
       ]),
-      const ComponentDef('DatePicker', 'Date picker; state key is name. mode range is accepted but renders as the single-date picker (documented deviation, see renderer).', [
+      const ComponentDef('DatePicker', 'Date picker; state key is name. mode single (default) or range; a range value is a {from, to} map of yyyy-MM-dd strings (React DateRange shape).', [
         PropDef('name', _s, required: true),
         PropDef('mode', _s),
         PropDef('rules', _any),
@@ -409,10 +409,10 @@ List<ComponentDef> _baseComponents() => [
         PropDef('rules', _any),
         PropDef('defaultValue', _any),
       ]),
-      const ComponentDef('ChipItem', 'One chip option: value first, then label; icon is a string name (React takes an Icon ref; this port keeps the string name).', [
+      const ComponentDef('ChipItem', 'One chip option: value first, then label; icon is an Icon node (React Icon ref) or a string name shorthand.', [
         PropDef('value', _s, required: true),
         PropDef('label', _s, required: true),
-        PropDef('icon', _s),
+        PropDef('icon', _any),
         PropDef('disabled', _b),
       ]),
       const ComponentDef('OptionCards', 'Selectable cards; state key is name. type: single/multiple (default single).', [

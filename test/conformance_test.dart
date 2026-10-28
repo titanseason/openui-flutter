@@ -67,6 +67,10 @@ t1 = Series("Trend", [5, 12, 8, 20])
     );
     await tester.pumpAndSettle();
     expect(find.text('Business Dashboard'), findsOneWidget);
+    // The pie has no values array: its Slice nodes supply the data
+    // (React's buildSliceData fallback), so the slice labels render.
+    expect(find.textContaining('Online'), findsOneWidget);
+    expect(find.textContaining('Offline'), findsOneWidget);
   });
 
   testWidgets('conformance: form + Query screen program', (tester) async {

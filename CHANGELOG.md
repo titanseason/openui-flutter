@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- React 0.18.1 full alignment (general library), feature
+  completion: `DatePicker` `mode` `"range"` now uses
+  `showDateRangePicker` and stores a `{from, to}` map of
+  yyyy-MM-dd strings, mirroring React's DateRange value shape;
+  `Tag` and `ChipItem` `icon` accept an Icon node (React's Icon
+  ref, with its name and category fallback) as well as the string
+  name shorthand; pie/radial/single-stacked charts read Slice
+  nodes from `labels` when `values` is absent (React's
+  buildSliceData fallback) — which also makes `values` optional
+  on those three charts, since the fallback was previously
+  unreachable behind the required-values check.
 - React 0.18.1 full alignment (general library): props that were
   accepted with no visible effect now do what React does — `Icon`
   `category` picks the fallback icon when the name does not resolve
