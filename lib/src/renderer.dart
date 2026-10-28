@@ -7,6 +7,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'extra_widgets.dart';
 import 'lang.dart';
+import 'registry.dart';
 
 class ActionEvent {
   const ActionEvent(this.type, this.args, this.formState);
@@ -30,6 +31,7 @@ class OpenUIRenderer extends StatefulWidget {
     this.initialState = const {},
     this.toolProvider,
     this.onToolError,
+    this.registry,
   });
   final OpenUILibrary library;
   final String? response;
@@ -39,6 +41,7 @@ class OpenUIRenderer extends StatefulWidget {
   final Map<String, Object?> initialState;
   final OpenUIToolProvider? toolProvider;
   final void Function(String tool, Object error)? onToolError;
+  final ComponentRegistry? registry;
 
   @override
   State<OpenUIRenderer> createState() => _OpenUIRendererState();
@@ -240,6 +243,10 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   Widget _buildNode(ElementNode node) {
+    // Lookup order: explicit registry builder first, built-in switch
+    // second, the switch's default last (never a crash).
+    final builder = widget.registry?.lookup(node.component);
+    if (builder != null) return builder(context, node, _buildNode);
     switch (node.component) {
       case '__Skeleton':
         return const _Skeleton();
