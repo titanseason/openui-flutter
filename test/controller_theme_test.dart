@@ -181,4 +181,152 @@ tickets = Query("list_tickets", {})
     expect(find.text('旧参数内容'), findsNothing);
     controller.dispose();
   });
+
+  testWidgets('typing into a bound Input in controller mode updates controller.formState and a \$variable display', (tester) async {
+    final controller = OpenUIController(library: openUIMvpLibrary());
+    controller.push('''
+root = Stack([inp, show])
+inp = Input("城市", "city")
+show = TextContent("city=" + \$city)
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OpenUIRenderer(library: controller.library, controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'shanghai');
+    await tester.pumpAndSettle();
+    expect(controller.formState['city'], 'shanghai');
+    expect(find.text('city=shanghai'), findsOneWidget);
+    controller.dispose();
+  });
+
+  testWidgets('typing into a bound TextArea in controller mode updates controller.formState and a \$variable display', (tester) async {
+    final controller = OpenUIController(library: openUIMvpLibrary());
+    controller.push('''
+root = Stack([area, show])
+area = TextArea("备注", "note")
+show = TextContent("note=" + \$note)
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OpenUIRenderer(library: controller.library, controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'hello');
+    await tester.pumpAndSettle();
+    expect(controller.formState['note'], 'hello');
+    expect(find.text('note=hello'), findsOneWidget);
+    controller.dispose();
+  });
+
+  testWidgets('controller mode: a failed Query is not retried on rebuild, but an explicit @Run retries it', (tester) async {
+    var calls = 0;
+    final controller = OpenUIController(
+      library: openUIMvpLibrary(),
+      toolProvider: (tool, params) async {
+        calls++;
+        if (calls == 1) throw StateError('boom');
+        return {'rows': [1, 2]};
+      },
+    );
+    controller.push('''
+root = Stack([count, btn])
+count = TextContent("" + @Count(tickets.rows))
+tickets = Query("list_tickets", {})
+btn = Button("重试", Action([@Run(tickets)]))
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OpenUIRenderer(library: controller.library, controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    expect(find.text('2'), findsNothing);
+    // Rebuilds alone must not retry the failed fetch.
+    await tester.pump();
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    expect(find.text('2'), findsOneWidget);
+    controller.dispose();
+  });
+
+  testWidgets('controller mode: a failed Mutation stops the rest of an action list', (tester) async {
+    final events = <ActionEvent>[];
+    final controller = OpenUIController(
+      library: openUIMvpLibrary(),
+      toolProvider: (tool, params) async => throw StateError('boom'),
+    );
+    controller.onAction.listen(events.add);
+    controller.push('''
+root = Stack([btn])
+btn = Button("提交", Action([@Run(bad), @ToAssistant("after")]))
+bad = Mutation("bad_mut", {})
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OpenUIRenderer(library: controller.library, controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('提交'));
+    await tester.pumpAndSettle();
+    expect(events.map((e) => e.type), contains('mutationError'));
+    expect(events.map((e) => e.type), isNot(contains('toAssistant')));
+    controller.dispose();
+  });
+
+  testWidgets('controller mode: a successful Mutation refetches all queries', (tester) async {
+    var queryCalls = 0;
+    var mutationCalls = 0;
+    final events = <ActionEvent>[];
+    final controller = OpenUIController(
+      library: openUIMvpLibrary(),
+      toolProvider: (tool, params) async {
+        if (tool == 'list_tickets') {
+          queryCalls++;
+          return {'rows': [1]};
+        }
+        if (tool == 'retry') {
+          mutationCalls++;
+          return {'ok': true};
+        }
+        return null;
+      },
+    );
+    controller.onAction.listen(events.add);
+    controller.push('''
+root = Stack([count, btn])
+count = TextContent("" + @Count(tickets.rows))
+tickets = Query("list_tickets", {}, {"rows": []})
+btn = Button("重试", Action([@Run(retry)]))
+retry = Mutation("retry", {})
+''');
+    controller.finish();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: OpenUIRenderer(library: controller.library, controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(queryCalls, 1);
+    expect(find.text('1'), findsOneWidget);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(mutationCalls, 1);
+    expect(queryCalls, 2);
+    expect(events.map((e) => e.type), contains('mutationResult'));
+    controller.dispose();
+  });
 }

@@ -420,7 +420,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
               border: const OutlineInputBorder(),
             ),
             onChanged: (v) {
-              if (bind != null) _updateState(bind, v);
+              if (bind != null) _setValue(bind, v);
             },
           ),
         );
@@ -630,7 +630,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
             enabled: !_effectiveStreaming,
             decoration: InputDecoration(labelText: node.stringOf('label'), hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
             onChanged: (v) {
-              if (bind != null) _updateState(bind, v);
+              if (bind != null) _setValue(bind, v);
             },
           ),
         );
