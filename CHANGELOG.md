@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- EditableTable restructured to the React schema: `name?`/`columns?`/
+  `data?` (column objects `{type: text/number/date-single/select/url,
+  key?, header?, width?, options?}`, row objects `{id, values}`).
+  Cell edits write to form state under `<name>:<rowId>:<columnKey>`
+  (statement id when name is empty); "Save Changes" writes the full
+  edited rows under `name` (skipped when name is empty). The old
+  Col-nodes + `bind` shape is removed. Cell editors follow the column
+  type: number keyboard with numeric parsing, select dropdown,
+  date-single date picker, url keyboard.
 - Props Batch C (Form family, from the schema-level diff against
   @openuidev/react-ui 0.18.1) — BREAKING for programs using the old
   form props: `Form` is now `name`/`buttons`/`fields?` (no `children`);

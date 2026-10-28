@@ -157,7 +157,7 @@ m2 = Modal("标题二", true, [TextContent("内容二")])
     expect(find.text('内容二'), findsOneWidget);
   });
 
-  testWidgets('bound EditableTable writes cells to form state', (tester) async {
+  testWidgets('EditableTable cell edits + Save Changes write rows under name', (tester) async {
     final states = <Map<String, Object?>>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -165,7 +165,7 @@ m2 = Modal("标题二", true, [TextContent("内容二")])
           library: library,
           response: '''
 root = Stack([t])
-t = EditableTable([Col("名", ["a", "b"])], true)
+t = EditableTable("staff", [{"type": "text", "key": "name", "header": "姓名"}, {"type": "number", "key": "age", "header": "年龄"}], [{"id": "r1", "values": ["a", 30]}])
 ''',
           onStateUpdate: states.add,
         ),
@@ -174,11 +174,15 @@ t = EditableTable([Col("名", ["a", "b"])], true)
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'zhang');
     await tester.pump();
-    expect(states, isNotEmpty);
-    expect(states.last['t:名:0'], 'zhang');
+    expect(states.last['staff:r1:name'], 'zhang');
+    await tester.tap(find.text('Save Changes'));
+    await tester.pump();
+    expect(states.last['staff'], equals([
+      {'id': 'r1', 'values': ['zhang', 30]},
+    ]));
   });
 
-  testWidgets('unbound EditableTable keeps cells local only', (tester) async {
+  testWidgets('EditableTable without name keys cells by statement and Save writes nothing', (tester) async {
     final states = <Map<String, Object?>>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -186,7 +190,7 @@ t = EditableTable([Col("名", ["a", "b"])], true)
           library: library,
           response: '''
 root = Stack([t])
-t = EditableTable([Col("名", ["a", "b"])])
+t = EditableTable(null, [{"type": "text", "key": "name", "header": "姓名"}], [{"id": "r1", "values": ["a"]}])
 ''',
           onStateUpdate: states.add,
         ),
@@ -195,7 +199,10 @@ t = EditableTable([Col("名", ["a", "b"])])
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).first, 'zhang');
     await tester.pump();
-    expect(states.every((s) => !s.containsKey('t:名:0')), isTrue);
+    expect(states.last['t:r1:name'], 'zhang');
+    await tester.tap(find.text('Save Changes'));
+    await tester.pump();
+    expect(states.every((s) => !s.containsKey('')), isTrue);
   });
 
   testWidgets('parse callbacks fire once when streaming ends, not per frame', (tester) async {

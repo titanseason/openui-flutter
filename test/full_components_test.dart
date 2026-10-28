@@ -57,7 +57,7 @@ void main() {
       'c9 = CodeBlock("python", "print(1)")',
       'c10 = InlineHeader("行内标题")',
       'c11 = Icon("search")',
-      'd1 = EditableTable([Col("名", ["a"])])',
+      'd1 = EditableTable("t", [{"type": "text", "key": "name", "header": "名"}], [{"id": "r1", "values": ["a"]}])',
       'd2 = AreaChart(["一", "二"], [Series("s", [1, 2])])',
       'd3 = RadarChart(["一", "二"], [Series("s", [1, 2])])',
       'd4 = HorizontalBarChart(["一", "二"], [Series("s", [1, 2])])',

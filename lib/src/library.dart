@@ -194,9 +194,10 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('data', _l, required: true),
         PropDef('type', _s),
       ]),
-      const ComponentDef('EditableTable', 'Table whose cells are editable text fields. bind: when true, each cell writes to form state under "<statementId>:<columnLabel>:<row>".', [
-        PropDef('columns', _nodes, required: true),
-        PropDef('bind', PropType.boolean),
+      const ComponentDef('EditableTable', 'Editable table. Column objects: {type: text/number/date-single/select/url, key?, header?, width?, options? [{value, label}]}. Row objects: {id, values}. Cell edits write to form state under "<name>:<rowId>:<columnKey>" (statement id when name is empty); "Save Changes" writes the full edited rows under `name` (skipped when name is empty).', [
+        PropDef('name', _s, defaultValue: ''),
+        PropDef('columns', _l, defaultValue: const []),
+        PropDef('data', _l, defaultValue: const []),
       ]),
       const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes. variant: grouped/stacked.', [
         PropDef('labels', _l, required: true),

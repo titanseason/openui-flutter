@@ -893,41 +893,116 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return Icon(iconByName(node.stringOf('name')));
       // ---- Data (remaining) ----
       case 'EditableTable':
-        // Col prop renamed values -> data (Batch A); EditableTable's
-        // own props are unchanged (later batch).
-        final cols = node.nodesOf('columns');
-        if (cols.isEmpty) return const SizedBox.shrink();
-        final rows = cols.map((c) => (c.props['data'] as List?) ?? const []).toList();
-        final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
-        // Bound cells (bind == true) read/write form state under
-        // "<statementId>:<columnLabel>:<row>"; unbound cells keep
-        // the previous local-only behaviour.
-        final bound = node.props['bind'] == true;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: [for (final c in cols) DataColumn(label: Text(c.stringOf('label')))],
-            rows: [
-              for (var r = 0; r < rowCount; r++)
-                DataRow(cells: [
-                  for (var ci = 0; ci < cols.length; ci++)
-                    DataCell(SizedBox(
-                      width: 120,
-                      child: Builder(builder: (context) {
-                        final key = '${node.statementId}:${cols[ci].stringOf('label')}:$r';
-                        final initial = bound && _stateHas(key)
-                            ? '${_stateValue(key)}'
-                            : (ci < rows.length && r < rows[ci].length ? '${rows[ci][r]}' : '');
-                        return TextFormField(
-                          initialValue: initial,
-                          decoration: const InputDecoration(border: InputBorder.none),
-                          onChanged: bound ? (v) => _setValue(key, v) : null,
-                        );
-                      }),
-                    )),
-                ]),
-            ],
-          ),
+        // React shape: name/columns objects/data rows. Cell edits
+        // write immediately to form state under
+        // "<namespace>:<rowId>:<columnKey>" (namespace = name, or the
+        // statement id when name is empty); "Save Changes" assembles
+        // the full edited rows and writes them under `name` (skipped
+        // when name is empty, since there is no key to submit under).
+        final tableName = node.stringOf('name');
+        final namespace = tableName.isEmpty ? node.statementId : tableName;
+        final columns = _mapList(node.props['columns']);
+        final dataRows = _mapList(node.props['data']);
+        Object? cellValue(int r, int ci) {
+          final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${columns[ci]['key'] ?? 'default'}';
+          if (_stateHas(key)) return _stateValue(key);
+          final values = dataRows[r]['values'];
+          if (values is List && ci < values.length) return values[ci];
+          return null;
+        }
+
+        Widget cellEditor(BuildContext context, int r, int ci) {
+          final column = columns[ci];
+          final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${column['key'] ?? 'default'}';
+          final current = cellValue(r, ci);
+          final width = (column['width'] as num?)?.toDouble() ?? 120;
+          final type = '${column['type'] ?? 'text'}';
+          Widget field;
+          switch (type) {
+            case 'select':
+              final options = _mapList(column['options']);
+              final currentValue = current;
+              field = DropdownButtonFormField<Object?>(
+                initialValue: options.any((o) => o['value'] == currentValue) ? currentValue : null,
+                decoration: const InputDecoration(border: InputBorder.none),
+                items: [for (final o in options) DropdownMenuItem<Object?>(value: o['value'], child: Text('${o['label'] ?? o['value'] ?? ''}'))],
+                onChanged: (v) => _setValue(key, v),
+              );
+            case 'date-single':
+              final initial = current == null ? '' : '$current';
+              field = TextFormField(
+                initialValue: initial,
+                readOnly: true,
+                decoration: const InputDecoration(border: InputBorder.none),
+                onTap: () async {
+                  final parsed = DateTime.tryParse(initial);
+                  final picked = await showDatePicker(context: context, initialDate: parsed ?? DateTime.now(), firstDate: DateTime(1900), lastDate: DateTime(2100));
+                  if (picked != null) {
+                    _setValue(key, '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
+                  }
+                },
+              );
+            case 'number':
+              field = TextFormField(
+                initialValue: current == null ? '' : '$current',
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(border: InputBorder.none),
+                onChanged: (v) => _setValue(key, int.tryParse(v) ?? double.tryParse(v) ?? v),
+              );
+            case 'url':
+              field = TextFormField(
+                initialValue: current == null ? '' : '$current',
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(border: InputBorder.none),
+                onChanged: (v) => _setValue(key, v),
+              );
+            default:
+              field = TextFormField(
+                initialValue: current == null ? '' : '$current',
+                decoration: const InputDecoration(border: InputBorder.none),
+                onChanged: (v) => _setValue(key, v),
+              );
+          }
+          return SizedBox(width: width, child: field);
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (columns.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: [for (final c in columns) DataColumn(label: Text('${c['header'] ?? ''}'))],
+                  rows: [
+                    for (var r = 0; r < dataRows.length; r++)
+                      DataRow(cells: [for (var ci = 0; ci < columns.length; ci++) DataCell(Builder(builder: (context) => cellEditor(context, r, ci)))]),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  onPressed: _effectiveStreaming
+                      ? null
+                      : () {
+                          if (tableName.isEmpty) return;
+                          final rows = [
+                            for (var r = 0; r < dataRows.length; r++)
+                              {
+                                'id': dataRows[r]['id'] ?? '$r',
+                                'values': [for (var ci = 0; ci < columns.length; ci++) cellValue(r, ci)],
+                              },
+                          ];
+                          _setValue(tableName, rows);
+                        },
+                  child: const Text('Save Changes'),
+                ),
+              ),
+            ),
+          ],
         );
       case 'AreaChart':
         return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
@@ -1356,6 +1431,18 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 
   List<String> _strings(Object? v) {
     if (v is List) return v.map((e) => '$e').toList();
+    return const [];
+  }
+
+  /// Object props arrive as Map<dynamic, dynamic> from the Lang
+  /// evaluator; normalize keys to strings for column/row objects.
+  Map<String, Object?> _stringMap(Object? v) {
+    if (v is Map) return Map<String, Object?>.fromEntries(v.entries.map((e) => MapEntry('${e.key}', e.value)));
+    return const {};
+  }
+
+  List<Map<String, Object?>> _mapList(Object? v) {
+    if (v is List) return [for (final e in v) if (e is Map) _stringMap(e)];
     return const [];
   }
 
