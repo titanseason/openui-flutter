@@ -12,7 +12,7 @@ void main() {
   });
 
   testWidgets('custom component with nested built-in child renders', (tester) async {
-    final base = openUIMvpLibrary();
+    final base = openUIStandardLibrary();
     // Task 3 will add extend(); for Task 1, construct the library directly.
     final library = OpenUILibrary(
       root: base.root,
@@ -54,7 +54,7 @@ tag = PriceTag(42, [TextContent("内嵌")])
       MaterialApp(
         home: Scaffold(
           body: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             registry: registry,
             response: 'root = TextContent("原")',
           ),

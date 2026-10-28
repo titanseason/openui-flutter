@@ -10,7 +10,7 @@ void main() {
         home: Scaffold(
           body: SingleChildScrollView(
             child: OpenUIRenderer(
-              library: openUIMvpLibrary(),
+              library: openUIStandardLibrary(),
               response: '''
 root = Stack([header, chart, cta])
 header = CardHeader("Q1 收入", "全部业务线")
@@ -37,7 +37,7 @@ cta = Button("查看明细", @ToAssistant("查看明细"))
       MaterialApp(
         home: Scaffold(
           body: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = Tabs([t1, t2])
 t1 = TabItem("概览", [TextContent("概览内容")])

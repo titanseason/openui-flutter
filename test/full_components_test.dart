@@ -15,7 +15,7 @@ void _collect(ElementNode node, Set<String> out) {
 }
 
 void main() {
-  final library = openUIMvpLibrary();
+  final library = openUIStandardLibrary();
 
   test('library now has all 95 component names', () {
     final names = library.components.map((c) => c.name).toList();

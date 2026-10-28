@@ -247,9 +247,8 @@ mobileHeader、threadHeader、welcome、composer、workspace）有值时
 ### `openUIMvpLibrary` → `openUIStandardLibrary()`
 
 两者返回同一个库，旧名字仍可用，纯粹是改名：新代码请用
-`openUIStandardLibrary()`。注意：旧名字目前**没有**加 `@Deprecated`
-注解——这是有意的：仓库内仍有几十处旧调用，加注解会让
-`flutter analyze` 刷满 info 级提示；等发 1.0 时再决定是否加注解。
+`openUIStandardLibrary()`。自 1.0.0 起旧名字已加 `@Deprecated`
+注解（仓库内调用已全部迁移，只剩一条为该别名本身背书的测试）。
 
 ### 示例
 

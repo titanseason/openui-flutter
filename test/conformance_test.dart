@@ -144,4 +144,172 @@ note = TextContent("下面的 Callout 不是内置渲染，而是宿主通过 re
     expect(find.text('宿主自定义 Callout'), findsOneWidget);
     expect(find.text('这是被替换的 Callout'), findsOneWidget);
   });
+
+  testWidgets('conformance: React docs card + bar chart + form + tabs',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SingleChildScrollView(
+          child: OpenUIRenderer(
+            library: openUIStandardLibrary(),
+            response: '''
+root = Stack([card, form, tabs])
+card = Card([chead, cbody, chart])
+chead = CardHeader("东京天气", "未来三天")
+cbody = TextContent("数据来自示例工具。")
+chart = BarChart(["周一", "周二", "周三"], [s])
+s = Series("气温", [22, 24, 21])
+form = Form([city])
+city = Input("城市", "city")
+tabs = Tabs([t1, t2])
+t1 = TabItem("概览", [TextContent("概览内容")])
+t2 = TabItem("明细", [TextContent("明细内容")])
+''',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('东京天气'), findsOneWidget);
+    expect(find.text('气温'), findsOneWidget);
+    expect(find.text('城市'), findsOneWidget);
+    expect(find.text('概览'), findsWidgets);
+  });
+
+  testWidgets('conformance: weather Query example shows forecast data',
+      (tester) async {
+    Map<String, Object?>? seenParams;
+    Future<Object?> provider(String tool, Map<String, Object?> params) async {
+      if (tool != 'get_weather') throw StateError('unknown tool $tool');
+      seenParams = params;
+      return {
+        'rows': [
+          {'day': '周一', 'condition': '晴'},
+          {'day': '周二', 'condition': '雨'},
+          {'day': '周三', 'condition': '晴'},
+        ],
+      };
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SingleChildScrollView(
+          child: OpenUIRenderer(
+            library: openUIStandardLibrary(),
+            response: '''
+root = Stack([count, sunny, first])
+count = TextContent("" + @Count(weather.rows))
+sunny = TextContent("" + @Count(@Filter(weather.rows, "condition", "==", "晴")))
+first = TextContent(sunnyRows[0].day)
+sunnyRows = @Filter(weather.rows, "condition", "==", "晴")
+weather = Query("get_weather", {"city": "Tokyo"}, {})
+''',
+            toolProvider: provider,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(seenParams?['city'], 'Tokyo');
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('周一'), findsOneWidget);
+  });
+
+  testWidgets('conformance: Mutation retry example refetches Queries',
+      (tester) async {
+    var queryCalls = 0;
+    var mutationCalls = 0;
+    Map<String, Object?>? mutationParams;
+    Future<Object?> provider(String tool, Map<String, Object?> params) async {
+      if (tool == 'list_deploys') {
+        queryCalls++;
+        return {
+          'rows': [1]
+        };
+      }
+      if (tool == 'retry_deployment') {
+        mutationCalls++;
+        mutationParams = params;
+        return {'ok': true};
+      }
+      return null;
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SingleChildScrollView(
+          child: OpenUIRenderer(
+            library: openUIStandardLibrary(),
+            response: '''
+root = Stack([count, btn])
+count = TextContent("" + @Count(deploys.rows))
+deploys = Query("list_deploys", {"project": "prod"}, {"rows": []})
+btn = Button("重试部署", Action([@Run(retry)]))
+retry = Mutation("retry_deployment", {"project": "prod"})
+''',
+            toolProvider: provider,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1'), findsOneWidget);
+    await tester.tap(find.text('重试部署'));
+    await tester.pumpAndSettle();
+    expect(mutationCalls, 1);
+    expect(mutationParams?['project'], 'prod');
+    expect(queryCalls, 2);
+  });
+
+  testWidgets('golden: bar chart', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = BarChart(["周一", "周二", "周三"], [s])
+s = Series("气温", [22, 24, 21])
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/chart_bar.png'),
+    );
+  });
+
+  testWidgets('golden: card', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 200,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = Card([chead, cbody])
+chead = CardHeader("东京天气", "未来三天")
+cbody = TextContent("数据来自示例工具。")
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/card.png'),
+    );
+  });
 }

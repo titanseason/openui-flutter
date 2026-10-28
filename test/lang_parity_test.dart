@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
-  final library = openUIMvpLibrary();
+  final library = openUIStandardLibrary();
 
   test('stored message restores form state and last program wins', () {
     const stored = '''

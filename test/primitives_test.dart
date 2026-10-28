@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
-  final library = openUIMvpLibrary();
+  final library = openUIStandardLibrary();
 
   testWidgets('TableSkeleton shows while a Table Query loads', (tester) async {
     final completer = Completer<Object?>();
@@ -132,7 +132,7 @@ tickets = Query("list_tickets", {})
 
   testWidgets('Table Query error uses theme errorBuilder in controller mode', (tester) async {
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) async => throw StateError('boom'),
       theme: OpenUIThemeData(
         colors: OpenUIThemeData.light().colors,

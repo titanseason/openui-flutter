@@ -10,7 +10,7 @@ void main() {
         home: Scaffold(
           body: SingleChildScrollView(
             child: OpenUIRenderer(
-              library: openUIMvpLibrary(),
+              library: openUIStandardLibrary(),
               response: '''
 root = MarkdownRenderer("# 标题\\n\\n- 一\\n- 二\\n\\n| a | b |\\n|---|---|\\n| 1 | 2 |\\n\\n> 引用\\n\\n`code` **粗体**")
 ''',

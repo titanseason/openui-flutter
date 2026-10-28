@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
-  final library = openUIMvpLibrary();
+  final library = openUIStandardLibrary();
 
   testWidgets('Query loads through toolProvider, then renders data', (tester) async {
     final completer = Completer<Object?>();

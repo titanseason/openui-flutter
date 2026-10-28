@@ -4,7 +4,7 @@ import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
   test('extend replaces a component and prompt lists custom actions', () {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       components: [const ComponentDef('Text', 'Replaced.', [PropDef('text', PropType.string, required: true)])],
       actions: [const ActionDef('Share', 'Share it', [PropDef('id', PropType.string, required: true)])],
     );
@@ -13,7 +13,7 @@ void main() {
   });
 
   test('extend remove, add-wins-over-remove, later-wins, and no mutation', () {
-    final base = openUIMvpLibrary();
+    final base = openUIStandardLibrary();
     final extended = base.extend(
       remove: ['Text', 'Card'],
       components: [
@@ -34,7 +34,7 @@ void main() {
   });
 
   test('extend keeps the root and merges builders across chained extends', () {
-    final lib = openUIMvpLibrary(root: 'Card')
+    final lib = openUIStandardLibrary(root: 'Card')
         .extend(builders: {'A': (context, node, renderChild) => const SizedBox.shrink()})
         .extend(builders: {'B': (context, node, renderChild) => const SizedBox.shrink()});
     expect(lib.root, 'Card');
@@ -44,6 +44,7 @@ void main() {
 
   test('openUIStandardLibrary matches openUIMvpLibrary', () {
     final a = openUIStandardLibrary();
+    // ignore: deprecated_member_use — this test pins the alias itself.
     final b = openUIMvpLibrary();
     expect(a.root, b.root);
     expect(a.components.map((c) => c.name).toList(), b.components.map((c) => c.name).toList());
@@ -51,7 +52,7 @@ void main() {
   });
 
   test('prompt options: preamble, rules, examples, includeBuiltins', () {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       actions: [const ActionDef('Share', 'Share it', [PropDef('id', PropType.string, required: true)])],
     );
     final full = lib.prompt(
@@ -72,7 +73,7 @@ void main() {
   });
 
   test('custom action with wrong argument type is a no-op', () {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       actions: [const ActionDef('Share', 'Share it', [PropDef('id', PropType.string, required: true)])],
     );
     final result = parseOpenUI('root = Button("Go", @Share(42))', lib);
@@ -81,7 +82,7 @@ void main() {
   });
 
   test('custom action missing a required argument is a no-op', () {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       actions: [const ActionDef('Share', 'Share it', [PropDef('id', PropType.string, required: true)])],
     );
     final result = parseOpenUI('root = Button("Go", @Share())', lib);
@@ -90,7 +91,7 @@ void main() {
   });
 
   test('valid custom action passes through, undeclared action still passes through', () {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       actions: [const ActionDef('Share', 'Share it', [PropDef('id', PropType.string, required: true)])],
     );
     final ok = parseOpenUI('root = Button("Go", @Share("abc"))', lib);
@@ -106,7 +107,7 @@ void main() {
 
   test('action name colliding with a built-in is rejected', () {
     expect(
-      () => openUIMvpLibrary().extend(
+      () => openUIStandardLibrary().extend(
         actions: [const ActionDef('Set', 'Clash.', [PropDef('x', PropType.string, required: true)])],
       ),
       throwsArgumentError,
@@ -121,7 +122,7 @@ void main() {
   });
 
   testWidgets('extend builders render through library.registry without a separate registry argument', (tester) async {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       components: [const ComponentDef('PriceTag', 'Test-only custom component.', [PropDef('label', PropType.string, required: true)])],
       builders: {
         'PriceTag': (context, node, renderChild) => Text('tag:${node.stringOf('label')}'),
@@ -144,7 +145,7 @@ void main() {
   });
 
   testWidgets('explicit registry argument wins over library.registry', (tester) async {
-    final lib = openUIMvpLibrary().extend(
+    final lib = openUIStandardLibrary().extend(
       components: [const ComponentDef('PriceTag', 'Test-only custom component.', [PropDef('label', PropType.string, required: true)])],
       builders: {
         'PriceTag': (context, node, renderChild) => const Text('from-library'),

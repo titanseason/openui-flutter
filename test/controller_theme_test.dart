@@ -9,7 +9,7 @@ void main() {
     expect(OpenUIThemeData.light().colors.surface, Colors.white);
     expect(OpenUIThemeData.dark().colors.surface, isNot(Colors.white));
     expect(OpenUIThemeData.light().cardRadius, 12);
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     expect(controller.effectiveTheme.colors.surface, OpenUIThemeData.light().colors.surface);
     expect(controller.effectiveTheme.chartPalette, OpenUIThemeData.light().chartPalette);
     controller.dispose();
@@ -21,11 +21,11 @@ root = BarChart(months, [rev])
 months = ["1月", "2月"]
 rev = Series("收入", [120, 145])
 ''';
-    final defaultController = OpenUIController(library: openUIMvpLibrary());
+    final defaultController = OpenUIController(library: openUIStandardLibrary());
     defaultController.push(program);
     defaultController.finish();
     final redController = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       theme: OpenUIThemeData(
         colors: OpenUIThemeData.light().colors,
         chartPalette: const [Colors.red, Colors.red],
@@ -59,7 +59,7 @@ rev = Series("收入", [120, 145])
   });
 
   testWidgets("controller's formState updates after tapping a bound Chips item", (tester) async {
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([chips])
 chips = Chips([ChipItem("北京", "beijing"), ChipItem("上海", "shanghai")], "city")
@@ -79,7 +79,7 @@ chips = Chips([ChipItem("北京", "beijing"), ChipItem("上海", "shanghai")], "
 
   test('controller emits a Query error on its error stream', () async {
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) async => throw StateError('boom'),
     );
     final firstError = controller.onError.first;
@@ -97,7 +97,7 @@ tickets = Query("list_tickets", {})
   testWidgets('controller mode uses the theme skeleton builder while a Query loads', (tester) async {
     final completer = Completer<Object?>();
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) => completer.future,
       theme: OpenUIThemeData(
         colors: OpenUIThemeData.light().colors,
@@ -125,7 +125,7 @@ tickets = Query("list_tickets", {})
 
   testWidgets('controller mode uses the theme error builder for an empty response', (tester) async {
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       theme: OpenUIThemeData(
         colors: OpenUIThemeData.light().colors,
         chartPalette: OpenUIThemeData.light().chartPalette,
@@ -146,7 +146,7 @@ tickets = Query("list_tickets", {})
 
   testWidgets('controller streaming disables Button', (tester) async {
     final events = <ActionEvent>[];
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     controller.onAction.listen(events.add);
     controller.push('root = Button("点我", Action([@ToAssistant("hi")]))');
     await tester.pumpWidget(
@@ -162,7 +162,7 @@ tickets = Query("list_tickets", {})
   });
 
   testWidgets('controller mode wins over the old response parameter', (tester) async {
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('root = TextContent("控制器内容")');
     controller.finish();
     await tester.pumpWidget(
@@ -183,7 +183,7 @@ tickets = Query("list_tickets", {})
   });
 
   testWidgets('typing into a bound Input in controller mode updates controller.formState and a \$variable display', (tester) async {
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([inp, show])
 inp = Input("城市", "city")
@@ -204,7 +204,7 @@ show = TextContent("city=" + \$city)
   });
 
   testWidgets('typing into a bound TextArea in controller mode updates controller.formState and a \$variable display', (tester) async {
-    final controller = OpenUIController(library: openUIMvpLibrary());
+    final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([area, show])
 area = TextArea("备注", "note")
@@ -227,7 +227,7 @@ show = TextContent("note=" + \$note)
   testWidgets('controller mode: a failed Query is not retried on rebuild, but an explicit @Run retries it', (tester) async {
     var calls = 0;
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) async {
         calls++;
         if (calls == 1) throw StateError('boom');
@@ -264,7 +264,7 @@ btn = Button("重试", Action([@Run(tickets)]))
   testWidgets('controller mode: a failed Mutation stops the rest of an action list', (tester) async {
     final events = <ActionEvent>[];
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) async => throw StateError('boom'),
     );
     controller.onAction.listen(events.add);
@@ -292,7 +292,7 @@ bad = Mutation("bad_mut", {})
     var mutationCalls = 0;
     final events = <ActionEvent>[];
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       toolProvider: (tool, params) async {
         if (tool == 'list_tickets') {
           queryCalls++;

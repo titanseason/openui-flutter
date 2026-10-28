@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
-  final library = openUIMvpLibrary();
+  final library = openUIStandardLibrary();
 
   test('forward reference renders root before children arrive', () {
     final r = parseOpenUI('''
@@ -89,13 +89,13 @@ btn = Button("保存", @Set($saved, true))
       );
 
   test('custom function', () {
-    final lib = openUIMvpLibrary(functions: [percentDef()]);
+    final lib = openUIStandardLibrary(functions: [percentDef()]);
     final r = parseOpenUI('root = TextContent("完成率: " + @Percent(30, 120))\n', lib);
     expect(r.root!.stringOf('text'), '完成率: 25.0%');
   });
 
   test('custom function: default, missing, literal type error, excess args', () {
-    final lib = openUIMvpLibrary(functions: [percentDef()]);
+    final lib = openUIStandardLibrary(functions: [percentDef()]);
     // Default total = 100.
     expect(parseOpenUI('root = TextContent("" + @Percent(42))\n', lib).root!.stringOf('text'), '42.0%');
     // Missing required part.
@@ -116,13 +116,13 @@ btn = Button("保存", @Set($saved, true))
   });
 
   test('custom function: runtime null is silent, returns mismatch is runtime-error', () {
-    final lib = openUIMvpLibrary(functions: [percentDef()]);
+    final lib = openUIStandardLibrary(functions: [percentDef()]);
     // Unset $variable: required runtime null, no error, call is null.
     final runtimeNull = parseOpenUI('root = TextContent("完成率: " + @Percent(\$missing, 120))\n', lib);
     expect(runtimeNull.errors, isEmpty);
     expect(runtimeNull.root!.stringOf('text'), '完成率: ');
     // Returns mismatch.
-    final badReturns = openUIMvpLibrary(functions: [
+    final badReturns = openUIStandardLibrary(functions: [
       defineFunction(
         name: 'Bad',
         description: 'returns a number but declares string',
@@ -139,7 +139,7 @@ btn = Button("保存", @Set($saved, true))
     expect(unknown.root!.stringOf('text'), 'Total: ');
     // A custom function may not reuse a built-in name.
     expect(
-      () => openUIMvpLibrary(functions: [
+      () => openUIStandardLibrary(functions: [
         defineFunction(name: 'Sum', description: 'shadow', params: const [], fn: (_) => 0),
       ]),
       throwsArgumentError,
@@ -166,7 +166,7 @@ rows = [{"priority": "高"}, {"priority": "低"}]
   });
 
   test('function prompt lists built-ins and custom functions', () {
-    final lib = openUIMvpLibrary(functions: [percentDef()]);
+    final lib = openUIStandardLibrary(functions: [percentDef()]);
     expect(lib.prompt(), contains('@Count('));
     expect(lib.prompt(), contains('@Percent(part: number, total?: number) -> string'));
   });

@@ -4,7 +4,7 @@ import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
   test('extra chart components are in the library', () {
-    final names = openUIMvpLibrary().components.map((c) => c.name).toSet();
+    final names = openUIStandardLibrary().components.map((c) => c.name).toSet();
     expect(names, containsAll(['HeatmapChart', 'FunnelChart', 'CalendarHeatmap', 'MiniBarChart', 'MiniLineChart', 'StackedLegend', 'BarChartCondensed', 'LineChartCondensed', 'AreaChartCondensed']));
   });
 
@@ -13,7 +13,7 @@ void main() {
       MaterialApp(
         home: SingleChildScrollView(
           child: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = Stack([fun, heat])
 fun = FunnelChart([Slice("访问", 100), Slice("下单", 60), Slice("支付", 30)])
@@ -34,7 +34,7 @@ heat = HeatmapChart(["一", "二"], [Series("s", [1, 2])])
       MaterialApp(
         home: SingleChildScrollView(
           child: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = Stack([bar, line, area, hbar, pie, radar, radial, stacked, scatter])
 bar = BarChart(["一", "二"], [Series("柱", [1, 2])])
@@ -62,7 +62,7 @@ scatter = ScatterChart([ScatterSeries("散", [Point(1, 2), Point(3, 4)])])
       MaterialApp(
         home: SingleChildScrollView(
           child: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = Stack([mini, minib, cond, leg, cal])
 mini = MiniLineChart([1, 2, 3])
@@ -89,7 +89,7 @@ cal = CalendarHeatmap([{date: "2026-10-01", value: 3}, {date: "2026-10-02", valu
       MaterialApp(
         home: SingleChildScrollView(
           child: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = Stack([c1, c2])
 c1 = LineChartCondensed(["一", "二"], [Series("折紧", [1, 2])])
@@ -111,7 +111,7 @@ c2 = AreaChartCondensed(["一", "二"], [Series("面紧", [1, 2])])
       MaterialApp(
         home: SingleChildScrollView(
           child: OpenUIRenderer(
-            library: openUIMvpLibrary(),
+            library: openUIStandardLibrary(),
             response: '''
 root = RadarChart(["一", "二"], [])
 ''',
@@ -126,7 +126,7 @@ root = RadarChart(["一", "二"], [])
 
   testWidgets('radar chart honours a custom theme palette', (tester) async {
     final controller = OpenUIController(
-      library: openUIMvpLibrary(),
+      library: openUIStandardLibrary(),
       theme: OpenUIThemeData(
         colors: OpenUIThemeData.light().colors,
         chartPalette: const [Colors.red, Colors.red],
