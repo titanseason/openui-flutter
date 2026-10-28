@@ -171,10 +171,18 @@ rows = [{"priority": "高"}, {"priority": "低"}]
     expect(lib.prompt(), contains('@Percent(part: number, total?: number) -> string'));
   });
 
-  test('library prompt lists all 95 components', () {
-    // 86 GenUI names plus 9 extra chart components added in Task 6,
-    // 86 GenUI names (React 0.18.1 names) plus 9 extra chart components.
-    expect(library.components.length, 95);
+  test('library prompts list the split libraries', () {
+    // Split libraries: general 91, chat 93, union 95.
+    expect(library.components.length, 91);
+    expect(library.prompt(), contains('Tabs('));
+    expect(library.prompt(), contains('TabItem('));
+    expect(library.prompt(), contains('Accordion('));
+    expect(library.prompt(), isNot(contains('SectionBlock(')));
+    final chat = openUIChatLibrary();
+    expect(chat.components.length, 93);
+    expect(chat.prompt(), contains('SectionBlock('));
+    expect(chat.prompt(), contains('FollowUpBlock('));
+    expect(chat.prompt(), isNot(contains('Stack(')));
     expect(library.prompt(), contains('Tabs('));
     expect(library.prompt(), contains('TabItem('));
     expect(library.prompt(), contains('Accordion('));

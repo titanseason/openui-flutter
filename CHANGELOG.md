@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Library split, as in React: `openUIStandardLibrary()` is now the
+  general library (root `Stack`, 91 names) and `openUIChatLibrary()`
+  is the chat library (root `Card`, 93 names: everything except
+  `Stack`/`Modal`, with the chat `Card` variant). The union is the
+  full 95. Membership is enforced by the parser (`unknown-component`).
+  Tabs/Accordion/Carousel share one definition across both libraries:
+  React's chat variants differ only in content unions, which this
+  port's mapper does not enforce. SectionBlock/SectionItem corrected
+  to the React shapes (`sections`/`isFoldable?`,
+  `value`/`trigger`/`content`); foldable sections render as
+  expansion tiles.
+- Chat Card sources: the chat `Card` takes `sources?`
+  ([{title, sourceName?, url?}]), rendered as a Sources strip below
+  the card; inline [n] citations in TextContent descendants link to
+  them (tappable, dispatching `OpenUrl`; out-of-range markers and
+  url-less sources stay plain text; the innermost Card wins for
+  nested cards). The general Card has no sources prop.
+- Rules validation engine: `validateRules(rules, value)` implements
+  required/email/url/numeric/min/max/minLength/maxLength/pattern
+  (empty values skip all checks except required; lists apply
+  min/max/numeric to the first element). FormControl shows the live
+  error under touched inputs only (touched = the name key exists in
+  form state); there is no submit gate — hosts call `validateRules`
+  directly for submit-time validation.
 - EditableTable restructured to the React schema: `name?`/`columns?`/
   `data?` (column objects `{type: text/number/date-single/select/url,
   key?, header?, width?, options?}`, row objects `{id, values}`).

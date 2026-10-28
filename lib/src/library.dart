@@ -9,28 +9,33 @@ const _node = PropType.node;
 const _any = PropType.any;
 const _act = PropType.action;
 
-/// The full library: 95 components. Names are aligned directly with
-/// @openuidev/react-ui 0.18.1 (see docs/react-1.0-diff/): layout 13,
-/// content 16, data 21, form 19, actions 3, dialogue 4, composite
-/// cards 10 (SnippetCardBlock/SnippetCardItem and so on, plus
-/// MarkDownRenderer), plus 9 extra chart components.
+/// The full component set: 95 definitions. Names and props are aligned
+/// directly with @openuidev/react-ui 0.18.1 (see docs/react-1.0-diff/):
+/// layout 13, content 16, data 21, form 19, actions 3, dialogue 4,
+/// composite cards 10 (SnippetCardBlock/SnippetCardItem and so on, plus
+/// MarkDownRenderer), plus 9 extra chart components (not React GenUI
+/// names; they keep their own props and ship in both libraries).
 ///
 /// Props follow the official Zod schemas in @openuidev/react-ui 0.18.1
 /// (see docs/react-1.0-diff/react-source-props.md) in declaration order,
 /// except where a deviation is noted on the component itself. This
 /// order is the contract: OpenUI Lang maps positional arguments
 /// to props in this order, and `library.prompt()` prints it for the model.
-/// Still pending (later batches): the Form family, the 10 card-block
-/// components, EditableTable, and the general/chat library split; the
-/// 9 extra chart components keep their own props (they are not React
-/// GenUI names).
 ///
-/// The canonical library constructor. Use this for all new code.
-OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
-  return OpenUILibrary(
-    root: root,
-    functions: functions,
-    components: [
+/// Two libraries, as in React: [openUIStandardLibrary] is the general
+/// library (root `Stack`, 91 names: everything except the 4 chat-only
+/// components), and [openUIChatLibrary] is the chat library (root
+/// `Card`, 93 names: everything except `Stack` and `Modal`, with the
+/// chat `Card` variant that takes `sources` instead of variant/flex).
+/// The parser enforces both the root component and membership, so a
+/// program using a chat-only component under the general library (or
+/// vice versa) fails as `unknown-component`. Tabs/Accordion/Carousel
+/// share one definition across both libraries: React's chat variants
+/// differ only in their content unions, which this port's mapper does
+/// not enforce.
+///
+/// The shared definitions, in prompt order.
+List<ComponentDef> _baseComponents() => [
       // ---- Layout & structure (13) ----
       const ComponentDef('Stack', 'Stack container, the generic root. direction: row/column; gap: none/xs/s/m/l/xl/2xl; align: start/center/end/stretch/baseline; justify: start/center/end/between/around/evenly; wrap: wrap children.', [
         PropDef('children', _nodes, required: true),
@@ -40,7 +45,7 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('justify', _s),
         PropDef('wrap', _b),
       ]),
-      const ComponentDef('Card', 'Card container, the chat root. variant: card/sunk/clear; plus the Stack flex props. (The chat Card sources variant is not implemented.)', [
+      const ComponentDef('Card', 'Card container, the general-library root. variant: card/sunk/clear; plus the Stack flex props. (The chat variant, with sources instead of variant/flex, lives in openUIChatLibrary.)', [
         PropDef('children', _nodes, required: true),
         PropDef('variant', _s),
         PropDef('direction', _s),
@@ -86,13 +91,14 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('children', _nodes, required: true),
         PropDef('size', _s),
       ]),
-      const ComponentDef('SectionBlock', 'Chat grouping block; pass SectionItem nodes.', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
+      const ComponentDef('SectionBlock', 'Chat grouping block; pass SectionItem nodes. isFoldable: fold sections into expansion tiles.', [
+        PropDef('sections', _nodes, required: true),
+        PropDef('isFoldable', _b),
       ]),
-      const ComponentDef('SectionItem', 'One grouped item: label and its content nodes.', [
-        PropDef('label', _s, required: true),
-        PropDef('children', _nodes),
+      const ComponentDef('SectionItem', 'One section: value key, trigger heading, content nodes.', [
+        PropDef('value', _s, required: true),
+        PropDef('trigger', _s, required: true),
+        PropDef('content', _nodes, required: true),
       ]),
       // ---- Content & expression (16) ----
       const ComponentDef('CardHeader', 'Card title and subtitle; both optional.', [
@@ -574,7 +580,41 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('tag', _node),
         PropDef('bgImageAlt', _s),
       ]),
-    ],
+    ];
+
+/// Chat-only component names (in the chat library, not the general one).
+const _chatOnlyNames = {'FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem'};
+
+/// General-only component names (in the general library, not the chat one).
+const _generalOnlyNames = {'Stack', 'Modal'};
+
+/// The chat library's `Card`: children plus a sources list, instead of
+/// the general Card's variant/flex props. Each source is
+/// {title, sourceName?, url?}; the renderer shows them as a Sources
+/// strip and backs inline [n] citations in TextContent.
+const _chatCardDef = ComponentDef('Card', 'Card container, the chat root. sources: [{title, sourceName?, url?}] rendered as a Sources strip; inline [n] citations in TextContent link to them.', [
+  PropDef('children', _nodes, required: true),
+  PropDef('sources', _l),
+]);
+
+/// The general library constructor (root `Stack`). Use this for
+/// general-purpose programs.
+OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
+  return OpenUILibrary(
+    root: root,
+    functions: functions,
+    components: _baseComponents().where((c) => !_chatOnlyNames.contains(c.name)).toList(),
+  );
+}
+
+/// The chat library constructor (root `Card`). Use this for chat
+/// programs: it includes the chat-only components and the chat `Card`
+/// variant, and excludes `Stack` and `Modal`.
+OpenUILibrary openUIChatLibrary({String root = 'Card', List<FunctionDef> functions = const []}) {
+  return OpenUILibrary(
+    root: root,
+    functions: functions,
+    components: _baseComponents().where((c) => !_generalOnlyNames.contains(c.name)).map((c) => c.name == 'Card' ? _chatCardDef : c).toList(),
   );
 }
 

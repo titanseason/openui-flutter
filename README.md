@@ -318,10 +318,13 @@ Round / Abs / Floor / Ceil / Each`（内置函数会转换参数，如
 （extend、提示词选项、自定义动作定义与严格校验）、存储消息解析
 （`StoredMessage` / `parseStoredMessage`，含 formState 恢复）、渲染器
 回调（onError/onParseResult）、Query 失败的界面态、官方用例对照与
-金测（Task 10：React 文档风格程序 + 一图一卡金测）。
+金测（Task 10：React 文档风格程序 + 一图一卡金测）。官方 props
+层面已对齐（含三批 props 对齐、EditableTable 重构、通用/聊天双库
+拆分、聊天 Card sources 与行内引用、rules 校验引擎）；剩余偏差
+见 CHANGELOG（如聊天内容并集不强制、Stack/Card gap 默认等）。
 
 未实现（有意留到下一阶段）：token 级增量解析（现为每 push 全文
-重解析）、官方 props 1:1 对齐、pub.dev 发布与 CI、存储消息的
+重解析）、pub.dev 发布与 CI、存储消息的
 完整 build/parseMessage 往返。
 Markdown 全量语法已用 flutter_markdown_plus 补齐，Query/Mutation
 真实接线与行内自动补全也已补齐（见上文）。

@@ -37,6 +37,68 @@ class ComponentDef {
   final List<PropDef> props;
 }
 
+/// Validates [value] against a React-style rules object ({required?,
+/// email?, url?, numeric?, min?, max?, minLength?, maxLength?,
+/// pattern?}). Returns the first failure message, or null when the
+/// value passes. Empty values (null, '', empty list/map) skip all
+/// checks except `required`, so optional untouched fields never fail.
+/// For list values, min/max/numeric apply to the first element and
+/// minLength/maxLength to the length. Used by FormControl for live
+/// errors; hosts can call it directly for submit-time validation —
+/// there is no built-in submit gate.
+String? validateRules(Object? rules, Object? value) {
+  if (rules is! Map) return null;
+  bool isEmptyValue(Object? v) => v == null || (v is String && v.isEmpty) || (v is List && v.isEmpty) || (v is Map && v.isEmpty);
+  if (rules['required'] == true && isEmptyValue(value)) return 'This field is required.';
+  if (isEmptyValue(value)) return null;
+  num? asNum(Object? v) {
+    if (v is num) return v;
+    if (v is List && v.isNotEmpty) return asNum(v.first);
+    if (v is String) return num.tryParse(v);
+    return null;
+  }
+
+  int asLength(Object? v) {
+    if (v is String) return v.length;
+    if (v is List) return v.length;
+    if (v is Map) return v.length;
+    return '$v'.length;
+  }
+
+  final text = '$value';
+  if (rules['email'] == true && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)) return 'Enter a valid email address.';
+  if (rules['url'] == true) {
+    final uri = Uri.tryParse(text);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) return 'Enter a valid URL.';
+  }
+  if (rules['numeric'] == true && asNum(value) == null) return 'Enter a number.';
+  final min = rules['min'];
+  if (min is num) {
+    final n = asNum(value);
+    if (n == null) return 'Enter a number.';
+    if (n < min) return 'Must be at least $min.';
+  }
+  final max = rules['max'];
+  if (max is num) {
+    final n = asNum(value);
+    if (n == null) return 'Enter a number.';
+    if (n > max) return 'Must be at most $max.';
+  }
+  final minLength = rules['minLength'];
+  if (minLength is num && asLength(value) < minLength) return 'Must be at least ${minLength.toInt()} characters.';
+  final maxLength = rules['maxLength'];
+  if (maxLength is num && asLength(value) > maxLength) return 'Must be at most ${maxLength.toInt()} characters.';
+  final pattern = rules['pattern'];
+  if (pattern is String && pattern.isNotEmpty) {
+    try {
+      if (!RegExp(pattern).hasMatch(text)) return 'Does not match the required pattern.';
+    } on FormatException {
+      // An invalid pattern cannot fail a value.
+    }
+  }
+  return null;
+}
+
 class OpenUIError {
   const OpenUIError(this.code, this.message, {this.warning = false});
   final String code;

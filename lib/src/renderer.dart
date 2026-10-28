@@ -375,10 +375,13 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'Stack':
         return _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
       case 'Card':
-        // General Card: variant + flex props. The chat Card sources
-        // variant is not implemented (see library.dart).
-        final cardBody = _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
-        return switch (node.stringOf('variant', 'card')) {
+        // The general Card carries variant/flex; the chat Card carries
+        // sources. The def decides which props exist; the renderer
+        // honors both: sources render as a strip below the card and
+        // back inline [n] citations in TextContent descendants.
+        final sources = _mapList(node.props['sources']);
+        final cardBody = _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(sources.isEmpty ? c : _withSources(c, sources))]);
+        final card = switch (node.stringOf('variant', 'card')) {
           'clear' => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: cardBody),
           'sunk' => Card(
               color: Colors.grey.shade100,
@@ -392,6 +395,43 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
               child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
             ),
         };
+        if (sources.isEmpty) return card;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            card,
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < sources.length; i++)
+                    GestureDetector(
+                      onTap: sources[i]['url'] is String && (sources[i]['url'] as String).isNotEmpty && !_effectiveStreaming ? () => _dispatch(ActionValue('OpenUrl', [sources[i]['url'] as String])) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('[${i + 1}] ', style: const TextStyle(color: Colors.grey)),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('${sources[i]['title'] ?? ''}'),
+                                  if (sources[i]['sourceName'] is String) Text(sources[i]['sourceName'] as String, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
       case 'CardHeader':
         // Both props are optional now; an empty header renders nothing.
         if (node.props['title'] is! String && node.props['subtitle'] is! String) return const SizedBox.shrink();
@@ -414,7 +454,43 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           'large-heavy' => const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
           _ => const TextStyle(fontSize: 15),
         };
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: style));
+        final textContent = node.stringOf('text');
+        final attachedSources = _mapList(node.props['__sources']);
+        if (attachedSources.isEmpty) {
+          return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(textContent, style: style));
+        }
+        // Inline [n] citations backed by the enclosing chat Card's
+        // sources (see _withSources). A marker resolving to a source
+        // with a url renders as a tappable link (WidgetSpan, so no
+        // gesture-recognizer disposal is involved); out-of-range
+        // markers and url-less sources render as plain text.
+        final spans = <InlineSpan>[];
+        final citationPattern = RegExp(r'\[(\d+)\]');
+        var last = 0;
+        for (final m in citationPattern.allMatches(textContent)) {
+          if (m.start > last) spans.add(TextSpan(text: textContent.substring(last, m.start)));
+          final n = int.tryParse(m.group(1)!);
+          final marker = m.group(0)!;
+          if (n != null && n >= 1 && n <= attachedSources.length) {
+            final url = attachedSources[n - 1]['url'];
+            if (url is String && url.isNotEmpty) {
+              spans.add(WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: GestureDetector(
+                  onTap: _effectiveStreaming ? null : () => _dispatch(ActionValue('OpenUrl', [url])),
+                  child: Text(marker, style: style.copyWith(color: Colors.blue, decoration: TextDecoration.underline)),
+                ),
+              ));
+            } else {
+              spans.add(TextSpan(text: marker));
+            }
+          } else {
+            spans.add(TextSpan(text: marker));
+          }
+          last = m.end;
+        }
+        if (last < textContent.length) spans.add(TextSpan(text: textContent.substring(last)));
+        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text.rich(TextSpan(style: style, children: spans)));
       case 'MarkDownRenderer':
         final body = _MarkdownWidget(text: node.stringOf('textMarkdown'));
         return switch (node.stringOf('variant', 'clear')) {
@@ -691,14 +767,21 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         // renders nothing and never opens the dialog.
         return _ModalWidget(node: node, buildNode: _buildNode, open: node.props['open'] != false, size: node.stringOf('size', 'md'));
       case 'SectionBlock':
+        final sections = node.nodesOf('sections');
+        if (node.props['isFoldable'] == true) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [for (final s in sections) ExpansionTile(title: Text(s.stringOf('trigger')), children: [for (final c in s.nodesOf('content')) _buildNode(c)])],
+          );
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), for (final c in node.nodesOf('items')) _buildNode(c)],
+          children: [for (final s in sections) _buildNode(s)],
         );
       case 'SectionItem':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(node.stringOf('label'), style: const TextStyle(fontWeight: FontWeight.bold)), for (final c in node.nodesOf('children')) _buildNode(c)],
+          children: [Text(node.stringOf('trigger'), style: const TextStyle(fontWeight: FontWeight.bold)), for (final c in node.nodesOf('content')) _buildNode(c)],
         );
       // ---- Content (remaining) ----
       case 'Text':
@@ -1113,16 +1196,27 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       // ---- Form (remaining) ----
       case 'FormControl':
         // The mapper does not enforce the input union: any node is
-        // accepted as `input`. Rules are accepted and stored, not
-        // enforced, except the required marker on the label below.
+        // accepted as `input`. Rules are validated live with
+        // validateRules, but only for touched fields: a field counts
+        // as touched when its name key exists in form state (i.e. the
+        // user changed it), so untouched fields never show an error.
+        // There is no submit gate; hosts can call validateRules
+        // directly for submit-time validation.
         final inputNode = node.nodeOf('input');
         final inputRules = inputNode?.props['rules'];
         final requiredMark = inputRules is Map && inputRules['required'] == true ? ' *' : '';
+        String? validationError;
+        if (inputNode != null && inputRules is Map) {
+          final inputName = inputNode.stringOf('name');
+          if (inputName.isNotEmpty && _stateHas(inputName)) {
+            validationError = validateRules(inputRules, _stateValue(inputName));
+          }
+        }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Text('${node.stringOf('label')}$requiredMark', style: const TextStyle(fontWeight: FontWeight.bold)), if (inputNode != null) _buildNode(inputNode), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
+            children: [Text('${node.stringOf('label')}$requiredMark', style: const TextStyle(fontWeight: FontWeight.bold)), if (inputNode != null) _buildNode(inputNode), if (validationError != null) Text(validationError, style: const TextStyle(color: Colors.red, fontSize: 13)), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
           ),
         );
       case 'Label':
@@ -1444,6 +1538,27 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   List<Map<String, Object?>> _mapList(Object? v) {
     if (v is List) return [for (final e in v) if (e is Map) _stringMap(e)];
     return const [];
+  }
+
+  /// Copies [node], attaching [sources] as the hidden `__sources` prop
+  /// on every TextContent descendant, so a chat Card's sources back
+  /// inline [n] citations. A nested Card with its own sources re-runs
+  /// this transform and overwrites, so the innermost Card wins. The
+  /// prop is renderer-only: it is never in a ComponentDef or prompt.
+  ElementNode _withSources(ElementNode node, List<Map<String, Object?>> sources) {
+    final props = <String, Object?>{};
+    for (final entry in node.props.entries) {
+      final v = entry.value;
+      if (v is ElementNode) {
+        props[entry.key] = _withSources(v, sources);
+      } else if (v is List) {
+        props[entry.key] = [for (final e in v) e is ElementNode ? _withSources(e, sources) : e];
+      } else {
+        props[entry.key] = v;
+      }
+    }
+    if (node.component == 'TextContent') props['__sources'] = sources;
+    return ElementNode(node.component, props, node.statementId);
   }
 
   List<double> _numbers(Object? v) {

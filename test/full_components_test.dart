@@ -17,12 +17,25 @@ void _collect(ElementNode node, Set<String> out) {
 void main() {
   final library = openUIStandardLibrary();
 
-  test('library now has all 95 component names', () {
-    final names = library.components.map((c) => c.name).toList();
-    // 86 GenUI names plus 9 extra chart components added in Task 6,
-    // 86 GenUI names (React 0.18.1 names) plus 9 extra chart components.
+  test('libraries now have all 95 component names between them', () {
+    // Split libraries: general 91 (no chat-only 4), chat 93 (no Stack
+    // or Modal); the union is the full 95 (86 GenUI + 9 extras).
+    final general = openUIStandardLibrary();
+    final chat = openUIChatLibrary();
+    expect(general.root, 'Stack');
+    expect(chat.root, 'Card');
+    expect(general.components.length, 91);
+    expect(chat.components.length, 93);
+    for (final name in ['FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem']) {
+      expect(general.byName[name], isNull, reason: '$name must not be in the general library');
+      expect(chat.byName[name], isNotNull, reason: '$name must be in the chat library');
+    }
+    for (final name in ['Stack', 'Modal']) {
+      expect(general.byName[name], isNotNull, reason: '$name must be in the general library');
+      expect(chat.byName[name], isNull, reason: '$name must not be in the chat library');
+    }
+    final names = {...general.components.map((c) => c.name), ...chat.components.map((c) => c.name)}.toList();
     expect(names.length, 95);
-    expect(names.toSet().length, 95);
     for (final name in ['HeatmapChart', 'FunnelChart', 'CalendarHeatmap', 'MiniBarChart', 'MiniLineChart', 'StackedLegend', 'BarChartCondensed', 'LineChartCondensed', 'AreaChartCondensed']) {
       expect(names, contains(name), reason: 'missing $name');
     }
@@ -45,7 +58,7 @@ void main() {
       'a3 = Carousel([[TextContent("一")], [TextContent("二")]])',
       'a4 = Separator()',
       'a5 = Modal("弹窗", true, [TextContent("内")])',
-      'a6 = SectionBlock("分组", [SectionItem("项", [TextContent("内")])])',
+      'a6 = ListBlock([ListItem("列表项")])',
       'c1 = Text("普通")',
       'c2 = BoldText("加粗")',
       'c3 = TextCallout("warning", "注意", "请注意")',
@@ -94,8 +107,18 @@ void main() {
     expect(r.root, isNotNull);
     final found = <String>{};
     _collect(r.root!, found);
+    // Chat-only components live in the chat library, under a Card root.
+    final chatProgram = '''
+root = Card([sec, fol])
+sec = SectionBlock([SectionItem("sec", "分组", [TextContent("内")])])
+fol = FollowUpBlock([FollowUpItem("追问")])
+''';
+    final chatResult = parseOpenUI(chatProgram, openUIChatLibrary());
+    expect(chatResult.errors, isEmpty, reason: chatResult.errors.toString());
+    expect(chatResult.root, isNotNull);
+    _collect(chatResult.root!, found);
     for (final name in [
-      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem',
+      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem', 'FollowUpBlock', 'FollowUpItem',
       'Text', 'BoldText', 'TextCallout', 'ImageBlock', 'ImageGallery', 'ImageText', 'ImageTextLarge', 'IconText', 'CodeBlock', 'InlineHeader', 'Icon',
       'EditableTable', 'AreaChart', 'RadarChart', 'HorizontalBarChart', 'RadialChart', 'SingleStackedBarChart', 'ScatterChart', 'ScatterSeries', 'Point', 'TagBlock', 'Tag', 'EntityList', 'MetricIndicatorInline', 'MetricIndicatorWithStrikethrough',
       'FormControl', 'Label', 'TextArea', 'DatePicker', 'Slider', 'CheckBoxGroup', 'RadioGroup', 'SwitchGroup', 'OptionCards',
@@ -113,12 +136,11 @@ void main() {
           child: OpenUIRenderer(
             library: library,
             response: '''
-root = Stack([acc, steps, sep, modal, sec, txt, bold, call, code, head])
+root = Stack([acc, steps, sep, modal, txt, bold, call, code, head])
 acc = Accordion([AccordionItem("acc", "折叠标题", [TextContent("折叠内容")])])
 steps = Steps([StepsItem("第一步", "步骤内容")])
 sep = Separator()
 modal = Modal("弹窗标题", true, [TextContent("弹窗内容")])
-sec = SectionBlock("分组标题", [SectionItem("分组项", [TextContent("分组内容")])])
 txt = Text("普通文本")
 bold = BoldText("加粗文本")
 call = TextCallout("warning", "注意", "注意内容")
@@ -130,7 +152,7 @@ head = InlineHeader("行内标题")
       ),
     );
     await tester.pumpAndSettle();
-    for (final text in ['折叠标题', '第一步', '弹窗标题', '分组标题', '普通文本', '加粗文本', '注意内容', 'print(1)', '行内标题']) {
+    for (final text in ['折叠标题', '第一步', '弹窗标题', '普通文本', '加粗文本', '注意内容', 'print(1)', '行内标题']) {
       expect(find.text(text), findsWidgets);
     }
   });
