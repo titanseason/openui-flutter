@@ -328,16 +328,18 @@ git add lib/src/primitives.dart lib/src/renderer.dart lib/openui_flutter.dart te
 git commit -m "feat: skeleton, TableSkeleton, citation and sources primitives"
 ```
 
-### Task 6: Extra charts (heatmap, funnel, calendar heatmap, mini, legend, condensed)
+### Task 6: Extra charts + fl_chart migration (heatmap, funnel, calendar heatmap, mini, legend, condensed)
+
+**User decision 2026-10-28 (supersedes the original CustomPainter-only wording): charts use fl_chart.** This task therefore has two parts: (a) migrate the existing charts to fl_chart, and (b) add the extra charts below. Heatmap, Funnel and CalendarHeatmap have no fl_chart equivalent and stay self-drawn (CustomPainter); everything else in this task uses fl_chart.
 
 **Files:**
 - Create: `lib/src/extra_charts.dart`
-- Modify: `lib/src/library.dart`, `lib/src/renderer.dart`, `lib/openui_flutter.dart`
+- Modify: `lib/src/library.dart`, `lib/src/renderer.dart`, `lib/src/extra_widgets.dart`, `lib/openui_flutter.dart`, `pubspec.yaml`
 - Test: `test/extra_charts_test.dart`
 
 **Interfaces:**
 - Consumes: `Series`, `Slice` nodes (existing), `OpenUIThemeData.chartPalette` (Task 2).
-- Produces: new library components `HeatmapChart(categories: list, series: nodes)`, `FunnelChart(slices: nodes)`, `CalendarHeatmap(values: list)` where `values` is a list of `{date: string, value: number}` maps, `MiniBarChart(values: list)`, `MiniLineChart(values: list)`, `StackedLegend(series: nodes)` (renders palette swatches with labels, no chart area), and condensed variants `BarChartCondensed`, `LineChartCondensed`, `AreaChartCondensed` (same props as their full versions, fixed height 120, no legend row).
+- Produces: (a) migrated charts — `BarChart`, `LineChart`, `AreaChart`, `HorizontalBarChart`, `PieChart`, `RadarChart`, `RadialChart`, `SingleStackedBarChart`, `ScatterChart` rendered via fl_chart, with `theme.chartPalette` threaded through fl_chart colours (this also closes Task 2's deferred minor: extra-widget charts ignoring the theme palette); existing chart tests' visible texts/labels must still pass, painter internals may change. (b) new library components `HeatmapChart(categories: list, series: nodes)`, `FunnelChart(slices: nodes)`, `CalendarHeatmap(values: list)` where `values` is a list of `{date: string, value: number}` maps, `MiniBarChart(values: list)`, `MiniLineChart(values: list)`, `StackedLegend(series: nodes)` (renders palette swatches with labels, no chart area), and condensed variants `BarChartCondensed`, `LineChartCondensed`, `AreaChartCondensed` (same props as their full versions, fixed height 120, no legend row).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -357,20 +359,20 @@ testWidgets('funnel and heatmap render without crashing', (tester) async {
 Run: `~/flutter/bin/flutter test test/extra_charts_test.dart`
 Expected: FAIL with "HeatmapChart not in library" (unknown-component).
 
-- [ ] **Step 3: Implement the extra charts with CustomPainter**
+- [ ] **Step 3: Migrate existing charts to fl_chart, then implement the extra charts**
 
-Heatmap: grid cells coloured by value/max with the first chart-palette colour at increasing opacity. Funnel: centred trapezoids narrowing by value. CalendarHeatmap: 7-row week grid, cell opacity by value/max, no date arithmetic beyond parsing `yyyy-MM-dd` with `DateTime.parse` and weekday. Mini charts: same painters as bar/line at height 48 with no axes or legend. Condensed charts reuse the existing `_ChartWidget` with a height parameter of 120 and legend hidden.
+Add `fl_chart` to pubspec (user-approved; verify the resolved version and record it in the report). Migrate Bar/Line/Area/HorizontalBar/Pie/Radar/Radial/SingleStackedBar/Scatter to fl_chart, threading `theme.chartPalette` through. Then: Heatmap (self-drawn: grid cells coloured by value/max with the first chart-palette colour at increasing opacity), Funnel (self-drawn: centred trapezoids narrowing by value), CalendarHeatmap (self-drawn: 7-row week grid, cell opacity by value/max, no date arithmetic beyond parsing `yyyy-MM-dd` with `DateTime.parse` and weekday). Mini charts: fl_chart bar/line at height 48 with no axes or legend. Condensed charts: fl_chart with height 120 and legend hidden. StackedLegend: palette swatches with labels, no chart area.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `~/flutter/bin/flutter test test/extra_charts_test.dart && ~/flutter/bin/flutter analyze`
-Expected: PASS, no issues.
+Run: `~/flutter/bin/flutter test test/extra_charts_test.dart && ~/flutter/bin/flutter test && ~/flutter/bin/flutter analyze`
+Expected: PASS, no issues, full suite green (existing chart tests must still pass on visible texts/labels).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/src/extra_charts.dart lib/src/library.dart lib/src/renderer.dart lib/openui_flutter.dart test/extra_charts_test.dart
-git commit -m "feat: heatmap, funnel, calendar heatmap, mini charts, stacked legend, condensed charts"
+git add lib/src/extra_charts.dart lib/src/library.dart lib/src/renderer.dart lib/src/extra_widgets.dart lib/openui_flutter.dart pubspec.yaml test/extra_charts_test.dart
+git commit -m "feat: fl_chart migration, heatmap, funnel, calendar heatmap, mini charts, stacked legend, condensed charts"
 ```
 
 ### Task 7: AgentInterface shell, part 1 (model, storage, threads, composer)
