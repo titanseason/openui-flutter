@@ -3,6 +3,7 @@ import 'lang.dart';
 const _s = PropType.string;
 const _n = PropType.number;
 const _l = PropType.list;
+const _b = PropType.boolean;
 const _nodes = PropType.nodeList;
 const _any = PropType.any;
 const _act = PropType.action;
@@ -13,14 +14,15 @@ const _act = PropType.action;
 /// cards 10 (SnippetCardBlock/SnippetCardItem and so on, plus
 /// MarkDownRenderer), plus 9 extra chart components.
 ///
-/// Props are an MVP subset, not a 1:1 copy of the official Zod schemas:
-/// one representative prop per intent, in positional-argument order.
-/// This order is the contract: OpenUI Lang maps positional arguments
+/// Props follow the official Zod schemas in @openuidev/react-ui 0.18.1
+/// (see docs/react-1.0-diff/react-source-props.md) in declaration order,
+/// except where a deviation is noted on the component itself. This
+/// order is the contract: OpenUI Lang maps positional arguments
 /// to props in this order, and `library.prompt()` prints it for the model.
-/// Name alignment is names only: a component accepts this library's
-/// props, not the official Zod schema's props (e.g. MarkDownRenderer
-/// takes `text` here, while React's schema takes `textMarkdown`);
-/// props-level alignment is separate work.
+/// Still pending (later batches): the Form family, the 10 card-block
+/// components, EditableTable, and the general/chat library split; the
+/// 9 extra chart components keep their own props (they are not React
+/// GenUI names).
 ///
 /// The canonical library constructor. Use this for all new code.
 OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
@@ -29,40 +31,59 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
     functions: functions,
     components: [
       // ---- Layout & structure (13) ----
-      const ComponentDef('Stack', 'Vertical stack container, the generic root.', [
+      const ComponentDef('Stack', 'Stack container, the generic root. direction: row/column; gap: none/xs/s/m/l/xl/2xl; align: start/center/end/stretch/baseline; justify: start/center/end/between/around/evenly; wrap: wrap children.', [
         PropDef('children', _nodes, required: true),
+        PropDef('direction', _s),
+        PropDef('gap', _s),
+        PropDef('align', _s),
+        PropDef('justify', _s),
+        PropDef('wrap', _b),
       ]),
-      const ComponentDef('Card', 'Card container, the chat root.', [
+      const ComponentDef('Card', 'Card container, the chat root. variant: card/sunk/clear; plus the Stack flex props. (The chat Card sources variant is not implemented.)', [
         PropDef('children', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('direction', _s),
+        PropDef('gap', _s),
+        PropDef('align', _s),
+        PropDef('justify', _s),
+        PropDef('wrap', _b),
       ]),
       const ComponentDef('Tabs', 'Tabbed container; pass TabItem nodes as a list.', [
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('TabItem', 'One tab: label and its content nodes.', [
-        PropDef('label', _s, required: true),
-        PropDef('children', _nodes, required: true),
+      const ComponentDef('TabItem', 'One tab: value, trigger label, content nodes.', [
+        PropDef('value', _s, required: true),
+        PropDef('trigger', _s, required: true),
+        PropDef('content', _nodes, required: true),
       ]),
       const ComponentDef('Accordion', 'Collapsible panels; pass AccordionItem nodes.', [
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('AccordionItem', 'One collapsible panel: label and its content.', [
-        PropDef('label', _s, required: true),
-        PropDef('children', _nodes, required: true),
+      const ComponentDef('AccordionItem', 'One collapsible panel: value, trigger label, content nodes.', [
+        PropDef('value', _s, required: true),
+        PropDef('trigger', _s, required: true),
+        PropDef('content', _nodes, required: true),
       ]),
       const ComponentDef('Steps', 'Step list; pass StepsItem nodes.', [
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('StepsItem', 'One step: label and its content nodes.', [
-        PropDef('label', _s, required: true),
-        PropDef('children', _nodes),
+      const ComponentDef('StepsItem', 'One step: title and details text.', [
+        PropDef('title', _s, required: true),
+        PropDef('details', _s, required: true),
       ]),
-      const ComponentDef('Carousel', 'Swipeable pages; pass content nodes.', [
-        PropDef('children', _nodes, required: true),
+      const ComponentDef('Carousel', 'Swipeable pages; children is a list of slides, each slide a list of nodes. variant: card/sunk.', [
+        PropDef('children', _l, required: true),
+        PropDef('variant', _s),
       ]),
-      const ComponentDef('Separator', 'Divider line between blocks.', []),
-      const ComponentDef('Modal', 'Dialog-style container; renders as a real AlertDialog.', [
-        PropDef('title', _s),
+      const ComponentDef('Separator', 'Divider line between blocks. orientation: horizontal/vertical; decorative is accepted but has no visible effect.', [
+        PropDef('orientation', _s),
+        PropDef('decorative', _b),
+      ]),
+      const ComponentDef('Modal', 'Dialog-style container; renders as a real AlertDialog. open: false renders nothing; size: sm/md/lg dialog width.', [
+        PropDef('title', _s, required: true),
+        PropDef('open', _b),
         PropDef('children', _nodes, required: true),
+        PropDef('size', _s),
       ]),
       const ComponentDef('SectionBlock', 'Chat grouping block; pass SectionItem nodes.', [
         PropDef('title', _s),
@@ -73,123 +94,179 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('children', _nodes),
       ]),
       // ---- Content & expression (16) ----
-      const ComponentDef('CardHeader', 'Card title and subtitle.', [
-        PropDef('title', _s, required: true),
+      const ComponentDef('CardHeader', 'Card title and subtitle; both optional.', [
+        PropDef('title', _s),
         PropDef('subtitle', _s),
       ]),
-      const ComponentDef('TextContent', 'Body text. variant: small, normal, large, large-heavy.', [
+      const ComponentDef('TextContent', 'Body text. size: small/default/large/small-heavy/large-heavy.', [
         PropDef('text', _s, required: true),
-        PropDef('variant', _s, defaultValue: 'normal'),
+        PropDef('size', _s),
       ]),
-      const ComponentDef('Text', 'Plain inline text.', [
-        PropDef('text', _s, required: true),
+      // DOCUMENTED DEVIATION: React schema order is
+      // variant/value/subtext/subtextVariant/size, but a one-arg
+      // positional call would then bind to variant, not the text.
+      // This library puts value first so Text("...") works; the
+      // remaining props follow schema order.
+      const ComponentDef('Text', 'Plain inline text. variant: text/number; size: xs/sm/md/lg.', [
+        PropDef('value', _s, required: true),
+        PropDef('variant', _s, defaultValue: 'text'),
+        PropDef('subtext', _s),
+        PropDef('subtextVariant', _s, defaultValue: 'text'),
+        PropDef('size', _s, defaultValue: 'sm'),
       ]),
-      const ComponentDef('BoldText', 'Bold inline text.', [
-        PropDef('text', _s, required: true),
+      const ComponentDef('BoldText', 'Bold inline text. Same props as Text, value first (see Text note).', [
+        PropDef('value', _s, required: true),
+        PropDef('variant', _s, defaultValue: 'text'),
+        PropDef('subtext', _s),
+        PropDef('subtextVariant', _s, defaultValue: 'text'),
+        PropDef('size', _s, defaultValue: 'sm'),
       ]),
-      const ComponentDef('MarkDownRenderer', 'Markdown text rendered by flutter_markdown_plus (full Markdown).', [
-        PropDef('text', _s, required: true),
+      const ComponentDef('MarkDownRenderer', 'Markdown text rendered by flutter_markdown_plus (full Markdown). variant: clear/card/sunk.', [
+        PropDef('textMarkdown', _s, required: true),
+        PropDef('variant', _s),
       ]),
-      const ComponentDef('Callout', 'Tip/warning block. variant: info, warning, error.', [
-        PropDef('text', _s, required: true),
-        PropDef('variant', _s, defaultValue: 'info'),
+      const ComponentDef('Callout', 'Callout block. variant: info/warning/error/success/neutral; visible: false renders nothing.', [
+        PropDef('variant', _s, required: true),
+        PropDef('title', _s, required: true),
+        PropDef('description', _s, required: true),
+        PropDef('visible', _b),
       ]),
-      const ComponentDef('TextCallout', 'Text tip block. variant: info, warning, error.', [
-        PropDef('text', _s, required: true),
-        PropDef('variant', _s, defaultValue: 'info'),
+      const ComponentDef('TextCallout', 'Text callout block; all props optional. variant: neutral/info/warning/success/danger.', [
+        PropDef('variant', _s),
+        PropDef('title', _s),
+        PropDef('description', _s),
       ]),
-      const ComponentDef('Image', 'Single image from a network URL.', [
+      const ComponentDef('Image', 'Single image from a network URL. alt is required; src absent renders the alt text.', [
+        PropDef('alt', _s, required: true),
+        PropDef('src', _s),
+      ]),
+      const ComponentDef('ImageBlock', 'Image with an optional alt line.', [
         PropDef('src', _s, required: true),
         PropDef('alt', _s),
       ]),
-      const ComponentDef('ImageBlock', 'Image with an optional caption.', [
-        PropDef('src', _s, required: true),
-        PropDef('caption', _s),
-      ]),
-      const ComponentDef('ImageGallery', 'Horizontal gallery; images is a list of URLs.', [
+      const ComponentDef('ImageGallery', 'Horizontal gallery; images is a list of {src, alt?, details?} objects (plain URL strings are also accepted).', [
         PropDef('images', _l, required: true),
       ]),
-      const ComponentDef('ImageText', 'Small image beside text.', [
+      const ComponentDef('ImageText', 'Small image beside a title and optional subtitle. bold: title in bold; layout: horizontal/vertical; imageSize: image side in logical pixels.', [
         PropDef('src', _s, required: true),
-        PropDef('text', _s, required: true),
+        PropDef('alt', _s),
+        PropDef('title', _s, required: true),
+        PropDef('subtitle', _s),
+        PropDef('bold', _b, defaultValue: false),
+        PropDef('layout', _s, defaultValue: 'horizontal'),
+        PropDef('imageSize', _n),
       ]),
-      const ComponentDef('ImageTextLarge', 'Large image above text.', [
+      const ComponentDef('ImageTextLarge', 'Large image above a title and optional subtitle.', [
         PropDef('src', _s, required: true),
-        PropDef('text', _s, required: true),
+        PropDef('alt', _s),
+        PropDef('title', _s, required: true),
+        PropDef('subtitle', _s),
+        PropDef('bold', _b, defaultValue: false),
       ]),
-      const ComponentDef('IconText', 'Icon plus text; icon is a name like "search".', [
+      const ComponentDef('IconText', 'Icon plus title and optional subtitle. icon is a string name like "search" (React takes an Icon ref; this port keeps the string name). iconVariant: neutral/info/success/warning/danger/inverted/filled/soft; iconSize: xs/s/m/l/xl/sm/md/lg; layout: horizontal/vertical.', [
         PropDef('icon', _s, required: true),
-        PropDef('text', _s, required: true),
+        PropDef('iconVariant', _s, defaultValue: 'neutral'),
+        PropDef('iconSize', _s, defaultValue: 'm'),
+        PropDef('title', _s, required: true),
+        PropDef('subtitle', _s),
+        PropDef('bold', _b, defaultValue: false),
+        PropDef('layout', _s, defaultValue: 'horizontal'),
       ]),
-      const ComponentDef('CodeBlock', 'Code block; language is a hint string.', [
-        PropDef('code', _s, required: true),
-        PropDef('language', _s),
+      const ComponentDef('CodeBlock', 'Code block, plain text (no highlighting). language first, then codeString.', [
+        PropDef('language', _s, required: true),
+        PropDef('codeString', _s, required: true),
       ]),
-      const ComponentDef('InlineHeader', 'Inline heading text.', [
-        PropDef('text', _s, required: true),
+      const ComponentDef('InlineHeader', 'Inline heading with an optional description.', [
+        PropDef('heading', _s, required: true),
+        PropDef('description', _s),
       ]),
-      const ComponentDef('Icon', 'Icon by name like "search"; also used as Tag.icon.', [
+      const ComponentDef('Icon', 'Icon by name like "search". category is accepted but has no visible effect in this port.', [
         PropDef('name', _s, required: true),
+        PropDef('category', _s),
       ]),
       // ---- Data display (21) ----
       const ComponentDef('Table', 'Columnar table; pass Col nodes as a list.', [
         PropDef('columns', _nodes, required: true),
       ]),
-      const ComponentDef('Col', 'One table column: label and a list of cell values.', [
+      const ComponentDef('Col', 'One table column: label, cell data, optional type (string/number/action; accepted but has no visible effect in this port).', [
         PropDef('label', _s, required: true),
-        PropDef('values', _l, required: true),
+        PropDef('data', _l, required: true),
+        PropDef('type', _s),
       ]),
       const ComponentDef('EditableTable', 'Table whose cells are editable text fields. bind: when true, each cell writes to form state under "<statementId>:<columnLabel>:<row>".', [
         PropDef('columns', _nodes, required: true),
         PropDef('bind', PropType.boolean),
       ]),
-      const ComponentDef('BarChart', 'Bar chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
+      const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes. variant: grouped/stacked.', [
+        PropDef('labels', _l, required: true),
+        PropDef('series', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('xLabel', _s),
+        PropDef('yLabel', _s),
+        PropDef('height', _n),
+      ]),
+      const ComponentDef('LineChart', 'Line chart: labels plus Series nodes. variant: linear/natural/step.', [
+        PropDef('labels', _l, required: true),
+        PropDef('series', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('xLabel', _s),
+        PropDef('yLabel', _s),
+        PropDef('height', _n),
+      ]),
+      const ComponentDef('AreaChart', 'Area chart: labels plus Series nodes. variant: linear/natural/step.', [
+        PropDef('labels', _l, required: true),
+        PropDef('series', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('xLabel', _s),
+        PropDef('yLabel', _s),
+        PropDef('height', _n),
+      ]),
+      const ComponentDef('RadarChart', 'Radar chart: labels plus Series nodes.', [
+        PropDef('labels', _l, required: true),
         PropDef('series', _nodes, required: true),
       ]),
-      const ComponentDef('LineChart', 'Line chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
+      const ComponentDef('HorizontalBarChart', 'Horizontal bar chart: labels plus Series nodes. variant: grouped/stacked.', [
+        PropDef('labels', _l, required: true),
         PropDef('series', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('xLabel', _s),
+        PropDef('yLabel', _s),
       ]),
-      const ComponentDef('AreaChart', 'Area chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('RadarChart', 'Radar chart: axes plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('HorizontalBarChart', 'Horizontal bar chart: categories plus Series.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('Series', 'One chart series: label and numeric values.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('Series', 'One chart series: category and numeric values.', [
+        PropDef('category', _s, required: true),
         PropDef('values', _l, required: true),
       ]),
-      const ComponentDef('PieChart', 'Pie chart; pass Slice nodes as a list.', [
-        PropDef('slices', _nodes, required: true),
+      const ComponentDef('PieChart', 'Pie chart: labels plus values arrays. variant: pie/donut; appearance: circular/semiCircular.', [
+        PropDef('labels', _l, required: true),
+        PropDef('values', _l, required: true),
+        PropDef('variant', _s),
+        PropDef('appearance', _s),
       ]),
-      const ComponentDef('RadialChart', 'Radial chart; pass Slice nodes as a list.', [
-        PropDef('slices', _nodes, required: true),
+      const ComponentDef('RadialChart', 'Radial chart: labels plus values arrays.', [
+        PropDef('labels', _l, required: true),
+        PropDef('values', _l, required: true),
       ]),
-      const ComponentDef('SingleStackedBarChart', 'One segmented bar; pass Slice nodes.', [
-        PropDef('slices', _nodes, required: true),
+      const ComponentDef('SingleStackedBarChart', 'One segmented bar: labels plus values arrays.', [
+        PropDef('labels', _l, required: true),
+        PropDef('values', _l, required: true),
       ]),
-      const ComponentDef('Slice', 'One pie/radial/stacked slice: label and numeric value.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('Slice', 'One pie/radial/stacked slice: category and numeric value. A virtual component: charts now take labels/values arrays, so Slice is only meaningful as data, not as a rendered node.', [
+        PropDef('category', _s, required: true),
         PropDef('value', _n, required: true),
       ]),
-      const ComponentDef('ScatterChart', 'Scatter chart; pass ScatterSeries nodes.', [
-        PropDef('series', _nodes, required: true),
+      const ComponentDef('ScatterChart', 'Scatter chart: datasets of ScatterSeries nodes.', [
+        PropDef('datasets', _nodes, required: true),
+        PropDef('xLabel', _s),
+        PropDef('yLabel', _s),
       ]),
-      const ComponentDef('ScatterSeries', 'One scatter series: label and Point nodes.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('ScatterSeries', 'One scatter series: name and Point nodes.', [
+        PropDef('name', _s, required: true),
         PropDef('points', _nodes, required: true),
       ]),
-      const ComponentDef('Point', 'One scatter point: x and y numbers.', [
+      const ComponentDef('Point', 'One scatter point: x and y numbers, optional z (accepted but not rendered in this 2D port).', [
         PropDef('x', _n, required: true),
         PropDef('y', _n, required: true),
+        PropDef('z', _n),
       ]),
       // ---- Extra charts (Task 6; fl_chart except Heatmap/Funnel/
       // CalendarHeatmap, which have no fl_chart equivalent) ----
@@ -224,25 +301,32 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('categories', _l, required: true),
         PropDef('series', _nodes, required: true),
       ]),
-      const ComponentDef('TagBlock', 'Tag list; pass Tag nodes.', [
-        PropDef('items', _nodes, required: true),
+      const ComponentDef('TagBlock', 'Tag list; tags is a list of strings. size: sm/md/lg.', [
+        PropDef('tags', _l, required: true),
+        PropDef('size', _s),
       ]),
-      const ComponentDef('Tag', 'One tag chip; icon is an optional icon name.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('Tag', 'One tag chip. icon is an optional icon name string (React takes an Icon ref; this port keeps the string name). size: sm/md/lg; variant: neutral/info/success/warning/danger.', [
+        PropDef('text', _s, required: true),
         PropDef('icon', _s),
+        PropDef('size', _s),
+        PropDef('variant', _s),
       ]),
-      const ComponentDef('EntityList', 'Entity list; items is a list of strings.', [
-        PropDef('items', _l, required: true),
+      const ComponentDef('EntityList', 'Entity list; rows is a list of {left, right, rightVariant?} objects. size: small/default; header/footer are row objects.', [
+        PropDef('rows', _l, required: true),
+        PropDef('size', _s, defaultValue: 'default'),
+        PropDef('header', _any),
+        PropDef('footer', _any),
       ]),
-      const ComponentDef('MetricIndicatorInline', 'Inline metric: label, value, optional change.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('MetricIndicatorInline', 'Inline metric: value, optional subtext and trend {direction: up/down, value}.', [
         PropDef('value', _any, required: true),
-        PropDef('change', _s),
+        PropDef('subtext', _s),
+        PropDef('trend', _any),
       ]),
-      const ComponentDef('MetricIndicatorWithStrikethrough', 'Metric with struck-through old value.', [
-        PropDef('label', _s, required: true),
+      const ComponentDef('MetricIndicatorWithStrikethrough', 'Metric with struck-through previous value, optional subtext and trend.', [
         PropDef('value', _any, required: true),
-        PropDef('oldValue', _any),
+        PropDef('subtext', _s),
+        PropDef('previousValue', _s),
+        PropDef('trend', _any),
       ]),
       // ---- Form & input (19) ----
       const ComponentDef('Form', 'Form container; children are inputs and buttons.', [
@@ -330,16 +414,24 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('description', _s),
       ]),
       // ---- Actions & feedback (3) ----
-      const ComponentDef('Button', 'Button with an optional action.', [
+      const ComponentDef('Button', 'Button with an optional action. variant: primary/secondary/tertiary; type: normal/destructive; size: extra-small/small/medium/large.', [
         PropDef('label', _s, required: true),
         PropDef('action', _act),
+        PropDef('variant', _s),
+        PropDef('type', _s),
+        PropDef('size', _s),
       ]),
-      const ComponentDef('Buttons', 'Button group; pass Button nodes.', [
-        PropDef('children', _nodes, required: true),
+      const ComponentDef('Buttons', 'Button group; pass Button nodes. direction: row/column.', [
+        PropDef('buttons', _nodes, required: true),
+        PropDef('direction', _s),
       ]),
-      const ComponentDef('IconButton', 'Icon button; icon is a name like "search".', [
+      const ComponentDef('IconButton', 'Icon button. name is used as the tooltip; icon is a string name like "search" (React takes an Icon ref; this port keeps the string name). variant: primary/secondary/tertiary; size: extra-small/small/medium/large; shape: square/circle.', [
+        PropDef('name', _s, required: true),
         PropDef('icon', _s, required: true),
         PropDef('action', _act),
+        PropDef('variant', _s),
+        PropDef('size', _s),
+        PropDef('shape', _s),
       ]),
       // ---- Dialogue guidance (4) ----
       const ComponentDef('FollowUpBlock', 'Follow-up suggestions; pass FollowUpItem nodes.', [
@@ -348,11 +440,17 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
       const ComponentDef('FollowUpItem', 'One follow-up: tapping sends it as the next question.', [
         PropDef('text', _s, required: true),
       ]),
-      const ComponentDef('ListBlock', 'List block; pass ListItem nodes.', [
+      const ComponentDef('ListBlock', 'List block; pass ListItem nodes. variant: number/image; size: default/small.', [
         PropDef('items', _nodes, required: true),
+        PropDef('variant', _s),
+        PropDef('size', _s),
       ]),
-      const ComponentDef('ListItem', 'One list item text.', [
-        PropDef('text', _s, required: true),
+      const ComponentDef('ListItem', 'One list item: title, optional subtitle, image {src, alt}, actionLabel and action.', [
+        PropDef('title', _s, required: true),
+        PropDef('subtitle', _s),
+        PropDef('image', _any),
+        PropDef('actionLabel', _s),
+        PropDef('action', _act),
       ]),
       // ---- Composite cards (10) ----
       const ComponentDef('SnippetCardBlock', 'Snippet card block; pass SnippetCardItem nodes.', [

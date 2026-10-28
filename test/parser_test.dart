@@ -38,7 +38,7 @@ root = TextContent("新")
 root = Stack([ok, bad, broken])
 ok = TextContent("在")
 bad = NoSuch("x")
-broken = CardHeader()
+broken = TextContent()
 ''', library);
     expect(r.root, isNotNull);
     expect(r.errors.map((e) => e.code), containsAll(['unknown-component', 'missing-required']));

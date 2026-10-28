@@ -11,11 +11,15 @@ import 'package:flutter/material.dart';
 /// here: in the light theme that surface is white, which as a bar on a
 /// white page would be invisible.
 
-/// One skeleton bar per count, stacked vertically.
+/// One skeleton bar per count, stacked vertically. Defaults follow the
+/// React host primitives: count 1, 16px bars, full width.
 class Skeleton extends StatelessWidget {
-  const Skeleton({this.count = 3, this.color});
+  const Skeleton({this.count = 1, this.color, this.height, this.width, this.borderRadius});
   final int count;
   final Color? color;
+  final double? height;
+  final double? width;
+  final double? borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -24,9 +28,10 @@ class Skeleton extends StatelessWidget {
       children: [
         for (var i = 0; i < count; i++)
           Container(
-            height: 16,
+            height: height ?? 16,
+            width: width ?? double.infinity,
             margin: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(borderRadius ?? 8)),
           ),
       ],
     );
@@ -34,9 +39,10 @@ class Skeleton extends StatelessWidget {
 }
 
 /// A skeleton placeholder shaped like a table: [rows] rows of [columns]
-/// cells each.
+/// cells each. Defaults follow the React host primitives: 5 rows of
+/// 4 columns.
 class TableSkeleton extends StatelessWidget {
-  const TableSkeleton({this.columns = 3, this.rows = 4, this.color});
+  const TableSkeleton({this.columns = 4, this.rows = 5, this.color});
   final int columns;
   final int rows;
   final Color? color;

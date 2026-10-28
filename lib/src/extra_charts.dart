@@ -86,26 +86,48 @@ double _maxValue(List<List<double>> all) {
 // ---------------- Bar / line / area / horizontal bar ----------------
 
 class FlBarChartWidget extends StatelessWidget {
-  const FlBarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false});
+  const FlBarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
   final double height;
   final bool showLegend;
   final bool horizontal;
+  final bool stacked;
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in series) _seriesValues(s)];
-    final maxY = _maxValue(all);
+    var stackedMax = 1.0;
+    if (stacked) {
+      for (var ci = 0; ci < categories.length; ci++) {
+        var sum = 0.0;
+        for (var si = 0; si < series.length; si++) {
+          sum += ci < all[si].length ? all[si][ci] : 0;
+        }
+        if (sum > stackedMax) stackedMax = sum;
+      }
+    }
+    final maxY = stacked ? stackedMax : _maxValue(all);
     final groups = <BarChartGroupData>[];
     for (var ci = 0; ci < categories.length; ci++) {
-      groups.add(BarChartGroupData(
-        x: ci,
-        barRods: [
-          for (var si = 0; si < series.length; si++)
-            BarChartRodData(toY: ci < all[si].length ? all[si][ci] : 0, color: _colorAt(palette, si), width: 16),
-        ],
-      ));
+      if (stacked) {
+        var running = 0.0;
+        final stack = <BarChartRodStackItem>[];
+        for (var si = 0; si < series.length; si++) {
+          final v = ci < all[si].length ? all[si][ci] : 0;
+          stack.add(BarChartRodStackItem(running, running + v, _colorAt(palette, si)));
+          running += v;
+        }
+        groups.add(BarChartGroupData(x: ci, barRods: [BarChartRodData(toY: running == 0 ? 1 : running, rodStackItems: stack, width: 16)]));
+      } else {
+        groups.add(BarChartGroupData(
+          x: ci,
+          barRods: [
+            for (var si = 0; si < series.length; si++)
+              BarChartRodData(toY: ci < all[si].length ? all[si][ci] : 0, color: _colorAt(palette, si), width: 16),
+          ],
+        ));
+      }
     }
     return _chartBox(
       height: height,
@@ -121,19 +143,21 @@ class FlBarChartWidget extends StatelessWidget {
           rotationQuarterTurns: horizontal ? 1 : 0,
         ),
       ),
-      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('label')], palette: palette) : null,
+      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
     );
   }
 }
 
 class FlLineChartWidget extends StatelessWidget {
-  const FlLineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false});
+  const FlLineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = false, this.step = false});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
   final double height;
   final bool showLegend;
   final bool area;
+  final bool curved;
+  final bool step;
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in series) _seriesValues(s)];
@@ -148,6 +172,8 @@ class FlLineChartWidget extends StatelessWidget {
                 spots: [for (var ci = 0; ci < all[si].length; ci++) FlSpot(ci.toDouble(), all[si][ci])],
                 color: _colorAt(palette, si),
                 barWidth: 2,
+                isCurved: curved,
+                isStepLineChart: step,
                 dotData: const FlDotData(show: true),
                 belowBarData: BarAreaData(show: area, color: _colorAt(palette, si).withValues(alpha: 0.2)),
               ),
@@ -162,7 +188,7 @@ class FlLineChartWidget extends StatelessWidget {
           lineTouchData: LineTouchData(enabled: false),
         ),
       ),
-      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('label')], palette: palette) : null,
+      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
     );
   }
 }
@@ -170,11 +196,29 @@ class FlLineChartWidget extends StatelessWidget {
 // ---------------- Pie ----------------
 
 class FlPieChartWidget extends StatelessWidget {
-  const FlPieChartWidget({required this.slices, this.palette = _defaultPalette});
-  final List<ElementNode> slices;
+  const FlPieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette});
+  final List<String> labels;
+  final List<double> values;
+  final String variant;
+  final String appearance;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
+    // Semi-circular: real sections plus a transparent section of the
+    // same total, starting at 9 o'clock so the real sections cover
+    // exactly the top half.
+    final total = values.fold<double>(0, (a, b) => a + b);
+    final semi = appearance == 'semiCircular';
+    final sections = <PieChartSectionData>[
+      for (var i = 0; i < labels.length; i++)
+        PieChartSectionData(
+          value: i < values.length ? values[i] : 0,
+          color: _colorAt(palette, i),
+          title: labels[i],
+          titleStyle: const TextStyle(fontSize: 11, color: Colors.white),
+        ),
+      if (semi) PieChartSectionData(value: total == 0 ? 1 : total, color: Colors.transparent, title: '', showTitle: false),
+    ];
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
@@ -185,21 +229,15 @@ class FlPieChartWidget extends StatelessWidget {
             height: 180,
             child: PieChart(
               PieChartData(
-                sections: [
-                  for (var i = 0; i < slices.length; i++)
-                    PieChartSectionData(
-                      value: slices[i].numOf('value'),
-                      color: _colorAt(palette, i),
-                      title: slices[i].stringOf('label'),
-                      titleStyle: const TextStyle(fontSize: 11, color: Colors.white),
-                    ),
-                ],
+                sections: sections,
                 sectionsSpace: 2,
+                centerSpaceRadius: variant == 'donut' ? 40 : 0,
+                startDegreeOffset: semi ? 180 : 0,
               ),
             ),
           ),
-          for (var i = 0; i < slices.length; i++)
-            Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
+          for (var i = 0; i < labels.length; i++)
+            Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${labels[i]} (${i < values.length ? values[i] : 0})')]),
         ],
       ),
     );
@@ -250,7 +288,7 @@ class FlRadarChartWidget extends StatelessWidget {
               ),
             ),
           ),
-          FlLegend(labels: [for (final s in series) s.stringOf('label')], palette: palette),
+          FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette),
         ],
       ),
     );
@@ -260,12 +298,13 @@ class FlRadarChartWidget extends StatelessWidget {
 // ---------------- Radial (gauge rings) ----------------
 
 class FlRadialChartWidget extends StatelessWidget {
-  const FlRadialChartWidget({required this.slices, this.palette = _defaultPalette});
-  final List<ElementNode> slices;
+  const FlRadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+  final List<String> labels;
+  final List<double> values;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    final maxV = slices.fold<double>(1, (m, s) => math.max(m, s.numOf('value')));
+    final maxV = values.fold<double>(1, (m, v) => math.max(m, v));
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
@@ -282,9 +321,9 @@ class FlRadialChartWidget extends StatelessWidget {
                 sweepAngle: 360,
                 defaultRingWidth: 10,
                 rings: [
-                  for (var i = 0; i < slices.length; i++)
+                  for (var i = 0; i < labels.length; i++)
                     GaugeProgressRing(
-                      value: slices[i].numOf('value'),
+                      value: i < values.length ? values[i] : 0,
                       color: _colorAt(palette, i),
                       backgroundColor: Colors.grey.shade200,
                       strokeCap: StrokeCap.round,
@@ -293,8 +332,8 @@ class FlRadialChartWidget extends StatelessWidget {
               ),
             ),
           ),
-          for (var i = 0; i < slices.length; i++)
-            Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
+          for (var i = 0; i < labels.length; i++)
+            Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${labels[i]} (${i < values.length ? values[i] : 0})')]),
         ],
       ),
     );
@@ -304,16 +343,17 @@ class FlRadialChartWidget extends StatelessWidget {
 // ---------------- Single stacked bar ----------------
 
 class FlStackedBarWidget extends StatelessWidget {
-  const FlStackedBarWidget({required this.slices, this.palette = _defaultPalette});
-  final List<ElementNode> slices;
+  const FlStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+  final List<String> labels;
+  final List<double> values;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    final total = slices.fold<double>(0, (s, n) => s + n.numOf('value'));
+    final total = values.fold<double>(0, (a, b) => a + b);
     var running = 0.0;
     final stack = <BarChartRodStackItem>[];
-    for (var i = 0; i < slices.length; i++) {
-      final v = slices[i].numOf('value');
+    for (var i = 0; i < labels.length; i++) {
+      final v = i < values.length ? values[i] : 0;
       stack.add(BarChartRodStackItem(running, running + v, _colorAt(palette, i)));
       running += v;
     }
@@ -339,7 +379,7 @@ class FlStackedBarWidget extends StatelessWidget {
           const SizedBox(height: 6),
           Wrap(
             spacing: 12,
-            children: [for (var i = 0; i < slices.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 4), Text('${slices[i].stringOf('label')} (${total == 0 ? 0 : (slices[i].numOf('value') / total * 100).round()}%)')])],
+            children: [for (var i = 0; i < labels.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 4), Text('${labels[i]} (${total == 0 ? 0 : ((i < values.length ? values[i] : 0) / total * 100).round()}%)')])],
           ),
         ],
       ),
@@ -396,7 +436,7 @@ class FlScatterChartWidget extends StatelessWidget {
               ),
             ),
           ),
-          FlLegend(labels: [for (final s in series) s.stringOf('label')], palette: palette),
+          FlLegend(labels: [for (final s in series) s.stringOf('name')], palette: palette),
         ],
       ),
     );
@@ -436,7 +476,7 @@ class HeatmapChartWidget extends StatelessWidget {
           for (var si = 0; si < series.length; si++)
             Row(
               children: [
-                SizedBox(width: 56, child: Text(series[si].stringOf('label'), style: const TextStyle(fontSize: 11))),
+                SizedBox(width: 56, child: Text(series[si].stringOf('category'), style: const TextStyle(fontSize: 11))),
                 for (var ci = 0; ci < categories.length; ci++)
                   Expanded(
                     child: AspectRatio(
@@ -503,7 +543,7 @@ class FunnelChartWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                SizedBox(width: 110, child: Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})', style: const TextStyle(fontSize: 12))),
+                SizedBox(width: 110, child: Text('${slices[i].stringOf('category')} (${slices[i].numOf('value')})', style: const TextStyle(fontSize: 12))),
               ],
             ),
         ],
@@ -636,6 +676,6 @@ class StackedLegendWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    return FlLegend(labels: [for (final s in series) s.stringOf('label')], palette: palette);
+    return FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette);
   }
 }

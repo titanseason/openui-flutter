@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Props Batch A (from the schema-level diff against @openuidev/react-ui
+  0.18.1): layout, content, Col, charts, data-display, actions,
+  dialogue and host-primitive props now follow the React schemas —
+  e.g. charts take `labels` (not `categories`), `Series` takes
+  `category`, `PieChart`/`RadialChart`/`SingleStackedBarChart` take
+  `labels` + `values` arrays (not Slice nodes), `CodeBlock` is
+  `language`-first, `Callout` is `variant`/`title`/`description`/
+  `visible`, `TabItem`/`AccordionItem` are `value`/`trigger`/`content`,
+  `Tag` is `text`/`icon?`/`size?`/`variant?`, `EntityList` takes row
+  objects, metrics take `value`/`subtext?`/`trend?`, `IconButton` is
+  `name`-first, `Skeleton` defaults to count 1 and `TableSkeleton` to
+  5×4. Documented deviations: `Text`/`BoldText` put `value` first
+  (schema order would bind a one-arg call to `variant`); icon props
+  stay string names, not Icon refs; the chat `Card` sources variant
+  is skipped; `Stack`/`Card` gap defaults to no spacing (not React's
+  "m" fallback). Form family, card blocks and EditableTable props are
+  unchanged (later batches).
 - Component names aligned directly with @openuidev/react-ui 0.18.1 (from
   the schema-level diff, see docs/react-1.0-diff/) — BREAKING for
   programs using the old short names: `MarkdownRenderer` is now

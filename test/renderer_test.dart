@@ -40,8 +40,8 @@ cta = Button("查看明细", @ToAssistant("查看明细"))
             library: openUIStandardLibrary(),
             response: '''
 root = Tabs([t1, t2])
-t1 = TabItem("概览", [TextContent("概览内容")])
-t2 = TabItem("明细", [TextContent("明细内容")])
+t1 = TabItem("overview", "概览", [TextContent("概览内容")])
+t2 = TabItem("detail", "明细", [TextContent("明细内容")])
 ''',
           ),
         ),

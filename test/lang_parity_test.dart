@@ -112,7 +112,7 @@ tickets = Query("list_tickets", {})
           library: library,
           response: '''
 root = Stack([m])
-m = Modal("标题", [TextContent("弹窗内容")])
+m = Modal("标题", true, [TextContent("弹窗内容")])
 ''',
         ),
       ),
@@ -134,7 +134,7 @@ m = Modal("标题", [TextContent("弹窗内容")])
     await tester.pumpWidget(
       widgetFor('''
 root = Stack([m])
-m = Modal("标题一", [TextContent("内容一")])
+m = Modal("标题一", true, [TextContent("内容一")])
 '''),
     );
     await tester.pumpAndSettle();
@@ -149,7 +149,7 @@ m = Modal("标题一", [TextContent("内容一")])
     await tester.pumpWidget(
       widgetFor('''
 root = Stack([m2])
-m2 = Modal("标题二", [TextContent("内容二")])
+m2 = Modal("标题二", true, [TextContent("内容二")])
 '''),
     );
     await tester.pumpAndSettle();

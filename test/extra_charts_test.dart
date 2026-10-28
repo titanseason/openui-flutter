@@ -41,10 +41,10 @@ bar = BarChart(["一", "二"], [Series("柱", [1, 2])])
 line = LineChart(["一", "二"], [Series("线", [1, 2])])
 area = AreaChart(["一", "二"], [Series("面", [1, 2])])
 hbar = HorizontalBarChart(["一", "二"], [Series("横", [1, 2])])
-pie = PieChart([Slice("饼一", 3), Slice("饼二", 1)])
+pie = PieChart(["饼一", "饼二"], [3, 1])
 radar = RadarChart(["一", "二"], [Series("雷达", [1, 2])])
-radial = RadialChart([Slice("径一", 3), Slice("径二", 1)])
-stacked = SingleStackedBarChart([Slice("堆一", 3), Slice("堆二", 1)])
+radial = RadialChart(["径一", "径二"], [3, 1])
+stacked = SingleStackedBarChart(["堆一", "堆二"], [3, 1])
 scatter = ScatterChart([ScatterSeries("散", [Point(1, 2), Point(3, 4)])])
 ''',
           ),

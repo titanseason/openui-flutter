@@ -113,7 +113,7 @@ retry = Button("Refresh", Action([@Run(weather)]))
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Host Custom Callout'),
-          Text(node.props['text'] as String? ?? ''),
+          Text(node.props['description'] as String? ?? ''),
         ],
       ),
     );
@@ -126,7 +126,7 @@ retry = Button("Refresh", Action([@Run(weather)]))
     controller.push('''
 root = Stack([title, callout, note])
 title = CardHeader("Theme & Custom Components", "Switch theme, Callout is replaced")
-callout = Callout("This is the replaced Callout", "info")
+callout = Callout("info", "Replaced Callout", "This is the replaced Callout")
 note = TextContent("The Callout below is not the built-in rendering, but a host replacement via the registry.")
 ''');
     controller.finish();
@@ -162,8 +162,8 @@ s = Series("气温", [22, 24, 21])
 form = Form([city])
 city = Input("城市", "city")
 tabs = Tabs([t1, t2])
-t1 = TabItem("概览", [TextContent("概览内容")])
-t2 = TabItem("明细", [TextContent("明细内容")])
+t1 = TabItem("overview", "概览", [TextContent("概览内容")])
+t2 = TabItem("detail", "明细", [TextContent("明细内容")])
 ''',
           ),
         ),

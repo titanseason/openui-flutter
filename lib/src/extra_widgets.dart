@@ -84,19 +84,21 @@ class RadarChartWidget extends StatelessWidget {
 }
 
 class RadialChartWidget extends StatelessWidget {
-  const RadialChartWidget({required this.slices, this.palette = _palette});
-  final List<ElementNode> slices;
+  const RadialChartWidget({required this.labels, required this.values, this.palette = _palette});
+  final List<String> labels;
+  final List<double> values;
   final List<Color> palette;
   @override
-  Widget build(BuildContext context) => FlRadialChartWidget(slices: slices, palette: palette);
+  Widget build(BuildContext context) => FlRadialChartWidget(labels: labels, values: values, palette: palette);
 }
 
 class SingleStackedBarWidget extends StatelessWidget {
-  const SingleStackedBarWidget({required this.slices, this.palette = _palette});
-  final List<ElementNode> slices;
+  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _palette});
+  final List<String> labels;
+  final List<double> values;
   final List<Color> palette;
   @override
-  Widget build(BuildContext context) => FlStackedBarWidget(slices: slices, palette: palette);
+  Widget build(BuildContext context) => FlStackedBarWidget(labels: labels, values: values, palette: palette);
 }
 
 class ScatterChartWidget extends StatelessWidget {

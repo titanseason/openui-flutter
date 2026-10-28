@@ -373,68 +373,95 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         }
         return Text('数据加载失败：$tool');
       case 'Stack':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final c in node.nodesOf('children')) _buildNode(c)],
-        );
+        return _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
       case 'Card':
-        return Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [for (final c in node.nodesOf('children')) _buildNode(c)],
+        // General Card: variant + flex props. The chat Card sources
+        // variant is not implemented (see library.dart).
+        final cardBody = _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
+        return switch (node.stringOf('variant', 'card')) {
+          'clear' => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: cardBody),
+          'sunk' => Card(
+              color: Colors.grey.shade100,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
             ),
-          ),
-        );
+          _ => Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
+            ),
+        };
       case 'CardHeader':
+        // Both props are optional now; an empty header renders nothing.
+        if (node.props['title'] is! String && node.props['subtitle'] is! String) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(node.stringOf('title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
             ],
           ),
         );
       case 'TextContent':
-        final variant = node.stringOf('variant', 'normal');
-        final style = switch (variant) {
+        final size = node.stringOf('size', 'default');
+        final style = switch (size) {
           'small' => const TextStyle(fontSize: 13, color: Colors.grey),
           'large' => const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          'small-heavy' => const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
           'large-heavy' => const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
           _ => const TextStyle(fontSize: 15),
         };
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: style));
       case 'MarkDownRenderer':
-        return _MarkdownWidget(text: node.stringOf('text'));
+        final body = _MarkdownWidget(text: node.stringOf('textMarkdown'));
+        return switch (node.stringOf('variant', 'clear')) {
+          'card' => Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              child: Padding(padding: const EdgeInsets.all(12), child: body),
+            ),
+          'sunk' => Container(margin: const EdgeInsets.symmetric(vertical: 6), padding: const EdgeInsets.all(12), color: Colors.grey.shade100, child: body),
+          _ => body,
+        };
       case 'Callout':
-        final variant = node.stringOf('variant', 'info');
-        final color = switch (variant) {
+        // visible == false renders nothing; absent means visible.
+        if (node.props['visible'] == false) return const SizedBox.shrink();
+        final calloutColor = switch (node.stringOf('variant')) {
           'warning' => Colors.orange,
           'error' => Colors.red,
+          'success' => Colors.green,
+          'neutral' => Colors.grey,
           _ => Colors.blue,
         };
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            border: Border(left: BorderSide(color: color, width: 4)),
+            color: calloutColor.withValues(alpha: 0.08),
+            border: Border(left: BorderSide(color: calloutColor, width: 4)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(node.stringOf('text')),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(node.stringOf('description')),
+            ],
+          ),
         );
       case 'Image':
+        final src = node.props['src'] is String ? node.stringOf('src') : null;
+        // src is optional now; without it the required alt text is shown.
+        if (src == null) return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(node.stringOf('alt')));
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.network(
-              node.stringOf('src'),
+              src,
               height: 180,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -474,7 +501,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         // of an empty DataTable. (A Col with genuinely empty values
         // is not a skeleton and still renders a normal table.)
         if (cols.any((c) => c.component == '__Skeleton')) return const TableSkeleton();
-        final rows = cols.map((c) => (c.props['values'] as List?) ?? const []).toList();
+        final rows = cols.map((c) => (c.props['data'] as List?) ?? const []).toList();
         final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -487,11 +514,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'BarChart':
-        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'PieChart':
-        return _PieWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
+        return _PieWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
       case 'Form':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -526,13 +553,39 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           },
         );
       case 'Button':
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: ElevatedButton(
-            onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']),
-            child: Text(node.stringOf('label')),
-          ),
-        );
+        final destructive = node.stringOf('type', 'normal') == 'destructive';
+        final buttonFontSize = switch (node.stringOf('size', 'medium')) {
+          'extra-small' => 12.0,
+          'small' => 13.0,
+          'large' => 17.0,
+          _ => 15.0,
+        };
+        final buttonPadding = switch (node.stringOf('size', 'medium')) {
+          'extra-small' => const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          'small' => const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          'large' => const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          _ => const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        };
+        final buttonLabel = Text(node.stringOf('label'), style: TextStyle(fontSize: buttonFontSize));
+        final onPressed = _effectiveStreaming ? null : () => _dispatch(node.props['action']);
+        final button = switch (node.stringOf('variant', 'primary')) {
+          'secondary' => OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null, side: destructive ? const BorderSide(color: Colors.red) : null),
+              child: buttonLabel,
+            ),
+          'tertiary' => TextButton(
+              onPressed: onPressed,
+              style: TextButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null),
+              child: buttonLabel,
+            ),
+          _ => ElevatedButton(
+              onPressed: onPressed,
+              style: ElevatedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.white : null, backgroundColor: destructive ? Colors.red : null),
+              child: buttonLabel,
+            ),
+        };
+        return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: button);
       case 'Chips':
         return _ChipsWidget(
           items: node.nodesOf('items'),
@@ -559,15 +612,15 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'TabItem':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final c in node.nodesOf('children')) _buildNode(c)],
+          children: [for (final c in node.nodesOf('content')) _buildNode(c)],
         );
       // ---- Layout (remaining) ----
       case 'Accordion':
         return Column(children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
       case 'AccordionItem':
         return ExpansionTile(
-          title: Text(node.stringOf('label')),
-          children: [for (final c in node.nodesOf('children')) _buildNode(c)],
+          title: Text(node.stringOf('trigger')),
+          children: [for (final c in node.nodesOf('content')) _buildNode(c)],
         );
       case 'Steps':
         return Column(
@@ -577,24 +630,51 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'StepsItem':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(node.stringOf('label'), style: const TextStyle(fontWeight: FontWeight.bold)), for (final c in node.nodesOf('children')) _buildNode(c)],
+          children: [Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)), Text(node.stringOf('details'))],
         );
       case 'Carousel':
-        final pages = node.nodesOf('children');
-        if (pages.isEmpty) return const SizedBox.shrink();
+        // children is a list of slides; each slide is a list of nodes
+        // (a bare node is leniently treated as a one-node slide).
+        final slides = <List<ElementNode>>[];
+        if (node.props['children'] is List) {
+          for (final slide in (node.props['children'] as List)) {
+            if (slide is List) {
+              slides.add([for (final n in slide) if (n is ElementNode) n]);
+            } else if (slide is ElementNode) {
+              slides.add([slide]);
+            }
+          }
+        }
+        if (slides.isEmpty) return const SizedBox.shrink();
+        final sunk = node.stringOf('variant', 'card') == 'sunk';
         return SizedBox(
           height: 220,
-          child: PageView(children: [for (final p in pages) SingleChildScrollView(child: _buildNode(p))]),
+          child: PageView(
+            children: [
+              for (final slide in slides)
+                Container(
+                  color: sunk ? Colors.grey.shade100 : null,
+                  child: SingleChildScrollView(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final c in slide) _buildNode(c)]),
+                  ),
+                ),
+            ],
+          ),
         );
       case 'Separator':
+        // decorative is accepted but has no visible effect.
+        if (node.stringOf('orientation', 'horizontal') == 'vertical') {
+          return Center(child: Container(width: 1, height: 24, color: Colors.grey.shade300));
+        }
         return const Divider(height: 24);
       case 'Modal':
         // A real overlay dialog: the node itself renders nothing
         // inline; _ModalWidget shows the dialog once on first build
         // and never re-opens it after close for this render. When
         // the node leaves the tree its state is disposed, so a
-        // Modal that re-enters the tree opens again.
-        return _ModalWidget(node: node, buildNode: _buildNode);
+        // Modal that re-enters the tree opens again. open == false
+        // renders nothing and never opens the dialog.
+        return _ModalWidget(node: node, buildNode: _buildNode, open: node.props['open'] != false, size: node.stringOf('size', 'md'));
       case 'SectionBlock':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -607,54 +687,202 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       // ---- Content (remaining) ----
       case 'Text':
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text')));
       case 'BoldText':
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontWeight: FontWeight.bold)));
+        // value-first is a documented deviation from schema order
+        // (see library.dart). variant number vs text is semantic
+        // only in this port: no distinct styling. subtextVariant is
+        // accepted but likewise has no distinct styling.
+        final textBold = node.component == 'BoldText';
+        final textSize = switch (node.stringOf('size', 'sm')) {
+          'xs' => 11.0,
+          'md' => 15.0,
+          'lg' => 18.0,
+          _ => 13.0,
+        };
+        final mainText = Text(node.stringOf('value'), style: TextStyle(fontSize: textSize, fontWeight: textBold ? FontWeight.bold : null));
+        if (node.props['subtext'] is! String) {
+          return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: mainText);
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [mainText, Text(node.stringOf('subtext'), style: TextStyle(fontSize: textSize - 1, color: Colors.grey))],
+          ),
+        );
       case 'TextCallout':
-        return _callout(node.stringOf('text'), node.stringOf('variant', 'info'));
+        final textCalloutColor = switch (node.stringOf('variant', 'neutral')) {
+          'info' => Colors.blue,
+          'warning' => Colors.orange,
+          'success' => Colors.green,
+          'danger' => Colors.red,
+          _ => Colors.grey,
+        };
+        if (node.props['title'] is! String && node.props['description'] is! String) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: textCalloutColor.withValues(alpha: 0.08),
+            border: Border(left: BorderSide(color: textCalloutColor, width: 4)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (node.props['description'] is String) Text(node.stringOf('description')),
+            ],
+          ),
+        );
       case 'ImageBlock':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 180, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: const Text('图片加载失败')))),
-            if (node.props['caption'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('caption'), style: const TextStyle(color: Colors.grey, fontSize: 13))),
+            if (node.props['alt'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('alt'), style: const TextStyle(color: Colors.grey, fontSize: 13))),
           ],
         );
       case 'ImageGallery':
-        final images = _strings(node.props['images']);
+        // Entries are {src, alt?, details?} maps; plain URL strings
+        // are leniently accepted as src-only entries.
+        final galleryEntries = <({String src, String? alt, String? details})>[];
+        if (node.props['images'] is List) {
+          for (final e in (node.props['images'] as List)) {
+            if (e is Map && e['src'] is String) {
+              galleryEntries.add((src: e['src'] as String, alt: e['alt'] is String ? e['alt'] as String : null, details: e['details'] is String ? e['details'] as String : null));
+            } else if (e is String) {
+              galleryEntries.add((src: e, alt: null, details: null));
+            }
+          }
+        }
         return SizedBox(
-          height: 140,
-          child: ListView(scrollDirection: Axis.horizontal, children: [for (final src in images) Padding(padding: const EdgeInsets.only(right: 8), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(src, width: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 200, color: Colors.grey.shade200))))]),
+          height: 170,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final entry in galleryEntries)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(entry.src, width: 200, height: 140, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 200, height: 140, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(entry.alt ?? '图片加载失败', style: const TextStyle(fontSize: 12)))),
+                      ),
+                      if (entry.details != null) SizedBox(width: 200, child: Text(entry.details!, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         );
       case 'ImageText':
+        final imageTextSize = node.props['imageSize'] is num ? (node.props['imageSize'] as num).toDouble() : 80.0;
+        final imageTextImage = ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(node.stringOf('src'), width: imageTextSize, height: imageTextSize, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: imageTextSize, height: imageTextSize, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12)))),
+        );
+        final imageTextBody = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+          ],
+        );
+        if (node.stringOf('layout', 'horizontal') == 'vertical') {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [imageTextImage, const SizedBox(height: 6), imageTextBody]);
+        }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), width: 80, height: 80, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 80, height: 80, color: Colors.grey.shade200))), const SizedBox(width: 8), Expanded(child: Text(node.stringOf('text')))],
+          children: [imageTextImage, const SizedBox(width: 8), Expanded(child: imageTextBody)],
         );
       case 'ImageTextLarge':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200))), const SizedBox(height: 6), Text(node.stringOf('text'))],
+          children: [
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12))))),
+            const SizedBox(height: 6),
+            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+          ],
         );
       case 'IconText':
-        return Row(children: [Icon(iconByName(node.stringOf('icon')), size: 20), const SizedBox(width: 6), Expanded(child: Text(node.stringOf('text')))]);
+        // icon is a string name in this port (React takes an Icon ref).
+        final iconSize = switch (node.stringOf('iconSize', 'm')) {
+          'xs' => 12.0,
+          's' => 16.0,
+          'l' => 24.0,
+          'xl' => 28.0,
+          'sm' => 16.0,
+          'md' => 20.0,
+          'lg' => 24.0,
+          _ => 20.0,
+        };
+        final iconVariant = node.stringOf('iconVariant', 'neutral');
+        final iconColor = switch (iconVariant) {
+          'info' => Colors.blue,
+          'success' => Colors.green,
+          'warning' => Colors.orange,
+          'danger' => Colors.red,
+          'neutral' => Colors.grey.shade700,
+          _ => Colors.grey.shade700,
+        };
+        final iconWidget = switch (iconVariant) {
+          'inverted' => Container(decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: Colors.white)),
+          'filled' => Container(decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: Colors.white)),
+          'soft' => Container(decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: iconColor)),
+          _ => Icon(iconByName(node.stringOf('icon')), size: iconSize, color: iconColor),
+        };
+        final iconTextBody = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+          ],
+        );
+        if (node.stringOf('layout', 'horizontal') == 'vertical') {
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [iconWidget, const SizedBox(height: 6), iconTextBody]);
+        }
+        return Row(children: [iconWidget, const SizedBox(width: 6), Expanded(child: iconTextBody)]);
       case 'CodeBlock':
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(10),
-          color: Colors.grey.shade100,
-          child: Text(node.stringOf('code'), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+        // Plain text by decision (no highlighting); language is shown
+        // as a caption above the code.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(node.stringOf('language'), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.all(10),
+              color: Colors.grey.shade100,
+              child: Text(node.stringOf('codeString'), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+            ),
+          ],
         );
       case 'InlineHeader':
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)));
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(node.stringOf('heading'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              if (node.props['description'] is String) Text(node.stringOf('description'), style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            ],
+          ),
+        );
       case 'Icon':
+        // category is accepted but has no visible effect in this port.
         return Icon(iconByName(node.stringOf('name')));
       // ---- Data (remaining) ----
       case 'EditableTable':
+        // Col prop renamed values -> data (Batch A); EditableTable's
+        // own props are unchanged (later batch).
         final cols = node.nodesOf('columns');
         if (cols.isEmpty) return const SizedBox.shrink();
-        final rows = cols.map((c) => (c.props['values'] as List?) ?? const []).toList();
+        final rows = cols.map((c) => (c.props['data'] as List?) ?? const []).toList();
         final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
         // Bound cells (bind == true) read/write form state under
         // "<statementId>:<columnLabel>:<row>"; unbound cells keep
@@ -687,17 +915,21 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'RadarChart':
-        return RadarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return RadarChartWidget(categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'HorizontalBarChart':
-        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
       case 'RadialChart':
-        return RadialChartWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
+        return RadialChartWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), palette: _theme.chartPalette);
       case 'SingleStackedBarChart':
-        return SingleStackedBarWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
+        return SingleStackedBarWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), palette: _theme.chartPalette);
       case 'ScatterChart':
-        return ScatterChartWidget(series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return _LabeledChart(
+          xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null,
+          yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null,
+          child: ScatterChartWidget(series: node.nodesOf('datasets'), palette: _theme.chartPalette),
+        );
       case 'HeatmapChart':
         return HeatmapChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'FunnelChart':
@@ -723,20 +955,70 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'AreaChartCondensed':
         return FlLineChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false, area: true);
       case 'TagBlock':
-        return Wrap(spacing: 8, children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
+        final tagSize = switch (node.stringOf('size', 'md')) {
+          'sm' => 11.0,
+          'lg' => 15.0,
+          _ => 13.0,
+        };
+        return Wrap(spacing: 8, children: [for (final tag in _strings(node.props['tags'])) Chip(label: Text(tag, style: TextStyle(fontSize: tagSize)))]);
       case 'Tag':
-        return Chip(label: Text(node.stringOf('label')), avatar: node.props['icon'] is String ? Icon(iconByName(node.stringOf('icon')), size: 18) : null);
+        // icon is a string name in this port (React takes an Icon ref).
+        final tagColor = switch (node.stringOf('variant', 'neutral')) {
+          'info' => Colors.blue.shade100,
+          'success' => Colors.green.shade100,
+          'warning' => Colors.orange.shade100,
+          'danger' => Colors.red.shade100,
+          _ => Colors.grey.shade200,
+        };
+        final tagFontSize = switch (node.stringOf('size', 'md')) {
+          'sm' => 11.0,
+          'lg' => 15.0,
+          _ => 13.0,
+        };
+        return Chip(
+          label: Text(node.stringOf('text'), style: TextStyle(fontSize: tagFontSize)),
+          avatar: node.props['icon'] is String ? Icon(iconByName(node.stringOf('icon')), size: 18) : null,
+          backgroundColor: tagColor,
+        );
       case 'EntityList':
-        return Column(children: [for (final item in _strings(node.props['items'])) ListTile(leading: const CircleAvatar(child: Icon(Icons.person, size: 18)), title: Text(item))]);
+        // rows are {left, right, rightVariant?} maps; rightVariant
+        // number vs text is semantic only in this port (both render
+        // as the trailing text). header/footer are row objects.
+        final entityDense = node.stringOf('size', 'default') == 'small';
+        Widget entityRow(Map map, {bool bold = false}) {
+          final style = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
+          return ListTile(
+            dense: entityDense,
+            leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),
+            title: Text(map['left'] is String ? map['left'] as String : '', style: style),
+            trailing: Text(map['right'] is String ? map['right'] as String : (map['right'] == null ? '' : '${map['right']}'), style: style),
+          );
+        }
+
+        final entityChildren = <Widget>[];
+        if (node.props['header'] is Map) {
+          entityChildren.add(entityRow(node.props['header'] as Map, bold: true));
+          entityChildren.add(const Divider(height: 1));
+        }
+        if (node.props['rows'] is List) {
+          for (final row in (node.props['rows'] as List)) {
+            if (row is Map) entityChildren.add(entityRow(row));
+          }
+        }
+        if (node.props['footer'] is Map) {
+          entityChildren.add(const Divider(height: 1));
+          entityChildren.add(entityRow(node.props['footer'] as Map, bold: true));
+        }
+        return Column(children: entityChildren);
       case 'MetricIndicatorInline':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(children: [Text('${node.stringOf('label')}: ', style: const TextStyle(color: Colors.grey)), Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['change'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('change'), style: TextStyle(color: node.stringOf('change').startsWith('-') ? Colors.red : Colors.green)))]) ,
+          child: Row(children: [Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), _trendWidget(node.props['trend'])]),
         );
       case 'MetricIndicatorWithStrikethrough':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(children: [Text('${node.stringOf('label')}: ', style: const TextStyle(color: Colors.grey)), if (node.props['oldValue'] != null) Padding(padding: const EdgeInsets.only(right: 8), child: Text('${node.props['oldValue']}', style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey))), Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold))]),
+          child: Row(children: [if (node.props['previousValue'] is String) Padding(padding: const EdgeInsets.only(right: 8), child: Text(node.stringOf('previousValue'), style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey))), Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), _trendWidget(node.props['trend'])]),
         );
       // ---- Form (remaining) ----
       case 'FormControl':
@@ -833,14 +1115,73 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       // ---- Actions (remaining) ----
       case 'Buttons':
-        return Wrap(spacing: 8, children: [for (final c in node.nodesOf('children')) _buildNode(c)]);
+        final buttons = [for (final c in node.nodesOf('buttons')) _buildNode(c)];
+        if (node.stringOf('direction', 'row') == 'column') {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: buttons);
+        }
+        return Wrap(spacing: 8, children: buttons);
       case 'IconButton':
-        return IconButton(icon: Icon(iconByName(node.stringOf('icon'))), onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']));
+        // icon is a string name in this port (React takes an Icon ref);
+        // name is used as the tooltip.
+        final iconButtonSize = switch (node.stringOf('size', 'medium')) {
+          'extra-small' => 16.0,
+          'small' => 20.0,
+          'large' => 28.0,
+          _ => 24.0,
+        };
+        final iconButtonColor = switch (node.stringOf('variant', 'secondary')) {
+          'primary' => Colors.blue,
+          'tertiary' => null,
+          _ => Colors.grey.shade700,
+        };
+        return Tooltip(
+          message: node.stringOf('name'),
+          child: IconButton(
+            icon: Icon(iconByName(node.stringOf('icon')), size: iconButtonSize),
+            color: iconButtonColor,
+            style: node.stringOf('shape', 'circle') == 'square' ? IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))) : null,
+            onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']),
+          ),
+        );
       // ---- Dialogue (remaining) ----
       case 'ListBlock':
-        return Column(children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
+        final listItems = node.nodesOf('items');
+        Widget listBody;
+        if (node.stringOf('variant', '') == 'number') {
+          // Numbered leading is a ListBlock-level concern, so this
+          // path renders items directly and bypasses custom ListItem
+          // registry builders for them.
+          listBody = Column(
+            children: [
+              for (var i = 0; i < listItems.length; i++) _numberedListTile(listItems[i], i + 1),
+            ],
+          );
+        } else {
+          listBody = Column(children: [for (final c in listItems) _buildNode(c)]);
+        }
+        if (node.stringOf('size', 'default') == 'small') {
+          listBody = ListTileTheme(data: const ListTileThemeData(dense: true), child: listBody);
+        }
+        return listBody;
       case 'ListItem':
-        return ListTile(leading: const Text('•'), title: Text(node.stringOf('text')));
+        final listImage = node.props['image'];
+        Widget? listLeading;
+        if (listImage is Map && listImage['src'] is String) {
+          final alt = listImage['alt'] is String ? listImage['alt'] as String : '图片加载失败';
+          listLeading = ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(listImage['src'] as String, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 48, height: 48, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(alt, style: const TextStyle(fontSize: 10)))),
+          );
+        }
+        return ListTile(
+          leading: listLeading ?? const Text('•'),
+          title: Text(node.stringOf('title')),
+          subtitle: node.props['subtitle'] is String ? Text(node.stringOf('subtitle')) : null,
+          trailing: node.props['actionLabel'] is String
+              ? TextButton(onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']), child: Text(node.stringOf('actionLabel')))
+              : null,
+          onTap: node.props['action'] != null && node.props['actionLabel'] is! String ? () => _dispatch(node.props['action']) : null,
+        );
       // ---- Composite cards ----
       case 'SnippetCardBlock':
       case 'OverviewCardBlock':
@@ -877,24 +1218,6 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     }
   }
 
-  Widget _callout(String text, String variant) {
-    final color = switch (variant) {
-      'warning' => Colors.orange,
-      'error' => Colors.red,
-      _ => Colors.blue,
-    };
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        border: Border(left: BorderSide(color: color, width: 4)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(text),
-    );
-  }
-
   List<String> _strings(Object? v) {
     if (v is List) return v.map((e) => '$e').toList();
     return const [];
@@ -903,6 +1226,115 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   List<double> _numbers(Object? v) {
     if (v is List) return v.map((e) => (e as num?)?.toDouble() ?? 0).toList();
     return const [];
+  }
+
+  // ---- Flex layout (Stack / Card) ----
+  // Gap values follow the React gap scale. When gap is absent this
+  // port inserts no spacing (a documented deviation from React's
+  // renderer fallback of "m"), so existing programs keep their layout;
+  // an explicit gap value is always honoured.
+  double _gapValue(String? gap) => switch (gap) {
+        'none' => 0,
+        'xs' => 4,
+        's' => 8,
+        'm' => 12,
+        'l' => 16,
+        'xl' => 24,
+        '2xl' => 32,
+        _ => 0,
+      };
+
+  Widget _flexLayout(ElementNode node, List<Widget> children) {
+    final direction = node.stringOf('direction', 'column');
+    final gap = _gapValue(node.props['gap'] is String ? node.stringOf('gap') : null);
+    final alignName = node.props['align'] is String ? node.stringOf('align') : (direction == 'row' ? 'start' : 'stretch');
+    final crossAxis = switch (alignName) {
+      'start' => CrossAxisAlignment.start,
+      'center' => CrossAxisAlignment.center,
+      'end' => CrossAxisAlignment.end,
+      'baseline' => CrossAxisAlignment.baseline,
+      _ => CrossAxisAlignment.stretch,
+    };
+    final mainAxis = switch (node.stringOf('justify', 'start')) {
+      'center' => MainAxisAlignment.center,
+      'end' => MainAxisAlignment.end,
+      'between' => MainAxisAlignment.spaceBetween,
+      'around' => MainAxisAlignment.spaceAround,
+      'evenly' => MainAxisAlignment.spaceEvenly,
+      _ => MainAxisAlignment.start,
+    };
+    final textBaseline = crossAxis == CrossAxisAlignment.baseline ? TextBaseline.alphabetic : null;
+    if (node.props['wrap'] == true) {
+      final wrapAlignment = switch (node.stringOf('justify', 'start')) {
+        'center' => WrapAlignment.center,
+        'end' => WrapAlignment.end,
+        'between' => WrapAlignment.spaceBetween,
+        'around' => WrapAlignment.spaceAround,
+        'evenly' => WrapAlignment.spaceEvenly,
+        _ => WrapAlignment.start,
+      };
+      return Wrap(
+        direction: direction == 'row' ? Axis.horizontal : Axis.vertical,
+        spacing: gap,
+        runSpacing: gap,
+        alignment: wrapAlignment,
+        children: children,
+      );
+    }
+    final spaced = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) spaced.add(direction == 'row' ? SizedBox(width: gap) : SizedBox(height: gap));
+      spaced.add(children[i]);
+    }
+    if (direction == 'row') {
+      return Row(mainAxisAlignment: mainAxis, crossAxisAlignment: crossAxis, textBaseline: textBaseline, children: spaced);
+    }
+    return Column(mainAxisAlignment: mainAxis, crossAxisAlignment: crossAxis, textBaseline: textBaseline, children: spaced);
+  }
+
+  // ---- Metric trend ----
+  // trend is a {direction: up/down, value: number} map.
+  Widget _trendWidget(Object? trend) {
+    if (trend is! Map) return const SizedBox.shrink();
+    final up = trend['direction'] == 'up';
+    final value = trend['value'];
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Text('${up ? '▲' : '▼'}${value ?? ''}', style: TextStyle(color: up ? Colors.green : Colors.red)),
+    );
+  }
+
+  // ---- Numbered list tile (ListBlock variant=number) ----
+  Widget _numberedListTile(ElementNode item, int index) {
+    return ListTile(
+      leading: CircleAvatar(radius: 12, child: Text('$index', style: const TextStyle(fontSize: 12))),
+      title: Text(item.stringOf('title')),
+      subtitle: item.props['subtitle'] is String ? Text(item.stringOf('subtitle')) : null,
+      trailing: item.props['actionLabel'] is String
+          ? TextButton(onPressed: _effectiveStreaming ? null : () => _dispatch(item.props['action']), child: Text(item.stringOf('actionLabel')))
+          : null,
+      onTap: item.props['action'] != null && item.props['actionLabel'] is! String ? () => _dispatch(item.props['action']) : null,
+    );
+  }
+}
+
+/// Axis labels for charts: yLabel above, xLabel below, both small grey.
+class _LabeledChart extends StatelessWidget {
+  const _LabeledChart({required this.child, this.xLabel, this.yLabel});
+  final Widget child;
+  final String? xLabel;
+  final String? yLabel;
+  @override
+  Widget build(BuildContext context) {
+    if (xLabel == null && yLabel == null) return child;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (yLabel != null) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(yLabel!, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+        child,
+        if (xLabel != null) Padding(padding: const EdgeInsets.only(top: 4), child: Center(child: Text(xLabel!, style: const TextStyle(color: Colors.grey, fontSize: 12)))),
+      ],
+    );
   }
 }
 
@@ -915,9 +1347,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 /// didUpdateWidget), and a closed dialog never re-opens on a later
 /// rebuild of the same statement.
 class _ModalWidget extends StatefulWidget {
-  const _ModalWidget({required this.node, required this.buildNode});
+  const _ModalWidget({required this.node, required this.buildNode, this.open = true, this.size = 'md'});
   final ElementNode node;
   final Widget Function(ElementNode) buildNode;
+  final bool open;
+  final String size;
   @override
   State<_ModalWidget> createState() => _ModalWidgetState();
 }
@@ -956,24 +1390,38 @@ class _ModalWidgetState extends State<_ModalWidget> {
         _showScheduled = false;
       }
     }
+    // open flipping false -> true re-arms a previously closed dialog.
+    if (widget.open && !oldWidget.open) {
+      _dismissed = false;
+      _dialogShown = false;
+      _showScheduled = false;
+    }
     _scheduleShow();
   }
 
   void _scheduleShow() {
-    if (_dismissed || _dialogShown || _showScheduled) return;
+    if (!widget.open || _dismissed || _dialogShown || _showScheduled) return;
     _showScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showScheduled = false;
       if (!mounted || _dismissed || _dialogShown) return;
       _dialogShown = true;
+      final dialogWidth = switch (widget.size) {
+        'sm' => 280.0,
+        'lg' => 520.0,
+        _ => 400.0,
+      };
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: widget.node.props['title'] is String ? Text(widget.node.stringOf('title')) : null,
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [for (final c in widget.node.nodesOf('children')) widget.buildNode(c)],
+          content: SizedBox(
+            width: dialogWidth,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final c in widget.node.nodesOf('children')) widget.buildNode(c)],
+              ),
             ),
           ),
           actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭'))],
@@ -1139,7 +1587,7 @@ class _TabsWidgetState extends State<_TabsWidget> with SingleTickerProviderState
         TabBar(
           controller: controller,
           isScrollable: true,
-          tabs: [for (final item in widget.items) Tab(text: item.stringOf('label'))],
+          tabs: [for (final item in widget.items) Tab(text: item.stringOf('trigger'))],
         ),
         SizedBox(
           height: 300,
@@ -1150,7 +1598,7 @@ class _TabsWidgetState extends State<_TabsWidget> with SingleTickerProviderState
                 SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [for (final c in item.nodesOf('children')) widget.buildNode(c)],
+                    children: [for (final c in item.nodesOf('content')) widget.buildNode(c)],
                   ),
                 ),
             ],
@@ -1168,30 +1616,40 @@ enum _ChartKind { bar, line, area, hbar }
 const _palette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
 
 class _ChartWidget extends StatelessWidget {
-  const _ChartWidget({required this.kind, required this.categories, required this.series, this.palette = _palette});
+  const _ChartWidget({required this.kind, required this.categories, required this.series, this.palette = _palette, this.stacked = false, this.curve, this.xLabel, this.yLabel, this.height});
   final _ChartKind kind;
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
+  final bool stacked;
+  final String? curve;
+  final String? xLabel;
+  final String? yLabel;
+  final double? height;
   @override
   Widget build(BuildContext context) {
+    final Widget chart;
     switch (kind) {
       case _ChartKind.bar:
-        return FlBarChartWidget(categories: categories, series: series, palette: palette);
+        chart = FlBarChartWidget(categories: categories, series: series, palette: palette, stacked: stacked, height: height ?? 220);
       case _ChartKind.hbar:
-        return FlBarChartWidget(categories: categories, series: series, palette: palette, horizontal: true);
+        chart = FlBarChartWidget(categories: categories, series: series, palette: palette, horizontal: true, stacked: stacked, height: height ?? 220);
       case _ChartKind.line:
-        return FlLineChartWidget(categories: categories, series: series, palette: palette);
+        chart = FlLineChartWidget(categories: categories, series: series, palette: palette, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
       case _ChartKind.area:
-        return FlLineChartWidget(categories: categories, series: series, palette: palette, area: true);
+        chart = FlLineChartWidget(categories: categories, series: series, palette: palette, area: true, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
     }
+    return _LabeledChart(xLabel: xLabel, yLabel: yLabel, child: chart);
   }
 }
 
 class _PieWidget extends StatelessWidget {
-  const _PieWidget({required this.slices, this.palette = _palette});
-  final List<ElementNode> slices;
+  const _PieWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _palette});
+  final List<String> labels;
+  final List<double> values;
+  final String variant;
+  final String appearance;
   final List<Color> palette;
   @override
-  Widget build(BuildContext context) => FlPieChartWidget(slices: slices, palette: palette);
+  Widget build(BuildContext context) => FlPieChartWidget(labels: labels, values: values, variant: variant, appearance: appearance, palette: palette);
 }
