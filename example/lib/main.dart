@@ -16,10 +16,10 @@ class DemoApp extends StatelessWidget {
         appBar: AppBar(title: const Text('OpenUI Flutter Demo')),
         body: ListView(
           children: const [
-            _Entry('聊天富回答', ChatRichAnswerScreen()),
-            _Entry('业务看板', DashboardScreen()),
-            _Entry('表单 + Query', FormQueryScreen()),
-            _Entry('主题与自定义组件', CustomThemeScreen()),
+            _Entry('Chat Rich Answer', ChatRichAnswerScreen()),
+            _Entry('Business Dashboard', DashboardScreen()),
+            _Entry('Form + Query', FormQueryScreen()),
+            _Entry('Theme & Custom Components', CustomThemeScreen()),
           ],
         ),
       ),

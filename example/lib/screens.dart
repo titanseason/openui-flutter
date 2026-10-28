@@ -18,21 +18,21 @@ class ChatRichAnswerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('聊天富回答')),
+      appBar: AppBar(title: const Text('Chat Rich Answer')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: OpenUIRenderer(
           library: openUIStandardLibrary(),
           response: '''
 root = Stack([header, note, table, chart, callout])
-header = CardHeader("Q1 收入", "全部业务线")
-note = TextContent("一季度收入稳步增长，3 月创单月新高。")
+header = CardHeader("Q1 Revenue", "All business lines")
+note = TextContent("Q1 revenue grew steadily, with March hitting a monthly high.")
 table = Table([m, v])
-m = Col("月份", ["1月", "2月", "3月"])
-v = Col("收入（万）", [120, 145, 180])
-chart = BarChart(["1月", "2月", "3月"], [rev])
-rev = Series("收入", [120, 145, 180])
-callout = Callout("提示：3 月含一笔大客户回款。", "info")
+m = Col("Month", ["Jan", "Feb", "Mar"])
+v = Col("Revenue (10k)", [120, 145, 180])
+chart = BarChart(["Jan", "Feb", "Mar"], [rev])
+rev = Series("Revenue", [120, 145, 180])
+callout = Callout("Note: March includes a large client payment.", "info")
 ''',
         ),
       ),
@@ -53,23 +53,23 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('业务看板')),
+      appBar: AppBar(title: const Text('Business Dashboard')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: OpenUIRenderer(
           library: openUIStandardLibrary(),
           response: '''
 root = Stack([title, hbar, radar, pie, heat, mini])
-title = CardHeader("业务看板", "各维度一览")
-hbar = HorizontalBarChart(["华北", "华东", "华南"], [s1])
-s1 = Series("销售额", [320, 280, 240])
-radar = RadarChart(["质量", "速度"], [rs])
-rs = Series("本季", [80, 65])
+title = CardHeader("Business Dashboard", "All dimensions at a glance")
+hbar = HorizontalBarChart(["North", "East", "South"], [s1])
+s1 = Series("Sales", [320, 280, 240])
+radar = RadarChart(["Quality", "Speed"], [rs])
+rs = Series("This quarter", [80, 65])
 pie = PieChart([p1, p2])
-p1 = Slice("线上", 60)
-p2 = Slice("线下", 40)
-heat = HeatmapChart(["周一", "周二"], [h1])
-h1 = Series("访问量", [10, 30])
+p1 = Slice("Online", 60)
+p2 = Slice("Offline", 40)
+heat = HeatmapChart(["Mon", "Tue"], [h1])
+h1 = Series("Visits", [10, 30])
 mini = MiniBarChart([5, 12, 8, 20])
 ''',
         ),
@@ -95,8 +95,8 @@ class _FormQueryScreenState extends State<FormQueryScreen> {
       String tool, Map<String, Object?> params) async {
     if (tool != 'get_weather') throw StateError('unknown tool $tool');
     final city = params['city'];
-    if (city == '上海') return {'rows': ['晴', '多云']};
-    return {'rows': ['晴', '多云', '雨']};
+    if (city == 'Shanghai') return {'rows': ['Sunny', 'Cloudy']};
+    return {'rows': ['Sunny', 'Cloudy', 'Rain']};
   }
 
   @override
@@ -105,16 +105,16 @@ class _FormQueryScreenState extends State<FormQueryScreen> {
     _controller = OpenUIController(
       library: openUIStandardLibrary(),
       toolProvider: _provider,
-      initialState: const {'city': '北京'},
+      initialState: const {'city': 'Beijing'},
     );
     _controller.push('''
 root = Stack([title, form, count, retry])
-title = CardHeader("城市天气", "输入城市，查询返回行数")
+title = CardHeader("City Weather", "Type a city, see the row count")
 form = Form([city])
-city = Input("城市", "city")
+city = Input("City", "city")
 count = TextContent("" + @Count(weather.rows))
 weather = Query("get_weather", {"city": \$city}, {"rows": []})
-retry = Button("刷新", Action([@Run(weather)]))
+retry = Button("Refresh", Action([@Run(weather)]))
 ''');
     _controller.finish();
   }
@@ -128,7 +128,7 @@ retry = Button("刷新", Action([@Run(weather)]))
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('表单 + Query')),
+      appBar: AppBar(title: const Text('Form + Query')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: OpenUIRenderer(
@@ -158,9 +158,9 @@ class _CustomThemeScreenState extends State<CustomThemeScreen> {
 
   static const _program = '''
 root = Stack([title, callout, note])
-title = CardHeader("主题与自定义组件", "切换主题，Callout 已被替换")
-callout = Callout("这是被替换的 Callout", "info")
-note = TextContent("下面的 Callout 不是内置渲染，而是宿主通过 registry 替换的。")
+title = CardHeader("Theme & Custom Components", "Switch theme, Callout is replaced")
+callout = Callout("This is the replaced Callout", "info")
+note = TextContent("The Callout below is not the built-in rendering, but a host replacement via the registry.")
 ''';
 
   @override
@@ -182,7 +182,7 @@ note = TextContent("下面的 Callout 不是内置渲染，而是宿主通过 re
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('宿主自定义 Callout',
+            const Text('Host Custom Callout',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             Text(node.props['text'] as String? ?? ''),
           ],
@@ -215,7 +215,7 @@ note = TextContent("下面的 Callout 不是内置渲染，而是宿主通过 re
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('主题与自定义组件')),
+      appBar: AppBar(title: const Text('Theme & Custom Components')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -223,7 +223,7 @@ note = TextContent("下面的 Callout 不是内置渲染，而是宿主通过 re
           children: [
             ElevatedButton(
               onPressed: _toggleTheme,
-              child: Text(_dark ? '切换浅色' : '切换深色'),
+              child: Text(_dark ? 'Switch to light' : 'Switch to dark'),
             ),
             OpenUIRenderer(
               library: openUIStandardLibrary(),
