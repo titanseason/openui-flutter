@@ -1,0 +1,17 @@
+# Flutter / Dart build artifacts
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+# Example app build artifacts
+example/.dart_tool/
+example/build/
+# IDE
+.idea/
+*.iml
+.vscode/
+# OS
+.DS_Store

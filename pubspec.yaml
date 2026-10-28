@@ -1,0 +1,15 @@
+name: openui_flutter
+description: Pure Dart port of OpenUI Lang (1.0 subset) + Flutter renderer for the full 86-component GenUI library. Markdown rendering uses flutter_markdown_plus.
+version: 0.1.0
+environment:
+  sdk: ^3.5.0
+  flutter: '>=3.22.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_markdown_plus: ^1.0.12
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true

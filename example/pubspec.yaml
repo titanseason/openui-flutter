@@ -1,0 +1,17 @@
+name: openui_flutter_example
+description: Demo app for openui_flutter.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ^3.5.0
+  flutter: '>=3.22.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  openui_flutter:
+    path: ../
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
