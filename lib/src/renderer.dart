@@ -87,7 +87,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   bool get _controllerMode => widget.controller != null;
   bool get _effectiveStreaming => _controllerMode ? widget.controller!.isStreaming : widget.isStreaming;
   OpenUIThemeData get _theme => widget.controller?.effectiveTheme ?? OpenUIThemeData.light();
-  ComponentRegistry? get _effectiveRegistry => widget.registry ?? widget.controller?.registry;
+  ComponentRegistry? get _effectiveRegistry =>
+      widget.registry ??
+      widget.controller?.registry ??
+      // In controller mode the controller's library is the parsed one;
+      // fall back to the widget's library otherwise.
+      (widget.controller?.library ?? widget.library).registry;
 
   /// Form-state access that reads the controller in controller mode
   /// and the local map otherwise, so every bound widget (Input,
@@ -298,8 +303,9 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   Widget _buildNode(ElementNode node) {
-    // Lookup order: explicit registry builder first, built-in switch
-    // second, the switch's default last (never a crash).
+    // Lookup order: explicit registry first, controller/library
+    // registry second (see _effectiveRegistry), built-in switch
+    // third, the switch's default last (never a crash).
     final builder = _effectiveRegistry?.lookup(node.component);
     if (builder != null) return builder(context, node, _buildNode);
     switch (node.component) {

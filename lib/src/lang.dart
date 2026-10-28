@@ -1,4 +1,4 @@
-// Pure Dart core for OpenUI Lang 1.0 (subset). No Flutter dependency.
+// Pure Dart core for OpenUI Lang 1.0 (subset).
 //
 // Supported: one assignment statement per line, positional arguments,
 // literals, lists, objects, field access, index access, references,
@@ -8,6 +8,15 @@
 // statements (collected as requests for the host's tool provider; the
 // renderer supplies results through `queryData`), structured error codes,
 // and streaming with autocloser (see StreamingParser).
+//
+// Note: `OpenUILibrary.registry` (Task 3) links this file to Flutter
+// widgets through registry.dart, so this file is no longer importable
+// from a pure-Dart program on its own. The parser and evaluator
+// themselves use no Flutter API; only the registry field (a builder
+// map) carries widget builders. See the Task 3 report for the
+// trade-off discussion.
+
+import 'registry.dart';
 
 enum PropType { string, number, boolean, list, node, nodeList, any, action, actionList }
 
@@ -527,6 +536,20 @@ FunctionDef defineFunction({
 }) =>
     FunctionDef(name: name, description: description, params: params, returns: returns, fn: fn);
 
+/// A custom action declaration, mirroring the official custom-action
+/// shape: name, description, params in positional order. Declaring an
+/// action makes the evaluator validate `@Name(...)` calls against
+/// these params; an invalid call evaluates to null with a
+/// `runtime-error` instead of passing through unchecked. Undeclared
+/// action names still pass through as before, for hosts that dispatch
+/// actions they do not want to declare.
+class ActionDef {
+  const ActionDef(this.name, this.description, this.params);
+  final String name;
+  final String description;
+  final List<PropDef> params;
+}
+
 const builtinActionNames = {'ToAssistant', 'OpenUrl', 'Set', 'Reset', 'Run'};
 
 const builtinFunctionNames = {
@@ -547,7 +570,7 @@ const builtinFunctionNames = {
 };
 
 class OpenUILibrary {
-  OpenUILibrary({required this.components, required this.root, this.functions = const []}) {
+  OpenUILibrary({required this.components, required this.root, this.functions = const [], this.actions = const [], this.registry}) {
     // Built-ins are looked up first, so a library must not reuse their names.
     for (final f in functions) {
       if (builtinActionNames.contains(f.name) || builtinFunctionNames.contains(f.name)) {
@@ -558,16 +581,81 @@ class OpenUILibrary {
     for (final f in functions) {
       if (!seen.add(f.name)) throw ArgumentError('duplicate function ${f.name}');
     }
+    for (final a in actions) {
+      if (builtinActionNames.contains(a.name) || builtinFunctionNames.contains(a.name)) {
+        throw ArgumentError('action ${a.name} reuses a built-in name');
+      }
+      if (functionsByName.containsKey(a.name)) {
+        throw ArgumentError('action ${a.name} reuses a function name');
+      }
+    }
+    final seenActions = <String>{};
+    for (final a in actions) {
+      if (!seenActions.add(a.name)) throw ArgumentError('duplicate action ${a.name}');
+    }
   }
   final List<ComponentDef> components;
   final String root;
   final List<FunctionDef> functions;
+  final List<ActionDef> actions;
+
+  /// Builders for custom components, supplied via [extend]. The
+  /// renderer checks an explicit `registry` argument first, then this
+  /// registry, then its built-ins. Null means no custom builders.
+  final ComponentRegistry? registry;
 
   Map<String, ComponentDef> get byName => {for (final c in components) c.name: c};
   Map<String, FunctionDef> get functionsByName => {for (final f in functions) f.name: f};
+  Map<String, ActionDef> get actionsByName => {for (final a in actions) a.name: a};
 
-  String prompt() {
-    final buf = StringBuffer('Available components (use exactly these names and argument order):\n');
+  /// Returns a new library; never mutates the receiver. A component
+  /// in [components] with an existing name replaces it; a name in
+  /// both [remove] and [components] is added (add wins over remove);
+  /// within [components], a later entry wins. Functions and actions
+  /// follow the same replace-by-name rule. Builders merge into the
+  /// existing registry, new names winning per name.
+  OpenUILibrary extend({
+    List<ComponentDef> components = const [],
+    List<String> remove = const [],
+    List<FunctionDef> functions = const [],
+    List<ActionDef> actions = const [],
+    Map<String, OpenUIComponentBuilder> builders = const {},
+  }) {
+    final byName = <String, ComponentDef>{for (final c in this.components) c.name: c};
+    final addedNames = {for (final c in components) c.name};
+    byName.removeWhere((name, _) => remove.contains(name) && !addedNames.contains(name));
+    for (final c in components) {
+      byName[c.name] = c;
+    }
+    final fnByName = <String, FunctionDef>{for (final f in this.functions) f.name: f};
+    for (final f in functions) {
+      fnByName[f.name] = f;
+    }
+    final actByName = <String, ActionDef>{for (final a in this.actions) a.name: a};
+    for (final a in actions) {
+      actByName[a.name] = a;
+    }
+    var nextRegistry = this.registry;
+    if (builders.isNotEmpty) {
+      var merged = nextRegistry ?? const ComponentRegistry();
+      for (final entry in builders.entries) {
+        merged = merged.withBuilder(entry.key, entry.value);
+      }
+      nextRegistry = merged;
+    }
+    return OpenUILibrary(
+      components: byName.values.toList(),
+      root: root,
+      functions: fnByName.values.toList(),
+      actions: actByName.values.toList(),
+      registry: nextRegistry,
+    );
+  }
+
+  String prompt({String? preamble, List<String> additionalRules = const [], List<String> examples = const [], bool includeBuiltins = true}) {
+    final buf = StringBuffer();
+    if (preamble != null) buf.writeln(preamble);
+    buf.writeln('Available components (use exactly these names and argument order):');
     for (final c in components) {
       final props = c.props.map((p) {
         final req = p.required ? '' : '?';
@@ -575,21 +663,23 @@ class OpenUILibrary {
       }).join(', ');
       buf.writeln('- ${c.name}($props) — ${c.description}');
     }
-    buf.writeln('Built-in functions (call with @, e.g. @Count(items)):');
-    buf.writeln('- @Count(array: list) -> number — Length of array');
-    buf.writeln('- @Sum(array: list) -> number — Sum of numbers (numeric strings are converted)');
-    buf.writeln('- @Avg(array: list) -> number — Average');
-    buf.writeln('- @Min(array: list) -> number — Smallest value');
-    buf.writeln('- @Max(array: list) -> number — Largest value');
-    buf.writeln('- @First(array: list) -> any — First element');
-    buf.writeln('- @Last(array: list) -> any — Last element');
-    buf.writeln('- @Filter(array: list, field: string, operator: string, value: any) -> list — Keep items where field matches; operators: ==, !=, >, <, >=, <=, contains');
-    buf.writeln('- @Sort(array: list, field: string, direction?: string) -> list — Sort by field; direction asc (default) or desc');
-    buf.writeln('- @Round(number: number, decimals?: number) -> number — Round to N decimal places');
-    buf.writeln('- @Abs(number: number) -> number — Absolute value');
-    buf.writeln('- @Floor(number: number) -> number — Round down');
-    buf.writeln('- @Ceil(number: number) -> number — Round up');
-    buf.writeln('- @Each(array: list, variable: string, template: any) -> list — Render the template for every item, with the loop variable in scope');
+    if (includeBuiltins) {
+      buf.writeln('Built-in functions (call with @, e.g. @Count(items)):');
+      buf.writeln('- @Count(array: list) -> number — Length of array');
+      buf.writeln('- @Sum(array: list) -> number — Sum of numbers (numeric strings are converted)');
+      buf.writeln('- @Avg(array: list) -> number — Average');
+      buf.writeln('- @Min(array: list) -> number — Smallest value');
+      buf.writeln('- @Max(array: list) -> number — Largest value');
+      buf.writeln('- @First(array: list) -> any — First element');
+      buf.writeln('- @Last(array: list) -> any — Last element');
+      buf.writeln('- @Filter(array: list, field: string, operator: string, value: any) -> list — Keep items where field matches; operators: ==, !=, >, <, >=, <=, contains');
+      buf.writeln('- @Sort(array: list, field: string, direction?: string) -> list — Sort by field; direction asc (default) or desc');
+      buf.writeln('- @Round(number: number, decimals?: number) -> number — Round to N decimal places');
+      buf.writeln('- @Abs(number: number) -> number — Absolute value');
+      buf.writeln('- @Floor(number: number) -> number — Round down');
+      buf.writeln('- @Ceil(number: number) -> number — Round up');
+      buf.writeln('- @Each(array: list, variable: string, template: any) -> list — Render the template for every item, with the loop variable in scope');
+    }
     if (functions.isNotEmpty) {
       buf.writeln('Custom functions (call with @):');
       for (final f in functions) {
@@ -599,6 +689,28 @@ class OpenUILibrary {
         }).join(', ');
         final ret = f.returns == null ? '' : ' -> ${_typeName(f.returns!)}';
         buf.writeln('- @${f.name}($params)$ret — ${f.description}');
+      }
+    }
+    if (actions.isNotEmpty) {
+      buf.writeln('Custom actions (call with @):');
+      for (final a in actions) {
+        final params = a.params.map((p) {
+          final req = p.required ? '' : '?';
+          return '${p.name}$req: ${_typeName(p.type)}';
+        }).join(', ');
+        buf.writeln('- @${a.name}($params) — ${a.description}');
+      }
+    }
+    if (additionalRules.isNotEmpty) {
+      buf.writeln('Additional rules:');
+      for (final r in additionalRules) {
+        buf.writeln('- $r');
+      }
+    }
+    if (examples.isNotEmpty) {
+      buf.writeln('Examples:');
+      for (final e in examples) {
+        buf.writeln(e);
       }
     }
     buf.writeln('Root component: $root. Output one assignment per line, e.g. root = $root([...]).');
@@ -815,11 +927,60 @@ class _Evaluator {
     final def = library.functionsByName[e.name];
     if (def != null) return _evalCustomFunction(def, e);
     if (expectAction) {
+      final actionDef = library.actionsByName[e.name];
+      if (actionDef != null) return _evalCustomAction(actionDef, e);
       final args = [for (final a in e.args) evalExpr(a, false)];
       return ActionValue(e.name, args);
     }
     errors.add(OpenUIError('unknown-function', 'unknown function ${e.name}'));
     return null;
+  }
+
+  // Custom actions: unlike custom functions, every failure is a
+  // `runtime-error` and the whole action is a no-op (null), per the
+  // brief. Missing required, null required, wrong type and excess
+  // args all fail; a QueryLoading argument propagates as a skeleton
+  // instead of failing. Undeclared action names never reach here.
+  Object? _evalCustomAction(ActionDef def, AtCallExpr e) {
+    if (e.args.length > def.params.length) {
+      errors.add(OpenUIError('runtime-error', 'too many args for @${def.name}'));
+      return null;
+    }
+    final args = <Object?>[];
+    var failed = false;
+    for (var i = 0; i < def.params.length; i++) {
+      final param = def.params[i];
+      if (i >= e.args.length) {
+        if (param.required) {
+          errors.add(OpenUIError('runtime-error', 'missing required param ${param.name} for @${def.name}'));
+          failed = true;
+        } else if (param.defaultValue != null) {
+          args.add(param.defaultValue);
+        }
+        continue;
+      }
+      final value = evalExpr(e.args[i], false);
+      if (isQueryLoading(value)) return queryLoading;
+      if (value == null) {
+        if (param.required) {
+          errors.add(OpenUIError('runtime-error', 'null required param ${param.name} for @${def.name}'));
+          failed = true;
+        } else if (param.defaultValue != null) {
+          args.add(param.defaultValue);
+        } else {
+          args.add(null);
+        }
+        continue;
+      }
+      if (!_typeOk(param.type, value)) {
+        errors.add(OpenUIError('runtime-error', 'wrong type for ${param.name} for @${def.name}'));
+        failed = true;
+        continue;
+      }
+      args.add(value);
+    }
+    if (failed) return null;
+    return ActionValue(def.name, args);
   }
 
   // Custom functions: same checks as component props (Functions doc).

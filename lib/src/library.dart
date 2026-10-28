@@ -22,8 +22,16 @@ const _act = PropType.action;
 /// SnippetCardBlock-style names in repo PRs; Block/Item is the name
 /// this library generates and renders.
 ///
-/// `openUIMvpLibrary` keeps its old name for compatibility; it now
-/// returns the full library, not just the original 25-component MVP.
+/// The canonical library constructor. `openUIMvpLibrary` below is a
+/// deprecated alias with identical results, kept for compatibility;
+/// it now returns the full library, not just the original 25-component
+/// MVP. (Deprecation is documented here rather than via @Deprecated,
+/// so existing callers do not flood `flutter analyze` with info
+/// diagnostics until the migration guide in Task 9 lands.)
+OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
+  return openUIMvpLibrary(root: root, functions: functions);
+}
+
 OpenUILibrary openUIMvpLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
   return OpenUILibrary(
     root: root,
