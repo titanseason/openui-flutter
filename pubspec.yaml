@@ -8,6 +8,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_markdown_plus: ^1.0.12
+  syntax_highlight: ^0.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
