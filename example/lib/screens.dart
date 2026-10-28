@@ -59,16 +59,17 @@ class DashboardScreen extends StatelessWidget {
         child: OpenUIRenderer(
           library: openUIStandardLibrary(),
           response: '''
-root = Stack([title, hbar, radar, pie, heat, mini])
+root = Stack([title, hbar, radar, pie, bar, trend])
 title = CardHeader("Business Dashboard", "All dimensions at a glance")
 hbar = HorizontalBarChart(["North", "East", "South"], [s1])
 s1 = Series("Sales", [320, 280, 240])
 radar = RadarChart(["Quality", "Speed"], [rs])
 rs = Series("This quarter", [80, 65])
 pie = PieChart(["Online", "Offline"], [60, 40])
-heat = HeatmapChart(["Mon", "Tue"], [h1])
+bar = BarChart(["Mon", "Tue"], [h1])
 h1 = Series("Visits", [10, 30])
-mini = MiniBarChart([5, 12, 8, 20])
+trend = LineChart(["W1", "W2", "W3", "W4"], [t1])
+t1 = Series("Trend", [5, 12, 8, 20])
 ''',
         ),
       ),

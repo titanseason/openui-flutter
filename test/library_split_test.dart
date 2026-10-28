@@ -8,7 +8,7 @@ void main() {
   test('general library excludes chat-only components', () {
     final lib = openUIStandardLibrary();
     expect(lib.root, 'Stack');
-    expect(lib.components.length, 91);
+    expect(lib.components.length, 82);
     for (final name in ['FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem']) {
       expect(lib.byName[name], isNull);
     }
@@ -19,7 +19,7 @@ void main() {
   test('chat library excludes general-only components', () {
     final lib = openUIChatLibrary();
     expect(lib.root, 'Card');
-    expect(lib.components.length, 93);
+    expect(lib.components.length, 84);
     expect(lib.byName['Stack'], isNull);
     expect(lib.byName['Modal'], isNull);
     for (final name in ['FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem']) {

@@ -9,12 +9,11 @@ const _node = PropType.node;
 const _any = PropType.any;
 const _act = PropType.action;
 
-/// The full component set: 95 definitions. Names and props are aligned
+/// The full component set: 86 definitions. Names and props are aligned
 /// directly with @openuidev/react-ui 0.18.1 (see docs/react-1.0-diff/):
 /// layout 13, content 16, data 21, form 19, actions 3, dialogue 4,
 /// composite cards 10 (SnippetCardBlock/SnippetCardItem and so on, plus
-/// MarkDownRenderer), plus 9 extra chart components (not React GenUI
-/// names; they keep their own props and ship in both libraries).
+/// MarkDownRenderer).
 ///
 /// Props follow the official Zod schemas in @openuidev/react-ui 0.18.1
 /// (see docs/react-1.0-diff/react-source-props.md) in declaration order,
@@ -23,9 +22,9 @@ const _act = PropType.action;
 /// to props in this order, and `library.prompt()` prints it for the model.
 ///
 /// Two libraries, as in React: [openUIStandardLibrary] is the general
-/// library (root `Stack`, 91 names: everything except the 4 chat-only
+/// library (root `Stack`, 82 names: everything except the 4 chat-only
 /// components), and [openUIChatLibrary] is the chat library (root
-/// `Card`, 93 names: everything except `Stack` and `Modal`, with the
+/// `Card`, 84 names: everything except `Stack` and `Modal`, with the
 /// chat `Card` variant that takes `sources` instead of variant/flex).
 /// The parser enforces both the root component and membership, so a
 /// program using a chat-only component under the general library (or
@@ -273,39 +272,6 @@ List<ComponentDef> _baseComponents() => [
         PropDef('x', _n, required: true),
         PropDef('y', _n, required: true),
         PropDef('z', _n),
-      ]),
-      // ---- Extra charts (Task 6; fl_chart except Heatmap/Funnel/
-      // CalendarHeatmap, which have no fl_chart equivalent) ----
-      const ComponentDef('HeatmapChart', 'Heatmap: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('FunnelChart', 'Funnel; pass Slice nodes.', [
-        PropDef('slices', _nodes, required: true),
-      ]),
-      const ComponentDef('CalendarHeatmap', 'Calendar heatmap; values are {date, value} maps.', [
-        PropDef('values', _l, required: true),
-      ]),
-      const ComponentDef('MiniBarChart', 'Mini bar chart; values are numbers.', [
-        PropDef('values', _l, required: true),
-      ]),
-      const ComponentDef('MiniLineChart', 'Mini line chart; values are numbers.', [
-        PropDef('values', _l, required: true),
-      ]),
-      const ComponentDef('StackedLegend', 'Legend swatches; pass Series nodes.', [
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('BarChartCondensed', 'Condensed bar chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('LineChartCondensed', 'Condensed line chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
-      ]),
-      const ComponentDef('AreaChartCondensed', 'Condensed area chart: categories plus Series nodes.', [
-        PropDef('categories', _l, required: true),
-        PropDef('series', _nodes, required: true),
       ]),
       const ComponentDef('TagBlock', 'Tag list; tags is a list of strings. size: sm/md/lg.', [
         PropDef('tags', _l, required: true),

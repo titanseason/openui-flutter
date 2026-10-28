@@ -8,6 +8,15 @@
   since these components appeared (0.16-0.18, zod key order).
   Programs must write `Text("text", "...")`; a one-arg call now
   binds to `variant`. All in-repo programs and tests migrated.
+- BREAKING, React 0.18.1 full alignment (general library): the 9
+  Flutter-only chart names are deleted — `HeatmapChart`,
+  `FunnelChart`, `CalendarHeatmap`, `MiniBarChart`, `MiniLineChart`,
+  `StackedLegend`, `BarChartCondensed`, `LineChartCondensed`,
+  `AreaChartCondensed` (the condensed files in React register as
+  `BarChart`/`LineChart`/`AreaChart`, which this port already has).
+  Counts are now general 82, chat 84, union 86 — exactly React's
+  0.18.1 registration. The example dashboard program and all tests
+  that used the deleted names now use React charts.
 - Token-level incremental parsing: `StreamingParser.push` no longer
   runs two full parses per chunk. Two `IncrementalOpenUIParser`
   instances (stable lines, display text) cache line parses by line

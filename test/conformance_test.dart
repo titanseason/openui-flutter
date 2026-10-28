@@ -47,7 +47,7 @@ callout = Callout("Note: March includes a large client payment.", "info")
           child: OpenUIRenderer(
             library: openUIStandardLibrary(),
             response: '''
-root = Stack([title, hbar, radar, pie, heat, mini])
+root = Stack([title, hbar, radar, pie, bar, trend])
 title = CardHeader("Business Dashboard", "All dimensions at a glance")
 hbar = HorizontalBarChart(["North", "East", "South"], [s1])
 s1 = Series("Sales", [320, 280, 240])
@@ -56,9 +56,10 @@ rs = Series("This quarter", [80, 65])
 pie = PieChart([p1, p2])
 p1 = Slice("Online", 60)
 p2 = Slice("Offline", 40)
-heat = HeatmapChart(["Mon", "Tue"], [h1])
+bar = BarChart(["Mon", "Tue"], [h1])
 h1 = Series("Visits", [10, 30])
-mini = MiniBarChart([5, 12, 8, 20])
+trend = LineChart(["W1", "W2", "W3", "W4"], [t1])
+t1 = Series("Trend", [5, 12, 8, 20])
 ''',
           ),
         ),

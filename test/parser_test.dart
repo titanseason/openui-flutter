@@ -172,14 +172,14 @@ rows = [{"priority": "高"}, {"priority": "低"}]
   });
 
   test('library prompts list the split libraries', () {
-    // Split libraries: general 91, chat 93, union 95.
-    expect(library.components.length, 91);
+    // Split libraries: general 82, chat 84, union 86.
+    expect(library.components.length, 82);
     expect(library.prompt(), contains('Tabs('));
     expect(library.prompt(), contains('TabItem('));
     expect(library.prompt(), contains('Accordion('));
     expect(library.prompt(), isNot(contains('SectionBlock(')));
     final chat = openUIChatLibrary();
-    expect(chat.components.length, 93);
+    expect(chat.components.length, 84);
     expect(chat.prompt(), contains('SectionBlock('));
     expect(chat.prompt(), contains('FollowUpBlock('));
     expect(chat.prompt(), isNot(contains('Stack(')));

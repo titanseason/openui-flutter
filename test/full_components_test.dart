@@ -17,15 +17,15 @@ void _collect(ElementNode node, Set<String> out) {
 void main() {
   final library = openUIStandardLibrary();
 
-  test('libraries now have all 95 component names between them', () {
-    // Split libraries: general 91 (no chat-only 4), chat 93 (no Stack
-    // or Modal); the union is the full 95 (86 GenUI + 9 extras).
+  test('libraries now have all 86 component names between them', () {
+    // Split libraries: general 82 (no chat-only 4), chat 84 (no Stack
+    // or Modal); the union is the full 86 GenUI names.
     final general = openUIStandardLibrary();
     final chat = openUIChatLibrary();
     expect(general.root, 'Stack');
     expect(chat.root, 'Card');
-    expect(general.components.length, 91);
-    expect(chat.components.length, 93);
+    expect(general.components.length, 82);
+    expect(chat.components.length, 84);
     for (final name in ['FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem']) {
       expect(general.byName[name], isNull, reason: '$name must not be in the general library');
       expect(chat.byName[name], isNotNull, reason: '$name must be in the chat library');
@@ -35,10 +35,7 @@ void main() {
       expect(chat.byName[name], isNull, reason: '$name must not be in the chat library');
     }
     final names = {...general.components.map((c) => c.name), ...chat.components.map((c) => c.name)}.toList();
-    expect(names.length, 95);
-    for (final name in ['HeatmapChart', 'FunnelChart', 'CalendarHeatmap', 'MiniBarChart', 'MiniLineChart', 'StackedLegend', 'BarChartCondensed', 'LineChartCondensed', 'AreaChartCondensed']) {
-      expect(names, contains(name), reason: 'missing $name');
-    }
+    expect(names.length, 86);
     for (final name in [
       'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem',
       'Text', 'BoldText', 'TextCallout', 'ImageBlock', 'ImageGallery', 'ImageText', 'ImageTextLarge', 'IconText', 'CodeBlock', 'InlineHeader', 'Icon',

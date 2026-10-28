@@ -42,9 +42,9 @@ void main() {
     for (final name in _reactNames) {
       expect(library.byName[name], isNotNull, reason: 'missing $name');
     }
-    // Split libraries: general 91, chat 93, union 95.
-    expect(library.components.length, 91);
-    expect({...library.components.map((c) => c.name), ...openUIChatLibrary().components.map((c) => c.name)}.length, 95);
+    // Split libraries: general 82, chat 84, union 86.
+    expect(library.components.length, 82);
+    expect({...library.components.map((c) => c.name), ...openUIChatLibrary().components.map((c) => c.name)}.length, 86);
   });
 
   test('short names are gone, not kept as aliases', () {

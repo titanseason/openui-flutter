@@ -9,10 +9,7 @@ Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外�
 - 本包现已实现全部 86 个 GenUI 组件（以 @openuidev/react-ui 0.17.0
   的名字去重清单为准：布局 13、内容 16、数据 21、表单 19、操作 3、
   对话引导 4、组合卡片 10），以及解析 OpenUI Lang 所必需的核心语义。
-  最初的 25 个 MVP 组件是这 86 个的子集。另有 9 个扩展图表组件
-  （HeatmapChart、FunnelChart、CalendarHeatmap、MiniBarChart、
-  MiniLineChart、StackedLegend、BarChartCondensed、LineChartCondensed、
-  AreaChartCondensed），库内组件总数为 95。组件名与
+  最初的 25 个 MVP 组件是这 86 个的子集。组件名与
   @openuidev/react-ui 0.18.1 直接对齐（含 MarkDownRenderer 及
   5 组 *CardBlock/*CardItem）。
 - 生成侧（系统提示）由库定义导出：`OpenUILibrary.prompt()` 会按组件名、
@@ -35,11 +32,7 @@ Flutter API，但 `lang.dart` 为了在库上挂接自定义构建器而 import 
 import——这是 Task 3 留下的耦合，见下方“已知取舍”。渲染器在
 `lib/src/renderer.dart`，组件定义在 `lib/src/library.dart`。
 
-## 组件清单（86 个 GenUI + 9 个扩展图表 = 95）
-
-9 个扩展图表见下方“图表”一节（HeatmapChart、FunnelChart、
-CalendarHeatmap、MiniBarChart、MiniLineChart、StackedLegend、
-BarChartCondensed、LineChartCondensed、AreaChartCondensed）。
+## 组件清单（86 个 GenUI）
 
 布局 13：Stack, Card, Tabs, TabItem, Accordion, AccordionItem, Steps,
 StepsItem, Carousel, Separator, Modal, SectionBlock, SectionItem。
@@ -206,9 +199,7 @@ library.prompt(
 
 常规图表（Bar/Line/Area/HorizontalBar/Pie/Radar/Radial/
 SingleStackedBar/Scatter）走 fl_chart，颜色全部取主题
-`chartPalette`；扩展组件里 Heatmap/Funnel/CalendarHeatmap 仍自绘，
-Mini（高 48，无轴无图例）、Condensed（高 120，无图例）走 fl_chart，
-StackedLegend 只画色板与标签、没有图表区。
+`chartPalette`。
 
 ## AgentInterface 聊天外壳
 

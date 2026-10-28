@@ -1120,30 +1120,6 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null,
           child: ScatterChartWidget(series: node.nodesOf('datasets'), palette: _theme.chartPalette),
         );
-      case 'HeatmapChart':
-        return HeatmapChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
-      case 'FunnelChart':
-        return FunnelChartWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
-      case 'CalendarHeatmap':
-        return CalendarHeatmapWidget(
-          values: [
-            for (final e in (node.props['values'] as List? ?? const []))
-              if (e is Map) Map<String, Object?>.fromEntries(e.entries.map((en) => MapEntry('${en.key}', en.value))),
-          ],
-          palette: _theme.chartPalette,
-        );
-      case 'MiniBarChart':
-        return MiniBarChartWidget(values: _numbers(node.props['values']), palette: _theme.chartPalette);
-      case 'MiniLineChart':
-        return MiniLineChartWidget(values: _numbers(node.props['values']), palette: _theme.chartPalette);
-      case 'StackedLegend':
-        return StackedLegendWidget(series: node.nodesOf('series'), palette: _theme.chartPalette);
-      case 'BarChartCondensed':
-        return FlBarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false);
-      case 'LineChartCondensed':
-        return FlLineChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false);
-      case 'AreaChartCondensed':
-        return FlLineChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false, area: true);
       case 'TagBlock':
         final tagSize = switch (node.stringOf('size', 'md')) {
           'sm' => 11.0,
