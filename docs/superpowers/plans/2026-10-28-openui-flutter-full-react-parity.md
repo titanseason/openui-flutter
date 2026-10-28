@@ -6,6 +6,8 @@
 
 **Architecture:** Keep the proven split (pure-Dart Lang core, Flutter renderer) and add one layer on top: a component-builder registry and an `OpenUIController` that own state, Query data, actions and errors, so the renderer becomes a thin mapping from `ElementNode` to widgets. New capabilities land as new modules behind that registry, never by editing the old giant switch for a special case.
 
+**Architecture trade-off accepted 2026-10-28 (Task 3 review ruling):** `OpenUILibrary.registry` carries Flutter widget builders, so `lib/src/lang.dart` imports `registry.dart` and is no longer importable from a pure-Dart program on its own. The parser/evaluator logic itself uses no Flutter API; only the registry field carries builders. Restoring file-level purity (e.g. moving `OpenUILibrary` to the Flutter layer) is parked for final-review triage, not a Task 3 fix, because it would balloon scope and risk Tasks 1–2. Task 9 must correct README's "lang.dart 不依赖 Flutter" line if the break still stands then.
+
 **Tech Stack:** Flutter 3.47.6 / Dart 3.13.5 (host toolchain at `~/flutter`), `flutter_markdown_plus` 1.0.12 for Markdown only, self-drawn charts (no chart package), `flutter_test` for all tests.
 
 **Spec:** `README.md` in this repo (current state: 86 components, Query/Mutation, streaming autocloser, 33 tests), the 2026-10-14 research doc `~/workspace/your_files/openui-react-ui-components.html` (@openuidev/react-ui 0.17.0, three layers: GenUI library, hand primitives, AgentInterface), and the previous brainstorm scheme delivered 2026-10-28 (one package, layered internally, no multi-package split).
