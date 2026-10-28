@@ -115,6 +115,22 @@ class FreshCopyStorage implements AgentStorage {
   Future<void> deleteThread(String id) async {}
 }
 
+/// Storage whose [listThreads] throws, so the shell must degrade to
+/// an empty list instead of surfacing an unhandled async error.
+class _ThrowingListStorage implements AgentStorage {
+  @override
+  Future<List<AgentThread>> listThreads() async => throw Exception('list failed');
+
+  @override
+  Future<AgentThread?> loadThread(String id) async => null;
+
+  @override
+  Future<void> saveThread(AgentThread thread) async {}
+
+  @override
+  Future<void> deleteThread(String id) async {}
+}
+
 /// Storage whose first [saveThread] throws and later saves succeed,
 /// so a failed send can be retried.
 class ThrowOnceStorage extends FakeStorage {
@@ -311,6 +327,38 @@ void main() {
     expect(find.byKey(const Key('agent-composer')), findsOneWidget);
     // No artifacts: no workspace column, no artifact UI.
     expect(find.text('Quarterly report'), findsNothing);
+  });
+
+  testWidgets('deleting a thread mid-stream does not resurrect it on the final save', (tester) async {
+    final storage = FakeStorage({
+      't1': thread('t1', 'Thread One', []),
+    });
+    final gate = Completer<void>();
+    await pumpShellWithLlm(tester, storage, GatedLlm(gate));
+    await tester.tap(find.text('Thread One'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('agent-composer')), 'hi');
+    await tester.tap(find.byKey(const Key('agent-send')));
+    await tester.pump();
+    await tester.pump();
+    // Delete mid-stream: the pre-stream save already happened once.
+    expect(storage.saveCalls, 1);
+    await tester.tap(find.byKey(const Key('agent-thread-delete')));
+    await tester.pumpAndSettle();
+    expect(storage.threads.containsKey('t1'), isFalse);
+    // Let the stream finish: the finally block must NOT re-save it.
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(storage.threads.containsKey('t1'), isFalse);
+    expect(storage.saveCalls, 1);
+  });
+
+  testWidgets('a throwing listThreads leaves an empty list without an unhandled error', (tester) async {
+    await pumpShell(tester, _ThrowingListStorage());
+    // Welcome state, no threads, no crash: the error is swallowed
+    // into an empty list rather than surfacing as an unhandled error.
+    expect(find.text('Welcome to OpenUI'), findsOneWidget);
+    expect(find.text('Thread One'), findsNothing);
   });
 
   testWidgets('composer send is disabled while streaming', (tester) async {

@@ -28,13 +28,8 @@ not picked here — add a LICENSE file before publishing.
 - `lang.dart` is no longer importable from a pure-Dart package: the
   parse/eval logic uses no Flutter API, but the file imports
   `registry.dart` for the library registry field.
-- Minimum versions raised: Flutter `>=3.27.4` (fl_chart 1.3.0's floor).
-  Note for final review: the package still declares `sdk: ^3.5.0`
-  while fl_chart 1.3.0 requires `sdk: >=3.6.2`; pub enforces
-  fl_chart's own constraint and Flutter 3.27.4 ships Dart 3.6+, so
-  resolution is unaffected, but the declared Dart floor is not
-  self-consistent and should be bumped to `^3.6.2` or higher before
-  publishing if the owner wants the declaration to match.
+- Minimum versions raised: Flutter `>=3.27.4` and Dart SDK `^3.6.2`
+  (both fl_chart 1.3.0's floor; the declared floors now match).
 - Third-party dependencies are now two, not zero:
   flutter_markdown_plus 1.0.12 and fl_chart 1.3.0. `CodeBlock` is
   plain monospace text — no syntax-highlighting dependency.

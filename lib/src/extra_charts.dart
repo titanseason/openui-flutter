@@ -14,7 +14,7 @@ const _defaultPalette = [Colors.blue, Colors.green, Colors.orange, Colors.purple
 
 Color _colorAt(List<Color> palette, int i) => palette.isEmpty ? _defaultPalette[i % _defaultPalette.length] : palette[i % palette.length];
 
-List<double> seriesValues(ElementNode series) {
+List<double> _seriesValues(ElementNode series) {
   return ((series.props['values'] as List?) ?? const []).map((e) => (e as num?)?.toDouble() ?? 0).toList();
 }
 
@@ -95,7 +95,7 @@ class FlBarChartWidget extends StatelessWidget {
   final bool horizontal;
   @override
   Widget build(BuildContext context) {
-    final all = [for (final s in series) seriesValues(s)];
+    final all = [for (final s in series) _seriesValues(s)];
     final maxY = _maxValue(all);
     final groups = <BarChartGroupData>[];
     for (var ci = 0; ci < categories.length; ci++) {
@@ -136,7 +136,7 @@ class FlLineChartWidget extends StatelessWidget {
   final bool area;
   @override
   Widget build(BuildContext context) {
-    final all = [for (final s in series) seriesValues(s)];
+    final all = [for (final s in series) _seriesValues(s)];
     final maxY = _maxValue(all);
     return _chartBox(
       height: height,
@@ -238,7 +238,7 @@ class FlRadarChartWidget extends StatelessWidget {
                   for (var si = 0; si < series.length; si++)
                     RadarDataSet(
                       dataEntries: [
-                        for (var ci = 0; ci < axisCount; ci++) RadarEntry(value: ci < seriesValues(series[si]).length ? seriesValues(series[si])[ci] : 0),
+                        for (var ci = 0; ci < axisCount; ci++) RadarEntry(value: ci < _seriesValues(series[si]).length ? _seriesValues(series[si])[ci] : 0),
                       ],
                       fillColor: _colorAt(palette, si).withValues(alpha: 0.25),
                       borderColor: _colorAt(palette, si),
@@ -412,7 +412,7 @@ class HeatmapChartWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    final all = [for (final s in series) seriesValues(s)];
+    final all = [for (final s in series) _seriesValues(s)];
     var maxV = 1.0;
     for (final list in all) {
       for (final v in list) {

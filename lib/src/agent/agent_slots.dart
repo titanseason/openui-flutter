@@ -55,6 +55,7 @@ class AgentSlots {
   final Widget Function(BuildContext, AgentInterfaceState)? composer;
 
   /// Replaces the default workspace column shown on the right when
-  /// artifacts are present.
+  /// artifacts are present. The builder receives no artifact list:
+  /// a custom workspace must close over the host's artifact source.
   final Widget Function(BuildContext, AgentInterfaceState)? workspace;
 }

@@ -5,6 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
 void main() {
+  test('runAction after dispose does not throw on closed streams', () async {
+    final controller = OpenUIController(library: openUIStandardLibrary());
+    controller.dispose();
+    // Must return without touching the closed broadcast streams.
+    expect(await controller.runAction(const ActionValue('ToAssistant', ['hi'])), isTrue);
+  });
+
   test('theme light/dark defaults differ and effectiveTheme falls back to light', () {
     expect(OpenUIThemeData.light().colors.surface, Colors.white);
     expect(OpenUIThemeData.dark().colors.surface, isNot(Colors.white));

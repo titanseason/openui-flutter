@@ -83,7 +83,15 @@ class _AgentInterfaceState extends State<AgentInterface> {
   }
 
   Future<void> _loadThreads() async {
-    final threads = await widget.storage.listThreads();
+    // A throwing storage must degrade to an empty list, not surface
+    // an unhandled async error: the visible result is the same
+    // (no threads listed), but the shell stays usable.
+    late final List<AgentThread> threads;
+    try {
+      threads = await widget.storage.listThreads();
+    } catch (_) {
+      threads = [];
+    }
     if (!mounted) return;
     setState(() => _threads = threads);
   }
@@ -218,6 +226,10 @@ class _AgentInterfaceState extends State<AgentInterface> {
       return;
     }
     if (!mounted) return;
+    // Captured before the streaming try/finally: `thread` is
+    // captured by the guard's closure below, which would lose its
+    // null promotion, so the id is read once here.
+    final threadId = thread.id;
     setState(() => _streaming = true);
     var accumulated = '';
     try {
@@ -237,7 +249,13 @@ class _AgentInterfaceState extends State<AgentInterface> {
         controller.finish();
         setState(() => _streaming = false);
       }
-      await widget.storage.saveThread(thread);
+      // Deletion guard: if the thread was deleted mid-stream, the
+      // final save must not resurrect it in storage. A thread that
+      // is still listed (or was never listed because it was just
+      // created and not yet deleted) saves normally.
+      if (_threads.any((t) => t.id == threadId)) {
+        await widget.storage.saveThread(thread);
+      }
     }
   }
 

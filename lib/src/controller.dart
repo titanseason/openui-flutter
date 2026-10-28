@@ -181,6 +181,9 @@ class OpenUIController extends ChangeNotifier {
   /// Dispatch an action value (or a list of them). Returns false only
   /// when a Mutation failed, which stops the rest of a list.
   Future<bool> runAction(Object? action) async {
+    // After dispose the broadcast streams are closed; dispatching
+    // would throw on add, so a disposed controller is a no-op.
+    if (_disposed) return true;
     if (action is List) {
       for (final a in action) {
         final ok = await _runSingle(a);

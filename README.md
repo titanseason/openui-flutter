@@ -1,6 +1,6 @@
 # openui_flutter
 
-纯 Dart 移植 OpenUI Lang（1.0 子集）+ Flutter 渲染器。包除 Flutter SDK 外只依赖两项第三方：Markdown 渲染用的 flutter_markdown_plus，和图表用的 fl_chart（热力图/漏斗图/日历热力图没有 fl_chart 等价物，仍为自绘 CustomPainter；CodeBlock 为纯文本，无高亮依赖）。依赖与最低版本见下方“依赖”一节。
+Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖两项第三方：Markdown 渲染用的 flutter_markdown_plus，和图表用的 fl_chart（热力图/漏斗图/日历热力图没有 fl_chart 等价物，仍为自绘 CustomPainter；CodeBlock 为纯文本，无高亮依赖）。依赖与最低版本见下方“依赖”一节。
 
 ## 定位
 
@@ -81,10 +81,8 @@ Markdown：标题、列表、表格、链接、引用、代码围栏、行内代
 - flutter_markdown_plus 1.0.12（Markdown 渲染；带入 markdown/args）。
 - fl_chart 1.3.0（全部常规图表；带入 equatable）。热力图、漏斗图、
   日历热力图没有 fl_chart 等价物，仍为自绘 CustomPainter。
-- 最低版本：Flutter >= 3.27.4（fl_chart 1.3.0 的要求；包的声明值已
-  跟着抬到这一档）。另注意：包声明的 Dart SDK 仍是 ^3.5.0，而
-  fl_chart 1.3.0 要求 Dart >= 3.6.2——pub 会强制执行 fl_chart 自己的
-  约束，实际解析不出问题，但声明值本身不一致，留待发 1.0 前统一。
+- 最低版本：Flutter >= 3.27.4、Dart SDK ^3.6.2（均为 fl_chart 1.3.0
+  的要求；包的声明值已跟着抬到这一档）。
 
 ## 用法
 
@@ -317,11 +315,12 @@ Round / Abs / Floor / Ceil / Each`（内置函数会转换参数，如
 与堆积图例）、Modal 真弹窗、EditableTable 状态绑定、库 API
 （extend、提示词选项、自定义动作定义与严格校验）、存储消息解析
 （`StoredMessage` / `parseStoredMessage`，含 formState 恢复）、渲染器
-回调（onError/onParseResult）、Query 失败的界面态。
+回调（onError/onParseResult）、Query 失败的界面态、官方用例对照与
+金测（Task 10：React 文档风格程序 + 一图一卡金测）。
 
 未实现（有意留到下一阶段）：token 级增量解析（现为每 push 全文
-重解析）、官方 props 1:1 对齐、官方用例对照与金测（Task 10）、
-pub.dev 发布与 CI、存储消息的完整 build/parseMessage 往返。
+重解析）、官方 props 1:1 对齐、pub.dev 发布与 CI、存储消息的
+完整 build/parseMessage 往返。
 Markdown 全量语法已用 flutter_markdown_plus 补齐，Query/Mutation
 真实接线与行内自动补全也已补齐（见上文）。
 
@@ -334,7 +333,7 @@ Markdown 全量语法已用 flutter_markdown_plus 补齐，Query/Mutation
 - CodeBlock 无高亮：syntax_highlight 曾接过又被回退（传递依赖带
   原生插件、抬高 SDK 最低版本）；更轻的路线（re_highlight、手写
   高亮）已调研，用户决定先保持纯文本，未经新决定不加。
-- SDK 最低版本声明不一致：见“依赖”一节，留待发 1.0 前统一。
+- SDK 最低版本声明已与 fl_chart 的要求对齐（Flutter >= 3.27.4、Dart ^3.6.2）。
 
 ## 验证
 
