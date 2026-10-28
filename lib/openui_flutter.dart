@@ -1,5 +1,7 @@
 export 'src/agent/agent_interface.dart';
+export 'src/agent/agent_slots.dart';
 export 'src/agent/agent_storage.dart';
+export 'src/agent/agent_tools.dart';
 export 'src/controller.dart';
 export 'src/extra_charts.dart';
 export 'src/extra_widgets.dart';

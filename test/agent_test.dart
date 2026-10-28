@@ -53,6 +53,27 @@ Future<void> pumpShellWithLlm(WidgetTester tester, AgentStorage storage, AgentLl
   await tester.pumpAndSettle();
 }
 
+Future<void> pumpShellWithOptions(
+  WidgetTester tester,
+  AgentStorage storage, {
+  AgentSlots? slots,
+  List<AgentToolCall> Function()? toolCalls,
+  List<AgentArtifact> Function()? artifacts,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: AgentInterface(
+        storage: storage,
+        llm: FakeLlm(),
+        slots: slots,
+        toolCalls: toolCalls,
+        artifacts: artifacts,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 /// LLM whose stream waits for [gate] before yielding, so the test can
 /// observe the in-flight (send disabled) state deterministically.
 class GatedLlm implements AgentLlm {
@@ -212,6 +233,84 @@ void main() {
     expect(find.text('hello new'), findsOneWidget);
     final send = tester.widget<IconButton>(find.byKey(const Key('agent-send')));
     expect(send.onPressed, isNotNull);
+  });
+
+  testWidgets('slots override defaults and tool timeline shows', (tester) async {
+    final storage = FakeStorage({
+      't1': thread('t1', 'Thread One', [
+        const AgentMessage(role: 'user', text: 'hello'),
+      ]),
+    });
+    await pumpShellWithOptions(
+      tester,
+      storage,
+      slots: AgentSlots(
+        welcome: (context, state) => const Text('Custom welcome here'),
+        composer: (context, state) => const Text('Custom composer here'),
+      ),
+      toolCalls: () => [
+        const AgentToolCall(
+          tool: 'get_weather',
+          params: {'city': 'Tokyo'},
+          result: 'sunny, 22C',
+          status: 'done',
+        ),
+      ],
+    );
+
+    // Welcome slot replaces the default welcome text entirely.
+    expect(find.text('Custom welcome here'), findsOneWidget);
+    expect(find.text('Welcome to OpenUI'), findsNothing);
+    // Composer slot replaces the default composer entirely.
+    expect(find.text('Custom composer here'), findsOneWidget);
+    expect(find.byKey(const Key('agent-composer')), findsNothing);
+
+    // Tool timeline appears above the messages once a thread is open.
+    await tester.tap(find.text('Thread One'));
+    await tester.pumpAndSettle();
+    expect(find.text('get_weather'), findsOneWidget);
+    expect(find.text('sunny, 22C'), findsOneWidget);
+  });
+
+  testWidgets('workspace shows artifact content on tap', (tester) async {
+    final storage = FakeStorage({
+      't1': thread('t1', 'Thread One', [
+        const AgentMessage(role: 'user', text: 'hello'),
+      ]),
+    });
+    await pumpShellWithOptions(
+      tester,
+      storage,
+      artifacts: () => [
+        const AgentArtifact(
+          id: 'a1',
+          title: 'Quarterly report',
+          content: 'Revenue grew 12% this quarter.',
+        ),
+      ],
+    );
+    await tester.tap(find.text('Thread One'));
+    await tester.pumpAndSettle();
+
+    // Workspace column lists the artifact; content hidden until tapped.
+    expect(find.text('Quarterly report'), findsOneWidget);
+    expect(find.text('Revenue grew 12% this quarter.'), findsNothing);
+    await tester.tap(find.text('Quarterly report'));
+    await tester.pumpAndSettle();
+    expect(find.text('Revenue grew 12% this quarter.'), findsOneWidget);
+  });
+
+  testWidgets('no slots means Task 7 defaults render unchanged', (tester) async {
+    final storage = FakeStorage({
+      't1': thread('t1', 'Thread One', [
+        const AgentMessage(role: 'user', text: 'hello'),
+      ]),
+    });
+    await pumpShellWithOptions(tester, storage);
+    expect(find.text('Welcome to OpenUI'), findsOneWidget);
+    expect(find.byKey(const Key('agent-composer')), findsOneWidget);
+    // No artifacts: no workspace column, no artifact UI.
+    expect(find.text('Quarterly report'), findsNothing);
   });
 
   testWidgets('composer send is disabled while streaming', (tester) async {

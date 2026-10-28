@@ -6,7 +6,9 @@ import '../controller.dart';
 import '../lang.dart';
 import '../library.dart';
 import '../renderer.dart';
+import 'agent_slots.dart';
 import 'agent_storage.dart';
+import 'agent_tools.dart';
 
 /// Implemented by the host against its own model provider. The shell
 /// never calls a model API directly: it streams [send]'s chunks into
@@ -16,14 +18,17 @@ abstract class AgentLlm {
 }
 
 /// Chat shell: sidebar thread list, thread header, welcome empty
-/// state, and a composer. Each assistant message is rendered through
-/// its own [OpenUIController] fed by the LLM stream, so streaming
-/// behaves exactly like [OpenUIRenderer] streaming elsewhere.
+/// state, composer, workspace/artifact column, and a tool-call
+/// timeline. Each assistant message is rendered through its own
+/// [OpenUIController] fed by the LLM stream, so streaming behaves
+/// exactly like [OpenUIRenderer] streaming elsewhere.
 ///
-/// Out of scope for this task: Workspace, Artifact and ToolCall
-/// views, and slot-based customisation (Task 8). The shell shows
-/// tool calls only if they arrive as rendered OpenUI content; it
-/// never executes tools itself.
+/// Customisation: any [AgentSlots] builder, when supplied, replaces
+/// its area entirely; when absent, the default renders. Tool calls
+/// and artifacts are read-only views supplied by the host: the shell
+/// never executes tools itself, it displays what the host's tool
+/// layer already ran. Both suppliers are called on every build, so
+/// they should be cheap and side-effect free.
 class AgentInterface extends StatefulWidget {
   const AgentInterface({
     super.key,
@@ -32,12 +37,18 @@ class AgentInterface extends StatefulWidget {
     this.library,
     this.toolProvider,
     this.onAction,
+    this.slots,
+    this.toolCalls,
+    this.artifacts,
   });
   final AgentStorage storage;
   final AgentLlm llm;
   final OpenUILibrary? library;
   final OpenUIToolProvider? toolProvider;
   final void Function(ActionEvent)? onAction;
+  final AgentSlots? slots;
+  final List<AgentToolCall> Function()? toolCalls;
+  final List<AgentArtifact> Function()? artifacts;
 
   @override
   State<AgentInterface> createState() => _AgentInterfaceState();
@@ -52,6 +63,10 @@ class _AgentInterfaceState extends State<AgentInterface> {
   TextEditingController? _titleController;
   final _messageControllers = <int, OpenUIController>{};
   final _actionSubs = <StreamSubscription<ActionEvent>>[];
+  String? _selectedArtifactId;
+
+  AgentInterfaceState get _slotState =>
+      AgentInterfaceState(currentThread: _selected, isStreaming: _streaming);
 
   AgentThread? get _selected {
     for (final t in _threads) {
@@ -227,18 +242,21 @@ class _AgentInterfaceState extends State<AgentInterface> {
   }
 
   Widget _sidebar() {
+    final sidebarSlot = widget.slots?.sidebar;
+    if (sidebarSlot != null) return sidebarSlot(context, _slotState);
     return Column(
       children: [
-        ListTile(
-          title: const Text('New chat'),
-          leading: const Icon(Icons.add),
-          onTap: () {
-            _disposeMessageControllers();
-            _titleController?.dispose();
-            _titleController = null;
-            setState(() => _selectedId = null);
-          },
-        ),
+        widget.slots?.sidebarHeader?.call(context, _slotState) ??
+            ListTile(
+              title: const Text('New chat'),
+              leading: const Icon(Icons.add),
+              onTap: () {
+                _disposeMessageControllers();
+                _titleController?.dispose();
+                _titleController = null;
+                setState(() => _selectedId = null);
+              },
+            ),
         const Divider(height: 1),
         Expanded(
           child: ListView(
@@ -257,6 +275,68 @@ class _AgentInterfaceState extends State<AgentInterface> {
             ],
           ),
         ),
+        if (widget.slots?.sidebarFooter != null)
+          widget.slots!.sidebarFooter!(context, _slotState),
+      ],
+    );
+  }
+
+  /// Read-only timeline of the host's tool calls, shown once above
+  /// the messages of the selected thread. A call shows its tool name,
+  /// a status icon, and its result text when done.
+  Widget _toolTimeline() {
+    final calls = widget.toolCalls?.call() ?? const <AgentToolCall>[];
+    if (calls.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        for (final call in calls)
+          ListTile(
+            leading: switch (call.status) {
+              'done' => const Icon(Icons.check_circle_outline),
+              'error' => const Icon(Icons.error_outline),
+              _ => const Icon(Icons.autorenew),
+            },
+            title: Text(call.tool),
+            subtitle: call.status == 'done' && call.result != null ? Text(call.result!) : null,
+          ),
+        const Divider(height: 1),
+      ],
+    );
+  }
+
+  /// Default workspace column: artifact titles; tapping one shows
+  /// its content below the list. Only rendered when artifacts are
+  /// present; a [AgentSlots.workspace] builder replaces this column.
+  Widget _workspaceColumn(List<AgentArtifact> artifacts) {
+    final workspaceSlot = widget.slots?.workspace;
+    if (workspaceSlot != null) return workspaceSlot(context, _slotState);
+    AgentArtifact? selected;
+    for (final a in artifacts) {
+      if (a.id == _selectedArtifactId) selected = a;
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            children: [
+              for (final artifact in artifacts)
+                ListTile(
+                  title: Text(artifact.title),
+                  selected: artifact.id == _selectedArtifactId,
+                  onTap: () => setState(() => _selectedArtifactId = artifact.id),
+                ),
+            ],
+          ),
+        ),
+        if (selected != null) ...[
+          const Divider(height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: Text(selected.content),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -312,46 +392,53 @@ class _AgentInterfaceState extends State<AgentInterface> {
 
   Widget _main() {
     final thread = _selected;
+    final composer = widget.slots?.composer?.call(context, _slotState) ?? _composer();
     if (thread == null) {
       return Column(
         children: [
-          const Expanded(child: Center(child: Text('Welcome to OpenUI'))),
-          _composer(),
+          Expanded(
+            child: widget.slots?.welcome?.call(context, _slotState) ??
+                const Center(child: Text('Welcome to OpenUI')),
+          ),
+          composer,
         ],
       );
     }
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('agent-thread-title'),
-                  controller: _titleController,
-                  decoration: const InputDecoration(border: InputBorder.none),
-                  onSubmitted: (value) => _renameThread(thread, value),
-                ),
+        widget.slots?.threadHeader?.call(context, _slotState) ??
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('agent-thread-title'),
+                      controller: _titleController,
+                      decoration: const InputDecoration(border: InputBorder.none),
+                      onSubmitted: (value) => _renameThread(thread, value),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('agent-thread-delete'),
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete thread',
+                    onPressed: () => _deleteThread(thread.id),
+                  ),
+                ],
               ),
-              IconButton(
-                key: const Key('agent-thread-delete'),
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Delete thread',
-                onPressed: () => _deleteThread(thread.id),
-              ),
-            ],
-          ),
-        ),
+            ),
         const Divider(height: 1),
+        _toolTimeline(),
         Expanded(child: _messages(thread)),
-        _composer(),
+        composer,
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final artifacts = widget.artifacts?.call() ?? const <AgentArtifact>[];
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 700) {
@@ -361,21 +448,38 @@ class _AgentInterfaceState extends State<AgentInterface> {
                 SizedBox(width: 280, child: _sidebar()),
                 const VerticalDivider(width: 1),
                 Expanded(child: _main()),
+                if (artifacts.isNotEmpty) ...[
+                  const VerticalDivider(width: 1),
+                  SizedBox(width: 320, child: _workspaceColumn(artifacts)),
+                ],
               ],
             ),
           );
         }
+        final mobileHeaderSlot = widget.slots?.mobileHeader;
         return Scaffold(
-          appBar: AppBar(
-            leading: Builder(
-              builder: (context) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(context).openDrawer(),
-              ),
-            ),
-          ),
+          appBar: mobileHeaderSlot != null
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(kToolbarHeight),
+                  child: mobileHeaderSlot(context, _slotState),
+                )
+              : AppBar(
+                  leading: Builder(
+                    builder: (context) => IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                    ),
+                  ),
+                ),
           drawer: Drawer(child: _sidebar()),
-          body: _main(),
+          body: artifacts.isEmpty
+              ? _main()
+              : Column(
+                  children: [
+                    Expanded(child: _main()),
+                    SizedBox(height: 240, child: _workspaceColumn(artifacts)),
+                  ],
+                ),
         );
       },
     );
