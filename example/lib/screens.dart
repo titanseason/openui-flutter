@@ -44,9 +44,9 @@ callout = Callout("info", "Note", "Note: March includes a large client payment."
 ///
 /// Visual checks for Task 6 that cannot be eyeballed in a headless
 /// sandbox live here, for a human to confirm on a real device:
-/// the HorizontalBarChart's category titles under rotation, and the
-/// 2-category RadarChart (fl_chart needs >= 3 entries, so it renders
-/// as a padded triangle rather than the old degenerate line).
+/// the HorizontalBarChart's category titles (now drawn horizontal
+/// on the left, not rotated), and the 2-category RadarChart (now
+/// drawn as its true geometry, a line, not a padded triangle).
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 

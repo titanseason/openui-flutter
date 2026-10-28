@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
@@ -60,8 +59,8 @@ void main() {
       tester,
       'root = ScatterChart([ScatterSeries("s", [Point(1, 2, 1), Point(3, 4, 100), Point(5, 6)])])\n',
     );
-    final chart = tester.widget<fl.ScatterChart>(find.byType(fl.ScatterChart));
-    final radii = chart.data.scatterSpots.map((s) => (s.dotPainter as fl.FlDotCirclePainter).radius).toList();
+    final chart = tester.widget<ScatterChartWidget>(find.byType(ScatterChartWidget));
+    final radii = computeScatterLayout(chart.series).dots.map((d) => d.radius).toList();
     expect(radii.length, 3);
     expect(radii[0] < radii[1], isTrue, reason: 'z=100 bubble is bigger than z=1');
     expect(radii[2], 6, reason: 'no z keeps the default radius');

@@ -1,6 +1,6 @@
 # openui_flutter
 
-Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖两项第三方：Markdown 渲染用的 flutter_markdown_plus，和图表用的 fl_chart；CodeBlock 为纯文本，无高亮依赖。依赖与最低版本见下方“依赖”一节。
+Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖一项第三方：Markdown 渲染用的 flutter_markdown_plus；图表全部自绘（CustomPainter），CodeBlock 为纯文本，无高亮依赖。依赖与最低版本见下方“依赖”一节。
 
 ## 定位
 
@@ -74,9 +74,9 @@ Markdown：标题、列表、表格、链接、引用、代码围栏、行内代
 ## 依赖
 
 - flutter_markdown_plus 1.0.12（Markdown 渲染；带入 markdown/args）。
-- fl_chart 1.3.0（全部图表；带入 equatable）。
-- 最低版本：Flutter >= 3.27.4、Dart SDK ^3.6.2（均为 fl_chart 1.3.0
-  的要求；包的声明值已跟着抬到这一档）。
+- 最低版本：Flutter >= 3.27.4、Dart SDK ^3.6.2（此前由 fl_chart 1.3.0
+  的要求抬到这一档；fl_chart 已移除，但下限暂保持不动，另行
+  核对代码所用 API 与 flutter_markdown_plus 的约束后再降）。
 
 ## 用法
 
@@ -197,8 +197,12 @@ library.prompt(
 ## 图表
 
 常规图表（Bar/Line/Area/HorizontalBar/Pie/Radar/Radial/
-SingleStackedBar/Scatter）走 fl_chart，颜色全部取主题
-`chartPalette`。
+SingleStackedBar/Scatter）全部自绘（CustomPainter），颜色全部取主题
+`chartPalette`。图例格式、盒子高度、数值刻度与散点 z 气泡均与
+此前一致；两处有意改动：HorizontalBar 类目标题横排在左侧
+（此前旋转后在窄列里逐字母竖排），1/2 类别雷达按真实几何画
+（点/线，不再补成三角形）。悬停 tooltip 暂无：React 图表默认
+带悬停 tooltip，属待补的对齐缺口（此前 fl_chart 版同样没有）。
 
 ## AgentInterface 聊天外壳
 

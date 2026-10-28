@@ -1725,7 +1725,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
     );
   }
 
-  /// Normalizes chart series data for the fl_chart widgets, which
+  /// Normalizes chart series data for the chart widgets, which
   /// only know ElementNodes. Series nodes pass through; plain
   /// {category, values} objects (React's SeriesSchema) become
   /// synthetic Series nodes with the same props. Nested lists (e.g.
@@ -2281,13 +2281,13 @@ class _ChartWidget extends StatelessWidget {
     final Widget chart;
     switch (kind) {
       case _ChartKind.bar:
-        chart = FlBarChartWidget(categories: categories, series: series, palette: palette, stacked: stacked, height: height ?? 220);
+        chart = BarChartWidget(categories: categories, series: series, palette: palette, stacked: stacked, height: height ?? 220);
       case _ChartKind.hbar:
-        chart = FlBarChartWidget(categories: categories, series: series, palette: palette, horizontal: true, stacked: stacked, height: height ?? 220);
+        chart = BarChartWidget(categories: categories, series: series, palette: palette, horizontal: true, stacked: stacked, height: height ?? 220);
       case _ChartKind.line:
-        chart = FlLineChartWidget(categories: categories, series: series, palette: palette, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
+        chart = LineChartWidget(categories: categories, series: series, palette: palette, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
       case _ChartKind.area:
-        chart = FlLineChartWidget(categories: categories, series: series, palette: palette, area: true, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
+        chart = LineChartWidget(categories: categories, series: series, palette: palette, area: true, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
     }
     return _LabeledChart(xLabel: xLabel, yLabel: yLabel, child: chart);
   }
@@ -2301,5 +2301,5 @@ class _PieWidget extends StatelessWidget {
   final String appearance;
   final List<Color> palette;
   @override
-  Widget build(BuildContext context) => FlPieChartWidget(labels: labels, values: values, variant: variant, appearance: appearance, palette: palette);
+  Widget build(BuildContext context) => PieChartWidget(labels: labels, values: values, variant: variant, appearance: appearance, palette: palette);
 }

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Charts are fully self-drawn (`CustomPainter` in
+  `extra_charts.dart`): fl_chart is removed, so the package's
+  only third-party dependency is flutter_markdown_plus.
+  Legend formats, box heights, value scales, the z-scaled
+  scatter bubbles (now via the pure `computeScatterLayout`)
+  and the empty-series radar box are unchanged, and the bar
+  chart golden was regenerated (visually identical: same
+  heights, rounded tops). Two deliberate changes:
+  HorizontalBar category titles are drawn horizontal on the
+  left instead of rotated, and a 1- or 2-axis radar draws its
+  true geometry (a dot, a line) instead of a padded triangle.
+  Known gap, unchanged from the fl_chart version and a React
+  parity gap: no hover tooltips (React charts show one by
+  default). The SDK floor (Dart ^3.6.2 / Flutter 3.27.4) is
+  kept for now although fl_chart no longer requires it.
 - Renderer incrementality: `_buildNode` results are memoized by
   node identity, so a rebuild after a streaming push (or a host
   rebuild) reuses the identical Widget for every pure subtree,

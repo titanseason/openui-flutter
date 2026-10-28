@@ -45,8 +45,8 @@ root = RadarChart(["一", "二"], [])
       ),
     );
     await tester.pumpAndSettle();
-    // The bordered empty box, not a fl_chart assertion failure.
-    expect(find.byType(FlRadarChartWidget), findsOneWidget);
+    // The bordered empty box, not a crash.
+    expect(find.byType(RadarChartWidget), findsOneWidget);
   });
 
   testWidgets('radar chart honours a custom theme palette', (tester) async {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'extra_charts.dart';
 import 'lang.dart';
 
 /// Icon name to Material icon. React names are lucide kebab-case
@@ -164,48 +163,6 @@ IconData? _iconByCategory(String? category) {
     default:
       return null;
   }
-}
-
-const _palette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
-
-// ---------------- Radar / radial / stacked / scatter (fl_chart) ----------------
-// These keep their public names and signatures (a palette parameter was
-// added so the theme palette threads through, closing Task 2's deferred
-// minor); the implementations live in extra_charts.dart.
-
-class RadarChartWidget extends StatelessWidget {
-  const RadarChartWidget({required this.categories, required this.series, this.palette = _palette});
-  final List<String> categories;
-  final List<ElementNode> series;
-  final List<Color> palette;
-  @override
-  Widget build(BuildContext context) => FlRadarChartWidget(categories: categories, series: series, palette: palette);
-}
-
-class RadialChartWidget extends StatelessWidget {
-  const RadialChartWidget({required this.labels, required this.values, this.palette = _palette});
-  final List<String> labels;
-  final List<double> values;
-  final List<Color> palette;
-  @override
-  Widget build(BuildContext context) => FlRadialChartWidget(labels: labels, values: values, palette: palette);
-}
-
-class SingleStackedBarWidget extends StatelessWidget {
-  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _palette});
-  final List<String> labels;
-  final List<double> values;
-  final List<Color> palette;
-  @override
-  Widget build(BuildContext context) => FlStackedBarWidget(labels: labels, values: values, palette: palette);
-}
-
-class ScatterChartWidget extends StatelessWidget {
-  const ScatterChartWidget({required this.series, this.palette = _palette});
-  final List<ElementNode> series;
-  final List<Color> palette;
-  @override
-  Widget build(BuildContext context) => FlScatterChartWidget(series: series, palette: palette);
 }
 
 // ---------------- Option groups ----------------

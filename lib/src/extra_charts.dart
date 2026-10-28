@@ -1,13 +1,24 @@
 import 'dart:math' as math;
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 import 'lang.dart';
 
-/// Charts rendered via fl_chart. Every widget takes the theme palette
-/// explicitly so [OpenUIThemeData.chartPalette] threads through all
-/// of them.
+/// Charts drawn with [CustomPainter] and plain widgets — no chart
+/// package. Every widget takes the theme palette explicitly so
+/// [OpenUIThemeData.chartPalette] threads through all of them.
+///
+/// Kept identical to the old fl_chart rendering where it matters:
+/// the legend shape (a 10x10 swatch plus a label), the legend text
+/// formats ('label (value)' for pie/radial, 'label (xx%)' for the
+/// stacked bar), the box heights, and the value scales (bar/line
+/// maxY floors at 1.0, stacked bars scale by their stack sum).
+/// Changed on purpose: HorizontalBar category titles are drawn
+/// horizontal on the left instead of rotated (the old rotation
+/// wrapped them letter by letter in narrow columns), and a 1- or
+/// 2-axis radar draws its true geometry (a dot, a line) instead of
+/// a padded triangle. Touch was already disabled on every chart,
+/// so nothing interactive is lost.
 
 const _defaultPalette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
 
@@ -17,11 +28,23 @@ List<double> _seriesValues(ElementNode series) {
   return ((series.props['values'] as List?) ?? const []).map((e) => (e as num?)?.toDouble() ?? 0).toList();
 }
 
-/// Legend row used by every fl_chart widget in this file: a swatch
-/// Container per series (the colour test in controller_theme_test pins
-/// this exact shape) plus the series label.
-class FlLegend extends StatelessWidget {
-  const FlLegend({required this.labels, required this.palette});
+double _maxValue(List<List<double>> all) {
+  var m = 1.0;
+  for (final list in all) {
+    for (final v in list) {
+      m = math.max(m, v);
+    }
+  }
+  return m;
+}
+
+const _axisStyle = TextStyle(fontSize: 10, color: Colors.grey);
+
+/// Legend row used by every chart widget in this file: a swatch
+/// Container per series (the colour test in controller_theme_test
+/// pins this exact shape) plus the series label.
+class ChartLegend extends StatelessWidget {
+  const ChartLegend({required this.labels, required this.palette});
   final List<String> labels;
   final List<Color> palette;
   @override
@@ -44,48 +67,521 @@ Widget _chartBox({required double height, required Widget chart, Widget? legend}
     decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
     child: Column(
       children: [
-        Expanded(child: chart),
+        // SizedBox.expand: a bare CustomPaint sizes to zero under the
+        // Column's loose cross-axis constraints; the old fl_chart
+        // widgets expanded on their own, so this was never needed.
+        Expanded(child: SizedBox.expand(child: chart)),
         if (legend != null) legend,
       ],
     ),
   );
 }
 
-FlTitlesData _categoryTitles(List<String> categories, {bool show = true}) {
-  if (!show) return FlTitlesData(show: false);
-  return FlTitlesData(
-    show: true,
-    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-    bottomTitles: AxisTitles(
-      sideTitles: SideTitles(
-        showTitles: true,
-        reservedSize: 22,
-        getTitlesWidget: (value, meta) {
-          final i = value.toInt();
-          if (i < 0 || i >= categories.length) return const SizedBox.shrink();
-          return SideTitleWidget(meta: meta, child: Text(categories[i], style: const TextStyle(fontSize: 10, color: Colors.grey)));
-        },
-      ),
-    ),
-  );
+void _paintCenteredText(Canvas canvas, String text, Offset center, {double fontSize = 10, Color color = Colors.grey}) {
+  final tp = TextPainter(text: TextSpan(text: text, style: TextStyle(fontSize: fontSize, color: color)), textDirection: TextDirection.ltr)..layout();
+  tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
 }
 
-double _maxValue(List<List<double>> all) {
-  var m = 1.0;
-  for (final list in all) {
-    for (final v in list) {
-      m = math.max(m, v);
+/// A bottom-axis category label, centered on [centerX] and centered
+/// vertically in a 22px-tall label area starting at [areaTop].
+/// A bar rect with the top (vertical) end rounded, like the old
+/// fl_chart rods. [radius] caps at half the bar thickness.
+void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false}) {
+  const radius = 6.0;
+  final r = horizontal ? math.min(radius, rect.height / 2) : math.min(radius, rect.width / 2);
+  final corners = horizontal
+      ? RRect.fromRectAndCorners(rect, topRight: Radius.circular(r), bottomRight: Radius.circular(r))
+      : RRect.fromRectAndCorners(rect, topLeft: Radius.circular(r), topRight: Radius.circular(r));
+  canvas.drawRRect(corners, paint);
+}
+
+void _paintCategoryLabel(Canvas canvas, String text, double centerX, double areaTop, double maxWidth) {
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: maxWidth);
+  tp.paint(canvas, Offset(centerX - tp.width / 2, areaTop + (22 - tp.height) / 2));
+}
+
+// ---------------- Bar / horizontal bar ----------------
+
+class _BarPainter extends CustomPainter {
+  _BarPainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.stacked, required this.horizontal});
+  final List<String> categories;
+  final List<List<double>> all;
+  final List<Color> palette;
+  final double maxY;
+  final bool stacked;
+  final bool horizontal;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (categories.isEmpty || size.width <= 0 || size.height <= 0) return;
+    if (horizontal) {
+      _paintHorizontal(canvas, size);
+    } else {
+      _paintVertical(canvas, size);
     }
   }
-  return m;
+
+  void _paintVertical(Canvas canvas, Size size) {
+    final plotH = size.height - 22;
+    final n = categories.length;
+    final slot = size.width / n;
+    final m = all.length;
+    for (var ci = 0; ci < n; ci++) {
+      final x0 = ci * slot;
+      if (stacked) {
+        final rodW = math.min(16.0, slot);
+        final cx = x0 + (slot - rodW) / 2;
+        var running = 0.0;
+        // Only the topmost segment gets the rounded top.
+        var topSi = -1;
+        for (var si = 0; si < m; si++) {
+          if (ci < all[si].length && all[si][ci] > 0) topSi = si;
+        }
+        for (var si = 0; si < m; si++) {
+          final v = ci < all[si].length ? all[si][ci] : 0;
+          if (v > 0) {
+            final top = plotH * (1 - (running + v) / maxY);
+            final bottom = plotH * (1 - running / maxY);
+            final rect = Rect.fromLTWH(cx, top, rodW, bottom - top);
+            final paint = Paint()..color = _colorAt(palette, si);
+            if (si == topSi) {
+              _drawBarTop(canvas, rect, paint);
+            } else {
+              canvas.drawRect(rect, paint);
+            }
+          }
+          running += v;
+        }
+      } else {
+        final rodW = m == 0 ? 0.0 : math.min(16.0, slot / m);
+        final startX = x0 + (slot - rodW * m) / 2;
+        for (var si = 0; si < m; si++) {
+          final v = ci < all[si].length ? all[si][ci] : 0;
+          if (v > 0) {
+            final h = plotH * v / maxY;
+            _drawBarTop(canvas, Rect.fromLTWH(startX + si * rodW, plotH - h, rodW, h), Paint()..color = _colorAt(palette, si));
+          }
+        }
+      }
+      _paintCategoryLabel(canvas, categories[ci], x0 + slot / 2, plotH, slot);
+    }
+  }
+
+  void _paintHorizontal(Canvas canvas, Size size) {
+    final n = categories.length;
+    var labelW = 0.0;
+    for (final c in categories) {
+      final tp = TextPainter(text: TextSpan(text: c, style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+      labelW = math.max(labelW, tp.width);
+    }
+    // Labels stay horizontal and readable; cap their column so a
+    // long label cannot eat the whole bar area.
+    final labelArea = math.min(labelW, size.width * 0.4 - 8);
+    final barX = labelArea + 8;
+    final barW = size.width - barX;
+    if (barW <= 0) return;
+    final slot = size.height / n;
+    final m = all.length;
+    for (var ci = 0; ci < n; ci++) {
+      final y0 = ci * slot;
+      final tp = TextPainter(text: TextSpan(text: categories[ci], style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: labelArea);
+      tp.paint(canvas, Offset(barX - 8 - tp.width, y0 + (slot - tp.height) / 2));
+      if (stacked) {
+        final thick = math.min(16.0, slot);
+        final cy = y0 + (slot - thick) / 2;
+        var running = 0.0;
+        // Only the rightmost segment gets the rounded end.
+        var endSi = -1;
+        for (var si = 0; si < m; si++) {
+          if (ci < all[si].length && all[si][ci] > 0) endSi = si;
+        }
+        for (var si = 0; si < m; si++) {
+          final v = ci < all[si].length ? all[si][ci] : 0;
+          if (v > 0) {
+            final rect = Rect.fromLTWH(barX + barW * running / maxY, cy, barW * v / maxY, thick);
+            final paint = Paint()..color = _colorAt(palette, si);
+            if (si == endSi) {
+              _drawBarTop(canvas, rect, paint, horizontal: true);
+            } else {
+              canvas.drawRect(rect, paint);
+            }
+          }
+          running += v;
+        }
+      } else {
+        final thick = m == 0 ? 0.0 : math.min(16.0, slot / m);
+        final startY = y0 + (slot - thick * m) / 2;
+        for (var si = 0; si < m; si++) {
+          final v = ci < all[si].length ? all[si][ci] : 0;
+          if (v > 0) {
+            _drawBarTop(canvas, Rect.fromLTWH(barX, startY + si * thick, barW * v / maxY, thick), Paint()..color = _colorAt(palette, si), horizontal: true);
+          }
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ---------------- Bar / line / area / horizontal bar ----------------
+// ---------------- Line / area ----------------
 
-class FlBarChartWidget extends StatelessWidget {
-  const FlBarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false});
+class _LinePainter extends CustomPainter {
+  _LinePainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.area, required this.curved, required this.step});
+  final List<String> categories;
+  final List<List<double>> all;
+  final List<Color> palette;
+  final double maxY;
+  final bool area;
+  final bool curved;
+  final bool step;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final plotH = size.height - 22;
+    final n = categories.length;
+    final denom = math.max(1, n - 1);
+    double px(int ci) => size.width * ci / denom;
+    double py(double v) => plotH * (1 - v / maxY);
+    for (var si = 0; si < all.length; si++) {
+      final vals = all[si];
+      if (vals.isEmpty) continue;
+      final pts = [for (var ci = 0; ci < vals.length; ci++) Offset(px(ci), py(vals[ci]))];
+      final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+      if (curved && pts.length > 2) {
+        // Catmull-Rom to Bezier: a smooth curve through the points,
+        // the same shape class as the old curved line chart.
+        for (var i = 0; i < pts.length - 1; i++) {
+          final p0 = i == 0 ? pts[i] : pts[i - 1];
+          final p1 = pts[i];
+          final p2 = pts[i + 1];
+          final p3 = i + 2 < pts.length ? pts[i + 2] : pts[i + 1];
+          path.cubicTo(p1.dx + (p2.dx - p0.dx) / 6, p1.dy + (p2.dy - p0.dy) / 6, p2.dx - (p3.dx - p1.dx) / 6, p2.dy - (p3.dy - p1.dy) / 6, p2.dx, p2.dy);
+        }
+      } else if (step) {
+        for (var i = 1; i < pts.length; i++) {
+          path.lineTo(pts[i].dx, pts[i - 1].dy);
+          path.lineTo(pts[i].dx, pts[i].dy);
+        }
+      } else {
+        for (var i = 1; i < pts.length; i++) {
+          path.lineTo(pts[i].dx, pts[i].dy);
+        }
+      }
+      final color = _colorAt(palette, si);
+      if (area) {
+        final fill = Path.from(path)
+          ..lineTo(pts.last.dx, plotH)
+          ..lineTo(pts.first.dx, plotH)
+          ..close();
+        canvas.drawPath(fill, Paint()..color = color.withValues(alpha: 0.2));
+      }
+      canvas.drawPath(path, Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2);
+      for (final p in pts) {
+        canvas.drawCircle(p, 4, Paint()..color = color);
+      }
+    }
+    for (var ci = 0; ci < n; ci++) {
+      _paintCategoryLabel(canvas, categories[ci], px(ci), plotH, size.width / denom);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Pie ----------------
+
+class _PiePainter extends CustomPainter {
+  _PiePainter({required this.labels, required this.values, required this.variant, required this.appearance, required this.palette});
+  final List<String> labels;
+  final List<double> values;
+  final String variant;
+  final String appearance;
+  final List<Color> palette;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = values.fold<double>(0, (a, b) => a + b);
+    if (total <= 0 || labels.isEmpty) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerR = math.min(size.width, size.height) / 2 - 4;
+    if (outerR <= 0) return;
+    final donut = variant == 'donut';
+    final semi = appearance == 'semiCircular';
+    // Circular starts at 3 o'clock, semi-circular at 9 o'clock so
+    // the real sections cover exactly the top half.
+    final fullSweep = semi ? math.pi : math.pi * 2;
+    var angle = semi ? math.pi : 0.0;
+    final gap = 2 / outerR; // ~2px arc gap between sections.
+    for (var i = 0; i < labels.length; i++) {
+      final v = i < values.length ? values[i] : 0;
+      final sweep = v / total * fullSweep;
+      if (sweep <= 0) continue;
+      final inset = math.min(gap / 2, sweep / 2);
+      final a0 = angle + inset;
+      final a1 = angle + sweep - inset;
+      if (a1 > a0) {
+        if (donut && outerR > 42) {
+          final midR = (outerR + 40) / 2;
+          canvas.drawArc(Rect.fromCircle(center: center, radius: midR), a0, a1 - a0, false, Paint()
+            ..color = _colorAt(palette, i)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = outerR - 40);
+        } else {
+          final path = Path()
+            ..moveTo(center.dx, center.dy)
+            ..arcTo(Rect.fromCircle(center: center, radius: outerR), a0, a1 - a0, false)
+            ..close();
+          canvas.drawPath(path, Paint()..color = _colorAt(palette, i));
+        }
+      }
+      // Section title, white on the slice; skipped for slivers
+      // where it could never be readable.
+      if (sweep >= 0.25) {
+        final mid = angle + sweep / 2;
+        final r = donut && outerR > 42 ? (outerR + 40) / 2 : outerR * 0.65;
+        _paintCenteredText(canvas, labels[i], center + Offset(math.cos(mid) * r, math.sin(mid) * r), fontSize: 11, color: Colors.white);
+      }
+      angle += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Radar ----------------
+
+class _RadarPainter extends CustomPainter {
+  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV});
+  final List<String> categories;
+  final List<List<double>> all;
+  final List<Color> palette;
+  final double maxV;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = categories.length;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.min(size.width, size.height) / 2 - 24;
+    if (n == 0 || radius <= 0) return;
+    Offset vertex(int i, double r) {
+      final angle = -math.pi / 2 + i * math.pi * 2 / n;
+      return center + Offset(math.cos(angle) * r, math.sin(angle) * r);
+    }
+
+    final gridPaint = Paint()
+      ..color = Colors.grey.shade300
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    if (n >= 3) {
+      for (final f in [0.25, 0.5, 0.75, 1.0]) {
+        final path = Path();
+        for (var i = 0; i < n; i++) {
+          final p = vertex(i, radius * f);
+          if (i == 0) {
+            path.moveTo(p.dx, p.dy);
+          } else {
+            path.lineTo(p.dx, p.dy);
+          }
+        }
+        path.close();
+        canvas.drawPath(path, gridPaint);
+      }
+    }
+    for (var i = 0; i < n; i++) {
+      canvas.drawLine(center, vertex(i, radius), gridPaint);
+    }
+    for (var i = 0; i < n; i++) {
+      _paintCenteredText(canvas, categories[i], vertex(i, radius + 14), fontSize: 11);
+    }
+    // Values scale relative to the largest entry, so the biggest
+    // value always reaches the outer ring; all-zero data sits at
+    // the center.
+    final scale = maxV > 0 ? radius / maxV : 0.0;
+    for (var si = 0; si < all.length; si++) {
+      final vals = all[si];
+      double val(int i) => i < vals.length ? vals[i] : 0;
+      final color = _colorAt(palette, si);
+      if (n == 1) {
+        canvas.drawCircle(vertex(0, val(0) * scale), 3, Paint()..color = color);
+      } else if (n == 2) {
+        // Geometrically degenerate: a line between the two values,
+        // not a padded triangle.
+        final a = vertex(0, val(0) * scale);
+        final b = vertex(1, val(1) * scale);
+        canvas.drawLine(a, b, Paint()
+          ..color = color
+          ..strokeWidth = 2);
+        canvas.drawCircle(a, 3, Paint()..color = color);
+        canvas.drawCircle(b, 3, Paint()..color = color);
+      } else {
+        final path = Path();
+        for (var i = 0; i < n; i++) {
+          final p = vertex(i, val(i) * scale);
+          if (i == 0) {
+            path.moveTo(p.dx, p.dy);
+          } else {
+            path.lineTo(p.dx, p.dy);
+          }
+        }
+        path.close();
+        canvas.drawPath(path, Paint()..color = color.withValues(alpha: 0.25));
+        canvas.drawPath(path, Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Radial (gauge rings) ----------------
+
+class _RadialPainter extends CustomPainter {
+  _RadialPainter({required this.values, required this.palette, required this.maxV});
+  final List<double> values;
+  final List<Color> palette;
+  final double maxV;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerR = math.min(size.width, size.height) / 2 - 8;
+    for (var i = 0; i < values.length; i++) {
+      final r = outerR - i * 16;
+      if (r <= 5) break;
+      canvas.drawArc(Rect.fromCircle(center: center, radius: r), 0, math.pi * 2, false, Paint()
+        ..color = Colors.grey.shade200
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10);
+      final v = i < values.length ? values[i] : 0;
+      if (v > 0 && maxV > 0) {
+        canvas.drawArc(Rect.fromCircle(center: center, radius: r), -math.pi / 2, v / maxV * math.pi * 2, false, Paint()
+          ..color = _colorAt(palette, i)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10
+          ..strokeCap = StrokeCap.round);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Single stacked bar ----------------
+
+class _StackedBarPainter extends CustomPainter {
+  _StackedBarPainter({required this.values, required this.palette, required this.total});
+  final List<double> values;
+  final List<Color> palette;
+  final double total;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (total <= 0) return;
+    const colW = 24.0;
+    final x = (size.width - colW) / 2;
+    var y = size.height;
+    var topI = -1;
+    for (var i = 0; i < values.length; i++) {
+      if (values[i] > 0) topI = i;
+    }
+    for (var i = 0; i < values.length; i++) {
+      final h = size.height * values[i] / total;
+      if (h > 0) {
+        y -= h;
+        final rect = Rect.fromLTWH(x, y, colW, h);
+        final paint = Paint()..color = _colorAt(palette, i);
+        if (i == topI) {
+          _drawBarTop(canvas, rect, paint);
+        } else {
+          canvas.drawRect(rect, paint);
+        }
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Scatter ----------------
+
+/// One scatter dot in data coordinates, with its bubble radius
+/// already resolved.
+typedef ScatterDot = ({double x, double y, double radius, int seriesIndex});
+
+/// The scatter layout in data coordinates: dots plus the axis
+/// bounds the painter maps from.
+typedef ScatterLayout = ({List<ScatterDot> dots, double minX, double maxX, double minY, double maxY});
+
+/// Pure data step of the scatter chart, kept separate from the
+/// painter so tests can pin the bubble radii without a widget.
+/// A point's z scales its bubble (area proportional to z, as in a
+/// bubble chart); points without z keep the default radius.
+ScatterLayout computeScatterLayout(List<ElementNode> series) {
+  final raw = <({double x, double y, double? z, int si})>[];
+  var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity, maxZ = 0.0;
+  for (var si = 0; si < series.length; si++) {
+    for (final p in series[si].nodesOf('points')) {
+      final x = p.numOf('x');
+      final y = p.numOf('y');
+      final z = p.props['z'] is num ? (p.props['z'] as num).toDouble() : null;
+      minX = math.min(minX, x);
+      maxX = math.max(maxX, x);
+      minY = math.min(minY, y);
+      maxY = math.max(maxY, y);
+      if (z != null) maxZ = math.max(maxZ, z);
+      raw.add((x: x, y: y, z: z, si: si));
+    }
+  }
+  final dots = <ScatterDot>[
+    for (final p in raw) (x: p.x, y: p.y, radius: p.z == null ? 6 : (maxZ > 0 ? 4 + 8 * math.sqrt(p.z! / maxZ) : 4), seriesIndex: p.si),
+  ];
+  if (dots.isEmpty) {
+    minX = 0;
+    maxX = 1;
+    minY = 0;
+    maxY = 1;
+  }
+  return (dots: dots, minX: minX, maxX: maxX == minX ? minX + 1 : maxX, minY: minY, maxY: maxY == minY ? minY + 1 : maxY);
+}
+
+class _ScatterPainter extends CustomPainter {
+  _ScatterPainter({required this.layout, required this.palette});
+  final ScatterLayout layout;
+  final List<Color> palette;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final spanX = layout.maxX - layout.minX;
+    final spanY = layout.maxY - layout.minY;
+    for (final d in layout.dots) {
+      final px = (d.x - layout.minX) / spanX * size.width;
+      final py = size.height - (d.y - layout.minY) / spanY * size.height;
+      canvas.drawCircle(Offset(px, py), d.radius, Paint()..color = _colorAt(palette, d.seriesIndex));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ---------------- Widgets ----------------
+
+class BarChartWidget extends StatelessWidget {
+  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
@@ -107,48 +603,16 @@ class FlBarChartWidget extends StatelessWidget {
       }
     }
     final maxY = stacked ? stackedMax : _maxValue(all);
-    final groups = <BarChartGroupData>[];
-    for (var ci = 0; ci < categories.length; ci++) {
-      if (stacked) {
-        var running = 0.0;
-        final stack = <BarChartRodStackItem>[];
-        for (var si = 0; si < series.length; si++) {
-          final v = ci < all[si].length ? all[si][ci] : 0;
-          stack.add(BarChartRodStackItem(running, running + v, _colorAt(palette, si)));
-          running += v;
-        }
-        groups.add(BarChartGroupData(x: ci, barRods: [BarChartRodData(toY: running == 0 ? 1 : running, rodStackItems: stack, width: 16)]));
-      } else {
-        groups.add(BarChartGroupData(
-          x: ci,
-          barRods: [
-            for (var si = 0; si < series.length; si++)
-              BarChartRodData(toY: ci < all[si].length ? all[si][ci] : 0, color: _colorAt(palette, si), width: 16),
-          ],
-        ));
-      }
-    }
     return _chartBox(
       height: height,
-      chart: BarChart(
-        BarChartData(
-          barGroups: groups,
-          alignment: BarChartAlignment.spaceAround,
-          maxY: maxY,
-          titlesData: _categoryTitles(categories),
-          gridData: FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          barTouchData: BarTouchData(enabled: false),
-          rotationQuarterTurns: horizontal ? 1 : 0,
-        ),
-      ),
-      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
+      chart: CustomPaint(painter: _BarPainter(categories: categories, all: all, palette: palette, maxY: maxY, stacked: stacked, horizontal: horizontal)),
+      legend: showLegend ? ChartLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
     );
   }
 }
 
-class FlLineChartWidget extends StatelessWidget {
-  const FlLineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = false, this.step = false});
+class LineChartWidget extends StatelessWidget {
+  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = false, this.step = false});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
@@ -163,39 +627,14 @@ class FlLineChartWidget extends StatelessWidget {
     final maxY = _maxValue(all);
     return _chartBox(
       height: height,
-      chart: LineChart(
-        LineChartData(
-          lineBarsData: [
-            for (var si = 0; si < series.length; si++)
-              LineChartBarData(
-                spots: [for (var ci = 0; ci < all[si].length; ci++) FlSpot(ci.toDouble(), all[si][ci])],
-                color: _colorAt(palette, si),
-                barWidth: 2,
-                isCurved: curved,
-                isStepLineChart: step,
-                dotData: const FlDotData(show: true),
-                belowBarData: BarAreaData(show: area, color: _colorAt(palette, si).withValues(alpha: 0.2)),
-              ),
-          ],
-          minX: 0,
-          maxX: math.max(1, categories.length - 1).toDouble(),
-          minY: 0,
-          maxY: maxY,
-          titlesData: _categoryTitles(categories),
-          gridData: FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          lineTouchData: LineTouchData(enabled: false),
-        ),
-      ),
-      legend: showLegend ? FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
+      chart: CustomPaint(painter: _LinePainter(categories: categories, all: all, palette: palette, maxY: maxY, area: area, curved: curved, step: step)),
+      legend: showLegend ? ChartLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette) : null,
     );
   }
 }
 
-// ---------------- Pie ----------------
-
-class FlPieChartWidget extends StatelessWidget {
-  const FlPieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette});
+class PieChartWidget extends StatelessWidget {
+  const PieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette});
   final List<String> labels;
   final List<double> values;
   final String variant;
@@ -203,21 +642,6 @@ class FlPieChartWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    // Semi-circular: real sections plus a transparent section of the
-    // same total, starting at 9 o'clock so the real sections cover
-    // exactly the top half.
-    final total = values.fold<double>(0, (a, b) => a + b);
-    final semi = appearance == 'semiCircular';
-    final sections = <PieChartSectionData>[
-      for (var i = 0; i < labels.length; i++)
-        PieChartSectionData(
-          value: i < values.length ? values[i] : 0,
-          color: _colorAt(palette, i),
-          title: labels[i],
-          titleStyle: const TextStyle(fontSize: 11, color: Colors.white),
-        ),
-      if (semi) PieChartSectionData(value: total == 0 ? 1 : total, color: Colors.transparent, title: '', showTitle: false),
-    ];
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
@@ -226,14 +650,8 @@ class FlPieChartWidget extends StatelessWidget {
         children: [
           SizedBox(
             height: 180,
-            child: PieChart(
-              PieChartData(
-                sections: sections,
-                sectionsSpace: 2,
-                centerSpaceRadius: variant == 'donut' ? 40 : 0,
-                startDegreeOffset: semi ? 180 : 0,
-              ),
-            ),
+            width: double.infinity,
+            child: CustomPaint(painter: _PiePainter(labels: labels, values: values, variant: variant, appearance: appearance, palette: palette)),
           ),
           for (var i = 0; i < labels.length; i++)
             Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${labels[i]} (${i < values.length ? values[i] : 0})')]),
@@ -243,24 +661,23 @@ class FlPieChartWidget extends StatelessWidget {
   }
 }
 
-// ---------------- Radar ----------------
-
-class FlRadarChartWidget extends StatelessWidget {
-  const FlRadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette});
+class RadarChartWidget extends StatelessWidget {
+  const RadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    // fl_chart asserts non-empty dataSets, so an empty series list
-    // (e.g. a Query returning nothing) renders the bordered empty box
-    // instead of crashing the whole render, mirroring the old painter's
-    // early return.
+    // An empty series list (e.g. a Query returning nothing) renders
+    // the bordered empty box instead of crashing the whole render.
     if (series.isEmpty) return _chartBox(height: 240, chart: const SizedBox.shrink());
-    // fl_chart asserts at least 3 radar entries per data set. A 1- or
-    // 2-axis radar is geometrically degenerate, so pad with zero
-    // entries (and empty titles) rather than crashing.
-    final axisCount = math.max(3, categories.length);
+    final all = [for (final s in series) _seriesValues(s)];
+    var maxV = 0.0;
+    for (final list in all) {
+      for (final v in list) {
+        maxV = math.max(maxV, v);
+      }
+    }
     return Container(
       height: 240,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -269,35 +686,17 @@ class FlRadarChartWidget extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            child: RadarChart(
-              RadarChartData(
-                dataSets: [
-                  for (var si = 0; si < series.length; si++)
-                    RadarDataSet(
-                      dataEntries: [
-                        for (var ci = 0; ci < axisCount; ci++) RadarEntry(value: ci < _seriesValues(series[si]).length ? _seriesValues(series[si])[ci] : 0),
-                      ],
-                      fillColor: _colorAt(palette, si).withValues(alpha: 0.25),
-                      borderColor: _colorAt(palette, si),
-                      borderWidth: 2,
-                    ),
-                ],
-                getTitle: (index, angle) => RadarChartTitle(text: index < categories.length ? categories[index] : ''),
-                radarShape: RadarShape.polygon,
-              ),
-            ),
+            child: SizedBox.expand(child: CustomPaint(painter: _RadarPainter(categories: categories, all: all, palette: palette, maxV: maxV))),
           ),
-          FlLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette),
+          ChartLegend(labels: [for (final s in series) s.stringOf('category')], palette: palette),
         ],
       ),
     );
   }
 }
 
-// ---------------- Radial (gauge rings) ----------------
-
-class FlRadialChartWidget extends StatelessWidget {
-  const FlRadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+class RadialChartWidget extends StatelessWidget {
+  const RadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
@@ -312,24 +711,8 @@ class FlRadialChartWidget extends StatelessWidget {
         children: [
           SizedBox(
             height: 180,
-            child: GaugeChart(
-              GaugeChartData(
-                minValue: 0,
-                maxValue: maxV,
-                startDegreeOffset: -90,
-                sweepAngle: 360,
-                defaultRingWidth: 10,
-                rings: [
-                  for (var i = 0; i < labels.length; i++)
-                    GaugeProgressRing(
-                      value: i < values.length ? values[i] : 0,
-                      color: _colorAt(palette, i),
-                      backgroundColor: Colors.grey.shade200,
-                      strokeCap: StrokeCap.round,
-                    ),
-                ],
-              ),
-            ),
+            width: double.infinity,
+            child: CustomPaint(painter: _RadialPainter(values: values, palette: palette, maxV: maxV)),
           ),
           for (var i = 0; i < labels.length; i++)
             Row(children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 6), Text('${labels[i]} (${i < values.length ? values[i] : 0})')]),
@@ -339,23 +722,15 @@ class FlRadialChartWidget extends StatelessWidget {
   }
 }
 
-// ---------------- Single stacked bar ----------------
-
-class FlStackedBarWidget extends StatelessWidget {
-  const FlStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+class SingleStackedBarWidget extends StatelessWidget {
+  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
     final total = values.fold<double>(0, (a, b) => a + b);
-    var running = 0.0;
-    final stack = <BarChartRodStackItem>[];
-    for (var i = 0; i < labels.length; i++) {
-      final v = i < values.length ? values[i] : 0;
-      stack.add(BarChartRodStackItem(running, running + v, _colorAt(palette, i)));
-      running += v;
-    }
+    final padded = [for (var i = 0; i < labels.length; i++) i < values.length ? values[i] : 0.0];
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -363,17 +738,7 @@ class FlStackedBarWidget extends StatelessWidget {
         children: [
           SizedBox(
             height: 48,
-            child: BarChart(
-              BarChartData(
-                barGroups: [BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: total == 0 ? 1 : total, rodStackItems: stack, width: 24)])],
-                alignment: BarChartAlignment.center,
-                maxY: total == 0 ? 1 : total,
-                titlesData: FlTitlesData(show: false),
-                gridData: FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                barTouchData: BarTouchData(enabled: false),
-              ),
-            ),
+            child: CustomPaint(painter: _StackedBarPainter(values: padded, palette: palette, total: total)),
           ),
           const SizedBox(height: 6),
           Wrap(
@@ -386,49 +751,12 @@ class FlStackedBarWidget extends StatelessWidget {
   }
 }
 
-// ---------------- Scatter ----------------
-
-class FlScatterChartWidget extends StatelessWidget {
-  const FlScatterChartWidget({required this.series, this.palette = _defaultPalette});
+class ScatterChartWidget extends StatelessWidget {
+  const ScatterChartWidget({required this.series, this.palette = _defaultPalette});
   final List<ElementNode> series;
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    // First pass: bounds and the largest z. A point's z scales its
-    // bubble (area proportional to z, as in a bubble chart); points
-    // without z keep the default radius.
-    final points = <({double x, double y, double? z, int si})>[];
-    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity, maxZ = 0.0;
-    for (var si = 0; si < series.length; si++) {
-      for (final p in series[si].nodesOf('points')) {
-        final x = p.numOf('x');
-        final y = p.numOf('y');
-        final z = p.props['z'] is num ? (p.props['z'] as num).toDouble() : null;
-        minX = math.min(minX, x);
-        maxX = math.max(maxX, x);
-        minY = math.min(minY, y);
-        maxY = math.max(maxY, y);
-        if (z != null) maxZ = math.max(maxZ, z);
-        points.add((x: x, y: y, z: z, si: si));
-      }
-    }
-    final spots = <ScatterSpot>[
-      for (final p in points)
-        ScatterSpot(
-          p.x,
-          p.y,
-          dotPainter: FlDotCirclePainter(
-            radius: p.z == null ? 6 : (maxZ > 0 ? 4 + 8 * math.sqrt(p.z! / maxZ) : 4),
-            color: _colorAt(palette, p.si),
-          ),
-        ),
-    ];
-    if (spots.isEmpty) {
-      minX = 0;
-      maxX = 1;
-      minY = 0;
-      maxY = 1;
-    }
     return Container(
       height: 240,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -437,24 +765,11 @@ class FlScatterChartWidget extends StatelessWidget {
       child: Column(
         children: [
           Expanded(
-            child: ScatterChart(
-              ScatterChartData(
-                scatterSpots: spots,
-                minX: minX,
-                maxX: maxX == minX ? minX + 1 : maxX,
-                minY: minY,
-                maxY: maxY == minY ? minY + 1 : maxY,
-                titlesData: FlTitlesData(show: false),
-                gridData: FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                scatterTouchData: ScatterTouchData(enabled: false),
-              ),
-            ),
+            child: SizedBox.expand(child: CustomPaint(painter: _ScatterPainter(layout: computeScatterLayout(series), palette: palette))),
           ),
-          FlLegend(labels: [for (final s in series) s.stringOf('name')], palette: palette),
+          ChartLegend(labels: [for (final s in series) s.stringOf('name')], palette: palette),
         ],
       ),
     );
   }
 }
-

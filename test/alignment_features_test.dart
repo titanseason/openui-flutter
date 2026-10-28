@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
@@ -67,7 +66,7 @@ void main() {
     );
     expect(find.text('组一'), findsOneWidget);
     expect(find.text('组二'), findsOneWidget);
-    expect(find.byType(fl.ScatterChart), findsNWidgets(2));
+    expect(find.byType(ScatterChartWidget), findsNWidgets(2));
   });
 
   testWidgets('Radial and SingleStackedBar read Slice nodes without values', (tester) async {
