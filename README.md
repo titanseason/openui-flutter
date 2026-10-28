@@ -1,6 +1,6 @@
 # openui_flutter
 
-纯 Dart 移植 OpenUI Lang（1.0 子集）+ Flutter 渲染器，无第三方依赖。
+纯 Dart 移植 OpenUI Lang（1.0 子集）+ Flutter 渲染器。包除 Flutter SDK 外只依赖一项第三方：Markdown 渲染用的 flutter_markdown_plus（见下方 Markdown 说明），其余组件均为自实现（图表为自绘 CustomPainter）。
 
 ## 定位
 
