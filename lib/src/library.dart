@@ -167,8 +167,8 @@ List<ComponentDef> _baseComponents() => [
         PropDef('subtitle', _s),
         PropDef('bold', _b, defaultValue: false),
       ]),
-      const ComponentDef('IconText', 'Icon plus title and optional subtitle. icon is a string name like "search" (React takes an Icon ref; this port keeps the string name). iconVariant: neutral/info/success/warning/danger/inverted/filled/soft; iconSize: xs/s/m/l/xl/sm/md/lg; layout: horizontal/vertical.', [
-        PropDef('icon', _s, required: true),
+      const ComponentDef('IconText', 'Icon plus title and optional subtitle. icon is an Icon node (React Icon ref) or a string name like "search". iconVariant: neutral/info/success/warning/danger/inverted/filled/soft; iconSize: xs/s/m/l/xl/sm/md/lg; layout: horizontal/vertical.', [
+        PropDef('icon', _any, required: true),
         PropDef('iconVariant', _s, defaultValue: 'neutral'),
         PropDef('iconSize', _s, defaultValue: 'm'),
         PropDef('title', _s, required: true),
@@ -202,37 +202,37 @@ List<ComponentDef> _baseComponents() => [
         PropDef('columns', _l, defaultValue: const []),
         PropDef('data', _l, defaultValue: const []),
       ]),
-      const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes. variant: grouped/stacked.', [
+      const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: grouped/stacked.', [
         PropDef('labels', _l, required: true),
-        PropDef('series', _nodes, required: true),
+        PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
       ]),
-      const ComponentDef('LineChart', 'Line chart: labels plus Series nodes. variant: linear/natural/step.', [
+      const ComponentDef('LineChart', 'Line chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step.', [
         PropDef('labels', _l, required: true),
-        PropDef('series', _nodes, required: true),
+        PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
       ]),
-      const ComponentDef('AreaChart', 'Area chart: labels plus Series nodes. variant: linear/natural/step.', [
+      const ComponentDef('AreaChart', 'Area chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step.', [
         PropDef('labels', _l, required: true),
-        PropDef('series', _nodes, required: true),
+        PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
       ]),
-      const ComponentDef('RadarChart', 'Radar chart: labels plus Series nodes.', [
+      const ComponentDef('RadarChart', 'Radar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema).', [
         PropDef('labels', _l, required: true),
-        PropDef('series', _nodes, required: true),
+        PropDef('series', _any, required: true),
       ]),
-      const ComponentDef('HorizontalBarChart', 'Horizontal bar chart: labels plus Series nodes. variant: grouped/stacked.', [
+      const ComponentDef('HorizontalBarChart', 'Horizontal bar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: grouped/stacked.', [
         PropDef('labels', _l, required: true),
-        PropDef('series', _nodes, required: true),
+        PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
@@ -259,14 +259,14 @@ List<ComponentDef> _baseComponents() => [
         PropDef('category', _s, required: true),
         PropDef('value', _n, required: true),
       ]),
-      const ComponentDef('ScatterChart', 'Scatter chart: datasets of ScatterSeries nodes.', [
-        PropDef('datasets', _nodes, required: true),
+      const ComponentDef('ScatterChart', 'Scatter chart: datasets of ScatterSeries nodes or plain {name, points} objects (React ScatterSeriesSchema).', [
+        PropDef('datasets', _any, required: true),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
       ]),
-      const ComponentDef('ScatterSeries', 'One scatter series: name and Point nodes.', [
+      const ComponentDef('ScatterSeries', 'One scatter series: name and Point nodes or plain {x, y, z?} objects (React PointSchema).', [
         PropDef('name', _s, required: true),
-        PropDef('points', _nodes, required: true),
+        PropDef('points', _any, required: true),
       ]),
       const ComponentDef('Point', 'One scatter point: x and y numbers, optional z scaling the bubble radius.', [
         PropDef('x', _n, required: true),
@@ -441,9 +441,9 @@ List<ComponentDef> _baseComponents() => [
         PropDef('buttons', _nodes, required: true),
         PropDef('direction', _s),
       ]),
-      const ComponentDef('IconButton', 'Icon button. name is used as the tooltip; icon is a string name like "search" (React takes an Icon ref; this port keeps the string name). variant: primary/secondary/tertiary; size: extra-small/small/medium/large; shape: square/circle.', [
+      const ComponentDef('IconButton', 'Icon button. name is used as the tooltip; icon is an Icon node (React Icon ref) or a string name like "search". variant: primary/secondary/tertiary; size: extra-small/small/medium/large; shape: square/circle.', [
         PropDef('name', _s, required: true),
-        PropDef('icon', _s, required: true),
+        PropDef('icon', _any, required: true),
         PropDef('action', _act),
         PropDef('variant', _s),
         PropDef('size', _s),

@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart' as fl;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
@@ -39,6 +40,34 @@ void main() {
   testWidgets('ChipItem icon accepts an Icon node', (tester) async {
     await _pump(tester, 'root = Stack([Chips("c", "multiple", [ChipItem("a", "A", Icon("no-such", "finance"))])])\n');
     expect(find.byWidgetPredicate((w) => w is Icon && w.icon == Icons.attach_money), findsOneWidget);
+  });
+
+  testWidgets('IconText and IconButton icons accept Icon nodes; strings still work', (tester) async {
+    await _pump(
+      tester,
+      'root = Stack([IconText(Icon("no-such", "finance"), "neutral", "m", "标题"), IconText("search", "neutral", "m", "标题二"), IconButton("tip", Icon("no-such", "finance"))])\n',
+    );
+    expect(find.byWidgetPredicate((w) => w is Icon && w.icon == Icons.attach_money), findsNWidgets(2));
+    expect(find.byWidgetPredicate((w) => w is Icon && w.icon == Icons.search), findsOneWidget);
+  });
+
+  testWidgets('BarChart accepts plain {category, values} series objects, mixed with nodes', (tester) async {
+    await _pump(
+      tester,
+      'root = Stack([BarChart(["一", "二"], [{"category": "甲系列", "values": [3, 5]}, Series("乙系列", [2, 4])])])\n',
+    );
+    expect(find.text('甲系列'), findsOneWidget);
+    expect(find.text('乙系列'), findsOneWidget);
+  });
+
+  testWidgets('ScatterChart accepts plain datasets and map points inside node datasets', (tester) async {
+    await _pump(
+      tester,
+      'root = Stack([ScatterChart([{"name": "组一", "points": [{"x": 1, "y": 2}, {"x": 3, "y": 4, "z": 10}]}]), ScatterChart([ScatterSeries("组二", [{"x": 1, "y": 2}])])])\n',
+    );
+    expect(find.text('组一'), findsOneWidget);
+    expect(find.text('组二'), findsOneWidget);
+    expect(find.byType(fl.ScatterChart), findsNWidgets(2));
   });
 
   testWidgets('Radial and SingleStackedBar read Slice nodes without values', (tester) async {

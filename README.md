@@ -1,12 +1,12 @@
 # openui_flutter
 
-Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖两项第三方：Markdown 渲染用的 flutter_markdown_plus，和图表用的 fl_chart（热力图/漏斗图/日历热力图没有 fl_chart 等价物，仍为自绘 CustomPainter；CodeBlock 为纯文本，无高亮依赖）。依赖与最低版本见下方“依赖”一节。
+Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖两项第三方：Markdown 渲染用的 flutter_markdown_plus，和图表用的 fl_chart；CodeBlock 为纯文本，无高亮依赖。依赖与最低版本见下方“依赖”一节。
 
 ## 定位
 
 - 不是官方 SDK 的搬运：官方目前只有 React / Vue / Svelte / Angular /
   React Native 等运行时，没有 Flutter/Dart 版。
-- 本包现已实现全部 86 个 GenUI 组件（以 @openuidev/react-ui 0.17.0
+- 本包现已实现全部 86 个 GenUI 组件（以 @openuidev/react-ui 0.18.1
   的名字去重清单为准：布局 13、内容 16、数据 21、表单 19、操作 3、
   对话引导 4、组合卡片 10），以及解析 OpenUI Lang 所必需的核心语义。
   最初的 25 个 MVP 组件是这 86 个的子集。组件名与
@@ -74,8 +74,7 @@ Markdown：标题、列表、表格、链接、引用、代码围栏、行内代
 ## 依赖
 
 - flutter_markdown_plus 1.0.12（Markdown 渲染；带入 markdown/args）。
-- fl_chart 1.3.0（全部常规图表；带入 equatable）。热力图、漏斗图、
-  日历热力图没有 fl_chart 等价物，仍为自绘 CustomPainter。
+- fl_chart 1.3.0（全部图表；带入 equatable）。
 - 最低版本：Flutter >= 3.27.4、Dart SDK ^3.6.2（均为 fl_chart 1.3.0
   的要求；包的声明值已跟着抬到这一档）。
 

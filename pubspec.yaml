@@ -1,5 +1,5 @@
 name: openui_flutter
-description: Flutter port of OpenUI Lang (1.0 subset) with a renderer for the 86-component GenUI library plus 9 extra charts. Markdown rendering uses flutter_markdown_plus.
+description: Flutter port of OpenUI Lang (1.0 subset) with a renderer for the 86-component GenUI library. Markdown rendering uses flutter_markdown_plus; charts use fl_chart.
 version: 1.0.0
 # TODO: replace these placeholder URLs with the real repository before
 # publishing to pub.dev. They are deliberately under .invalid (a

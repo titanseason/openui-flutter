@@ -618,9 +618,9 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'BarChart':
-        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'PieChart':
         final pie = _sliceData(node);
         return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
@@ -938,7 +938,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ],
         );
       case 'IconText':
-        // icon is a string name in this port (React takes an Icon ref).
+        // icon is an Icon node (React Icon ref) or a string name.
+        final iconTextData = _iconFromProp(node.props['icon']) ?? Icons.circle;
         final iconSize = switch (node.stringOf('iconSize', 'm')) {
           'xs' => 12.0,
           's' => 16.0,
@@ -959,10 +960,10 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           _ => Colors.grey.shade700,
         };
         final iconWidget = switch (iconVariant) {
-          'inverted' => Container(decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: Colors.white)),
-          'filled' => Container(decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: Colors.white)),
-          'soft' => Container(decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconByName(node.stringOf('icon')), size: iconSize, color: iconColor)),
-          _ => Icon(iconByName(node.stringOf('icon')), size: iconSize, color: iconColor),
+          'inverted' => Container(decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
+          'filled' => Container(decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
+          'soft' => Container(decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: iconColor)),
+          _ => Icon(iconTextData, size: iconSize, color: iconColor),
         };
         final iconTextBody = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1120,11 +1121,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ],
         );
       case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'RadarChart':
-        return RadarChartWidget(categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+        return RadarChartWidget(categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette);
       case 'HorizontalBarChart':
-        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['labels']), series: node.nodesOf('series'), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
+        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
       case 'RadialChart':
         final radial = _sliceData(node);
         return RadialChartWidget(labels: radial.labels, values: radial.values, palette: _theme.chartPalette);
@@ -1135,7 +1136,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return _LabeledChart(
           xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null,
           yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null,
-          child: ScatterChartWidget(series: node.nodesOf('datasets'), palette: _theme.chartPalette),
+          child: ScatterChartWidget(series: _datasetNodes(node.props['datasets']), palette: _theme.chartPalette),
         );
       case 'TagBlock':
         final tagSize = switch (node.stringOf('size', 'md')) {
@@ -1354,7 +1355,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         }
         return Wrap(spacing: 8, children: buttons);
       case 'IconButton':
-        // icon is a string name in this port (React takes an Icon ref);
+        // icon is an Icon node (React Icon ref) or a string name;
         // name is used as the tooltip.
         final iconButtonSize = switch (node.stringOf('size', 'medium')) {
           'extra-small' => 16.0,
@@ -1370,7 +1371,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         return Tooltip(
           message: node.stringOf('name'),
           child: IconButton(
-            icon: Icon(iconByName(node.stringOf('icon')), size: iconButtonSize),
+            icon: Icon(_iconFromProp(node.props['icon']) ?? Icons.circle, size: iconButtonSize),
             color: iconButtonColor,
             style: node.stringOf('shape', 'circle') == 'square' ? IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))) : null,
             onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']),
@@ -1642,6 +1643,80 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       labels: [for (final s in slices) s.stringOf('category')],
       values: [for (final s in slices) s.numOf('value')],
     );
+  }
+
+  /// Normalizes chart series data for the fl_chart widgets, which
+  /// only know ElementNodes. Series nodes pass through; plain
+  /// {category, values} objects (React's SeriesSchema) become
+  /// synthetic Series nodes with the same props. Nested lists (e.g.
+  /// @Each results, which the _nodes prop type used to flatten) are
+  /// flattened here instead, since these props are now _any.
+  List<ElementNode> _seriesNodes(Object? value) {
+    final out = <ElementNode>[];
+    void add(Object? item) {
+      if (item is List) {
+        for (final e in item) {
+          add(e);
+        }
+      } else if (item is ElementNode) {
+        out.add(item);
+      } else if (item is Map && item['category'] is String && item['values'] is List) {
+        out.add(ElementNode('Series', {
+          'category': item['category'] as String,
+          'values': [for (final n in item['values'] as List) if (n is num) n.toDouble()],
+        }, ''));
+      }
+    }
+
+    add(value);
+    return out;
+  }
+
+  /// Same idea for scatter points: Point nodes pass through, plain
+  /// {x, y, z?} objects (React's PointSchema) become synthetic Point
+  /// nodes.
+  List<ElementNode> _pointNodes(Object? value) {
+    final out = <ElementNode>[];
+    void add(Object? item) {
+      if (item is List) {
+        for (final e in item) {
+          add(e);
+        }
+      } else if (item is ElementNode) {
+        out.add(item);
+      } else if (item is Map && item['x'] is num && item['y'] is num) {
+        final props = <String, Object?>{'x': (item['x'] as num).toDouble(), 'y': (item['y'] as num).toDouble()};
+        if (item['z'] is num) props['z'] = (item['z'] as num).toDouble();
+        out.add(ElementNode('Point', props, ''));
+      }
+    }
+
+    add(value);
+    return out;
+  }
+
+  /// Scatter datasets normalized to ScatterSeries nodes. Both nodes
+  /// and plain {name, points} objects (React's ScatterSeriesSchema)
+  /// are rebuilt, so map points inside a node dataset are normalized
+  /// too; the name falls back to `label` for old programs.
+  List<ElementNode> _datasetNodes(Object? value) {
+    final out = <ElementNode>[];
+    void add(Object? item) {
+      if (item is List) {
+        for (final e in item) {
+          add(e);
+        }
+      } else if (item is ElementNode) {
+        final name = item.props['name'] is String ? item.stringOf('name') : (item.props['label'] is String ? item.stringOf('label') : '');
+        out.add(ElementNode('ScatterSeries', {'name': name, 'points': _pointNodes(item.props['points'])}, ''));
+      } else if (item is Map) {
+        final name = item['name'] is String ? item['name'] as String : (item['label'] is String ? item['label'] as String : '');
+        out.add(ElementNode('ScatterSeries', {'name': name, 'points': _pointNodes(item['points'])}, ''));
+      }
+    }
+
+    add(value);
+    return out;
   }
 
   /// Object props arrive as Map<dynamic, dynamic> from the Lang

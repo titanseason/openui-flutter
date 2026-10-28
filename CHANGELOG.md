@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- React 0.18.1 full alignment (general library): `IconText` and
+  `IconButton` `icon` accept an Icon node (React Icon ref) as
+  well as the string name shorthand, completing the icon-ref
+  alignment started with `Tag`/`ChipItem`; chart `series` /
+  `datasets` / `points` accept plain objects (React's
+  SeriesSchema / ScatterSeriesSchema / PointSchema) as well as
+  nodes — maps are normalized to synthetic nodes at the renderer
+  boundary, so the fl_chart widgets are unchanged. README
+  dependency statements corrected to the actual pubspec
+  (flutter_markdown_plus + fl_chart, no self-drawn charts left)
+  and the pubspec description no longer claims 9 extra charts.
 - React 0.18.1 full alignment (general library), feature
   completion: `DatePicker` `mode` `"range"` now uses
   `showDateRangePicker` and stores a `{from, to}` map of
