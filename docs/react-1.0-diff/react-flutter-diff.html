@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>React 0.18.1 vs Flutter port — full diff (schema-level)</title>
+<style>body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;max-width:1080px;margin:0 auto;padding:24px 20px 48px;color:#1a1a1a;line-height:1.6}h1{font-size:24px}h2{font-size:20px;margin-top:36px;border-bottom:2px solid #eee;padding-bottom:6px}h3{font-size:16px;margin-top:24px}table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f4f4f4}code{background:#f4f4f4;padding:1px 4px;border-radius:3px;font-size:13px}ul{padding-left:20px}</style>
+</head>
+<body>
+<h1>React 0.18.1 vs Flutter port — full diff (schema-level, definitive)</h1>
+<ul><li><strong>Fetch date:</strong> 2026-10-28 (source read; earlier web-only round same day).</li><li><strong>React side:</strong> Lang 1.0 spec + <code>@openuidev/react-ui</code> 0.18.1, repo</li></ul>
+<p><code>thesysdev/openui</code>, HEAD <code>f08a660535e55b5b2a24a0eb68568edaf9e4fe4b</code>. Basis document: <code>react-source-props.md</code> in this directory — every React prop below is read from <code>packages/react-ui/src/genui-lib</code> source (Zod schemas + <code>defineComponent</code> names), not from docs examples.</p>
+<ul><li><strong>Flutter side:</strong> <code>openui_flutter</code> 1.0.0, local git <code>main</code> HEAD <code>9b22cd8</code>,</li></ul>
+<p>95 components. Basis document: <code>flutter-inventory.md</code> in this directory.</p>
+<ul><li><strong>Step 1 result (superseded):</strong> the earlier web-only round (6 searches +</li></ul>
+<p>2 page fetches) could not reach the genui-lib source and left 73 components &quot;unverifiable&quot;. That caveat is now REPLACED: the source was read directly from a local sparse checkout of genui-lib, and §d gives a schema-level verdict for every component. Nothing in this report invents a React prop; the few things the checkout could not establish are listed per item in §4 of <code>react-source-props.md</code> and in &quot;Remaining caveats&quot; below.</p>
+<h2>Headline counts</h2>
+<table><tr><th>Measure</th><th>Count</th></tr>
+<tr><td>React registered GenUI names (source, union of both libraries)</td><td><strong>86</strong></td></tr>
+<tr><td>General library (<code>openuiLibrary</code>, root <code>Stack</code>)</td><td>82</td></tr>
+<tr><td>Chat library (<code>openuiChatLibrary</code>, root <code>Card</code>)</td><td>84</td></tr>
+<tr><td>Flutter components total</td><td>95</td></tr>
+<tr><td>(a) React GenUI names missing from Flutter</td><td><strong>11</strong> (1 casing + 10 Card-suffix names)</td></tr>
+<tr><td>(b) Flutter-only components</td><td><strong>20</strong> (11 renamed variants of React names + 9 extras)</td></tr>
+<tr><td>(c) Confirmed name mismatches</td><td><strong>11</strong> (same 11 as (a); no unresolved alias groups remain)</td></tr>
+<tr><td>(d) Schema-verified exact props parity</td><td><strong>7 of 86</strong></td></tr>
+<tr><td>(d) Schema-verified positional parity with a name-only difference</td><td><strong>3 of 86</strong></td></tr>
+<tr><td>(d) Partially verified (Icon: name confirmed, full schema not in checkout)</td><td>1</td></tr>
+<tr><td>(d) With props gaps / shape differences</td><td><strong>75 of 86</strong></td></tr>
+<tr><td>(d) Props unverifiable from the checkout</td><td><strong>0</strong> (except Icon&#x27;s <code>category</code> detail)</td></tr>
+<tr><td>(d) Host primitives with verified default divergence (not GenUI)</td><td>2 (<code>Skeleton</code>, <code>TableSkeleton</code>)</td></tr>
+<tr><td>(e) Flutter-internal notes carried over</td><td>F1–F7 + 12 parent-read components</td></tr>
+</table>
+<p>Reading rule: verdicts compare <strong>schema declaration order</strong> (React) with <strong>declaration order</strong> (Flutter), because Lang calls in the repo&#x27;s own notes are positional in schema order (<code>Tag(t.priority, null, &quot;sm&quot;)</code> = text/icon/size, <code>Col(&quot;Sales&quot;, sales, &quot;number&quot;)</code> = label/data/type, <code>Callout(&quot;success&quot;, &quot;Saved&quot;, &quot;Done.&quot;, $showSuccess)</code> = variant/title/description/visible, `Form(&quot;edit&quot;, Buttons(...), [fields...])` = name/buttons/fields). Verdict codes: <strong>P</strong> = exact parity (same slots, order, requiredness, defaults); <strong>N</strong> = same slots and order, only the prop NAME differs (a positional program still works); <strong>G</strong> = gap (React props Flutter lacks, or a requiredness mismatch); <strong>S</strong> = shape difference (different prop structure, types, or semantics — a positional program does NOT port as written); <strong>O</strong> = same props, different ORDER; <strong>X</strong> = Flutter has a prop React lacks (listed separately). A row can carry several codes.</p>
+<h2>(f) Version-baseline correction — read first</h2>
+<p><strong>&quot;react-ui 1.0&quot; is wrong.</strong> The &quot;1.0&quot; belongs to the language, not the component package:</p>
+<table><tr><th>Piece</th><th>Version</th></tr>
+<tr><td>OpenUI Lang (spec, updated 2026-10-26)</td><td>1.0</td></tr>
+<tr><td><code>@openuidev/lang-core</code> / <code>@openuidev/react-lang</code></td><td>1.0.1</td></tr>
+<tr><td><code>@openuidev/react-ui</code> (npm <code>latest</code>, jsDelivr, package README)</td><td><strong>0.18.1</strong></td></tr>
+</table>
+<p>The 0.18 README itself says &quot;react-ui 0.18 renders OpenUI Lang 1.0&quot;. Any statement of the form &quot;react-ui 1.0&quot; should be corrected to &quot;react-ui 0.18.1 rendering Lang 1.0&quot;.</p>
+<p>**0.17.0 → 0.18.1 component delta: the count was right, the identifiers were wrong.** The registered 0.18.1 set is 86 names — coincidentally the same count as the carried-over 0.17 baseline — but 11 of the baseline&#x27;s identifiers do not exist in source (see §a/§c). Whether those 11 are 0.18 renames or were already the 0.17 GenUI names cannot be established from this checkout (no 0.17 source in it); what IS established is that the earlier report&#x27;s &quot;0 missing&quot; verdict falls, because it was measured against the wrong identifiers. What is established for 0.18 as runtime (not component) change: lone action form, custom functions (<code>defineFunction</code>) and custom actions (<code>defineAction</code>), <code>library.extend</code> (add / override / remove), stored-message format (<code>]]&gt;openui:</code> markers), new error codes <code>unknown-function</code> and <code>no-root</code>, <code>action()</code> replacing `tagSchemaId(z.any(), &quot;ActionExpression&quot;)`, React 19 + react-lang 1.x peer deps.</p>
+<h2>(a) In React 0.18.1 but MISSING from Flutter — 11</h2>
+<p>Every missing name is a name Flutter spells differently, not a concept Flutter lacks. A Lang program written for React using any of these 11 identifiers fails in Flutter with <code>unknown-component</code>, and vice versa.</p>
+<table><tr><th>Name</th><th>Library (React)</th><th>Flutter&#x27;s (non-matching) spelling</th></tr>
+<tr><td><code>MarkDownRenderer</code></td><td>both</td><td><code>MarkdownRenderer</code> (capital D lost)</td></tr>
+<tr><td><code>SnippetCardBlock</code> / <code>SnippetCardItem</code></td><td>both</td><td><code>SnippetBlock</code> / <code>SnippetItem</code></td></tr>
+<tr><td><code>OverviewCardBlock</code> / <code>OverviewCardItem</code></td><td>both</td><td><code>OverviewBlock</code> / <code>OverviewItem</code></td></tr>
+<tr><td><code>ContextCardBlock</code> / <code>ContextCardItem</code></td><td>both</td><td><code>ContextBlock</code> / <code>ContextItem</code></td></tr>
+<tr><td><code>CompositeCardBlock</code> / <code>CompositeCardItem</code></td><td>both</td><td><code>CompositeBlock</code> / <code>CompositeItem</code></td></tr>
+<tr><td><code>VisualCardBlock</code> / <code>VisualCardItem</code></td><td>both</td><td><code>VisualBlock</code> / <code>VisualItem</code></td></tr>
+</table>
+<p>Not missing (corrections to the earlier report): <code>SegmentedBar</code> is not a GenUI name at all (zero hits in the checkout); <code>SingleStackedBar</code> is only the underlying chart widget imported from outside genui-lib, not a Lang-invocable name. <code>SourceFaviconImage</code>, <code>ToolCall</code>, <code>ToolResult</code>, <code>AgentInterface</code> are not GenUI registrations either. <code>BarChart</code> / <code>LineChart</code> / <code>AreaChart</code> ARE registered — via the <code>*Condensed.ts</code> files, which register the short names (see §b).</p>
+<h3>Library-membership note (not a missing component, but a parity gap)</h3>
+<p>React ships <strong>two</strong> libraries: <code>openuiLibrary</code> (root <code>Stack</code>, full suite except FollowUp/Section) and <code>openuiChatLibrary</code> (root <code>Card</code>, chat-optimized; excludes <code>Stack</code> and <code>Modal</code>, includes <code>FollowUpBlock</code>, <code>FollowUpItem</code>, <code>SectionBlock</code>, <code>SectionItem</code>). Flutter ships <strong>one</strong> merged library, <code>openUIStandardLibrary()</code>, containing all 95 names. So a Flutter program may combine <code>Stack</code> with <code>FollowUpBlock</code> in one tree, which neither React library accepts, and Flutter has no chat-<code>Card</code> variant (no <code>sources</code> prop) and no general-<code>Card</code> variant (no <code>variant</code> or flex props). No component is missing on membership grounds, but the library-membership boundary is not preserved.</p>
+<h2>(b) In Flutter but NOT in React&#x27;s GenUI library — 20</h2>
+<p><strong>11 renamed variants</strong> (same concept, wrong identifier — see §a): <code>MarkdownRenderer</code>, <code>SnippetBlock</code>, <code>SnippetItem</code>, <code>OverviewBlock</code>, <code>OverviewItem</code>, <code>ContextBlock</code>, <code>ContextItem</code>, <code>CompositeBlock</code>, <code>CompositeItem</code>, <code>VisualBlock</code>, <code>VisualItem</code>.</p>
+<p><strong>9 extras</strong> (Flutter-only as Lang-invocable components):</p>
+<table><tr><th>Flutter component</th><th>React status (source)</th><th>Flutter props</th></tr>
+<tr><td><code>BarChartCondensed</code></td><td>NOT a GenUI name — <code>BarChartCondensed.ts</code> registers <code>BarChart</code></td><td>categories\<em>, series\</em></td></tr>
+<tr><td><code>LineChartCondensed</code></td><td>NOT a GenUI name — <code>LineChartCondensed.ts</code> registers <code>LineChart</code></td><td>categories\<em>, series\</em></td></tr>
+<tr><td><code>AreaChartCondensed</code></td><td>NOT a GenUI name — <code>AreaChartCondensed.ts</code> registers <code>AreaChart</code></td><td>categories\<em>, series\</em></td></tr>
+<tr><td><code>HeatmapChart</code></td><td>No GenUI registration (zero hits in checkout)</td><td>categories\<em>, series\</em></td></tr>
+<tr><td><code>FunnelChart</code></td><td>No GenUI registration (zero hits in checkout)</td><td>slices\*</td></tr>
+<tr><td><code>CalendarHeatmap</code></td><td>No GenUI registration (zero hits in checkout)</td><td>values\*</td></tr>
+<tr><td><code>MiniBarChart</code></td><td>No GenUI registration (zero hits in checkout)</td><td>values\*</td></tr>
+<tr><td><code>MiniLineChart</code></td><td>No GenUI registration (zero hits in checkout)</td><td>values\*</td></tr>
+<tr><td><code>StackedLegend</code></td><td>No GenUI registration (zero hits in checkout)</td><td>series\*</td></tr>
+</table>
+<p><code>\*</code> = required in Flutter. Whether the last six exist as non-GenUI UI primitives under <code>packages/react-ui/src/components</code> could NOT be checked from the sparse checkout (that directory is outside it) — the claim here is only about GenUI registration, not about their existence as widgets.</p>
+<h2>(c) Name mismatches — all resolved, none left open</h2>
+<table><tr><th>Question</th><th>Verdict</th><th>Evidence (source)</th></tr>
+<tr><td><code>MarkDownRenderer</code> vs <code>MarkdownRenderer</code></td><td><strong>Confirmed mismatch</strong></td><td><code>defineComponent({ name: &quot;MarkDownRenderer&quot; })</code>, schema prop <code>textMarkdown</code>. Flutter registers <code>MarkdownRenderer</code>.</td></tr>
+<tr><td><code>SnippetBlock</code> vs <code>SnippetCardBlock</code> (+ 4 sibling block/item pairs)</td><td><strong>Confirmed mismatch (10 names)</strong></td><td>Registered names keep the <code>Card</code> suffix in all five block schemas and all five item <code>defineComponent</code> calls. The earlier &quot;GenUI-facing names govern (short)&quot; claim is contradicted by source.</td></tr>
+<tr><td><code>SingleStackedBarChart</code> vs <code>SingleStackedBar</code> / <code>SegmentedBar</code></td><td><strong>Resolved: <code>SingleStackedBarChart</code> is the registered name</strong></td><td><code>Charts/SingleStackedBarChart.ts</code> registers <code>SingleStackedBarChart</code>; <code>SingleStackedBar</code> is only the imported widget; <code>SegmentedBar</code> has zero hits. Flutter&#x27;s name matches; its SHAPE does not (see §d).</td></tr>
+<tr><td>Are the 9 extras in React&#x27;s GenUI library?</td><td><strong>Resolved: no</strong></td><td>No registration for any of the 9 names in either library file or any schema (see §b).</td></tr>
+<tr><td>Chat-variant components</td><td><strong>Resolved</strong></td><td>Chat <code>Card</code>/<code>Tabs</code>/<code>TabItem</code>/<code>Accordion</code>/<code>AccordionItem</code>/<code>Carousel</code>/<code>SectionBlock</code>/<code>SectionItem</code> are separate definitions under the same names with wider content unions; general <code>Tabs</code>/<code>Accordion</code>/<code>Carousel</code> use the base union. Flutter&#x27;s single variants match neither (see §d).</td></tr>
+</table>
+<h2>(d) Props comparison — schema level, all 86 React names</h2>
+<p>Flutter props are from <code>flutter-inventory.md</code> (HEAD <code>9b22cd8</code>). &quot;React&quot; below is the schema in <code>react-source-props.md</code> §2, in declaration order. For the 11 renamed components the Flutter counterpart is the short/casing variant.</p>
+<table><tr><th>Component</th><th>React props (schema order)</th><th>Flutter props</th><th>Verdict</th></tr>
+<tr><td>Stack (general only)</td><td>children\*, direction?, gap?, align?, justify?, wrap?</td><td>children\*</td><td>G (5 flex props missing — D1 settled)</td></tr>
+<tr><td>Card (general)</td><td>children\*, variant?, + flex props</td><td>children\*</td><td>G (variant + 5 flex missing)</td></tr>
+<tr><td>Card (chat)</td><td>children\*, sources?</td><td>children\*</td><td>G (sources missing; no chat variant at all)</td></tr>
+<tr><td>Tabs</td><td>items\*</td><td>items\*</td><td>P</td></tr>
+<tr><td>TabItem</td><td>value\<em>, trigger\</em>, content\*</td><td>label\<em>, children\</em></td><td>S (D2 settled)</td></tr>
+<tr><td>Accordion</td><td>items\*</td><td>items\*</td><td>P</td></tr>
+<tr><td>AccordionItem</td><td>value\<em>, trigger\</em>, content\*</td><td>label\<em>, children\</em></td><td>S (D2 settled)</td></tr>
+<tr><td>Steps</td><td>items\*</td><td>items\*</td><td>P</td></tr>
+<tr><td>StepsItem</td><td>title\<em>, details\</em></td><td>label\*, children?</td><td>S (strings vs label+nodes)</td></tr>
+<tr><td>Carousel</td><td>children\* (array of slide arrays), variant?</td><td>children\* (flat node list)</td><td>S + G (nested slides; variant missing)</td></tr>
+<tr><td>Separator</td><td>orientation?, decorative?</td><td>—</td><td>G (2 optional missing)</td></tr>
+<tr><td>Modal (general only)</td><td>title\<em>, open?, children\</em>, size?</td><td>title?, children\*</td><td>G (title required→optional; open/size missing)</td></tr>
+<tr><td>SectionBlock (chat only)</td><td>sections\*, isFoldable?</td><td>title?, items\*</td><td>S + X (title extra; sections→items; isFoldable missing)</td></tr>
+<tr><td>SectionItem (chat only)</td><td>value\<em>, trigger\</em>, content\*</td><td>label\*, children?</td><td>S</td></tr>
+<tr><td>CardHeader</td><td>title?, subtitle?</td><td>title\*, subtitle</td><td>G (title required in Flutter, optional in React)</td></tr>
+<tr><td>TextContent</td><td>text\*, size? (small/default/large/small-heavy/large-heavy)</td><td>text\*, variant=&#x27;normal&#x27;</td><td>G (size→variant name; value set differs: no &#x27;normal&#x27; in React; small-heavy/large-heavy/default missing)</td></tr>
+<tr><td>Text</td><td>variant=&#x27;text&#x27;, value\*, subtext?, subtextVariant=&#x27;text&#x27;, size=&#x27;sm&#x27;</td><td>text\*</td><td>S (core prop is <code>value</code>, not <code>text</code>; variant/subtext/size missing; see positional caveat)</td></tr>
+<tr><td>BoldText</td><td>variant=&#x27;text&#x27;, value\*, subtext?, subtextVariant=&#x27;text&#x27;, size=&#x27;sm&#x27;</td><td>text\*</td><td>S (same as Text)</td></tr>
+<tr><td>MarkDownRenderer</td><td>textMarkdown\*, variant? (clear/card/sunk)</td><td>text\* (as <code>MarkdownRenderer</code>)</td><td>G + name (textMarkdown→text; variant missing; casing §c)</td></tr>
+<tr><td>Callout</td><td>variant\<em>, title\</em>, description\*, visible?</td><td>text\*, variant=&#x27;info&#x27;</td><td>S (title+description vs single text; variant required vs defaulted; visible missing)</td></tr>
+<tr><td>TextCallout</td><td>variant?, title?, description?</td><td>text\*, variant=&#x27;info&#x27;</td><td>S (all-optional triple vs required text)</td></tr>
+<tr><td>Image</td><td>alt\*, src?</td><td>src\*, alt</td><td>G + O (requiredness swapped: alt required/src optional in React; order swapped)</td></tr>
+<tr><td>ImageBlock</td><td>src\*, alt?</td><td>src\*, caption?</td><td>G + X (alt missing; caption extra)</td></tr>
+<tr><td>ImageGallery</td><td>images\<em> (array of {src\</em>, alt?, details?})</td><td>images\* (list of strings)</td><td>S (element type: objects vs strings)</td></tr>
+<tr><td>ImageText</td><td>src\<em>, alt?, title\</em>, subtitle?, bold=false, layout=&#x27;horizontal&#x27;, imageSize?</td><td>src\<em>, text\</em></td><td>S (title/subtitle vs single text; alt/bold/layout/imageSize missing)</td></tr>
+<tr><td>ImageTextLarge</td><td>src\<em>, alt?, title\</em>, subtitle?, bold=false</td><td>src\<em>, text\</em></td><td>S (same pattern)</td></tr>
+<tr><td>IconText</td><td>icon\<em> (Icon ref), iconVariant=&#x27;neutral&#x27;, iconSize=&#x27;m&#x27;, title\</em>, subtitle?, bold=false, layout=&#x27;horizontal&#x27;</td><td>icon\<em> (string name), text\</em></td><td>S (icon is an Icon ref, not a string; title/subtitle vs text; 4 props missing)</td></tr>
+<tr><td>CodeBlock</td><td>language\<em>, codeString\</em></td><td>code\*, language?</td><td>O + G (order swapped; language required→optional; codeString→code)</td></tr>
+<tr><td>InlineHeader</td><td>heading\*, description?</td><td>text\*</td><td>S (heading+description vs text)</td></tr>
+<tr><td>Icon</td><td>name\*, category?</td><td>name\*</td><td>Partial (name matches; <code>category</code> exact schema not in checkout)</td></tr>
+<tr><td>Table</td><td>columns\* (Col refs)</td><td>columns\*</td><td>P</td></tr>
+<tr><td>Col</td><td>label\<em>, data\</em> (any), type? (string/number/action)</td><td>label\<em>, values\</em></td><td>G + name (data→values; type missing — D3 settled)</td></tr>
+<tr><td>EditableTable</td><td>name=&#x27;&#x27;, columns=[] ({type, key, header, width?, options?}), data=[] ({id, values}) — all defaulted</td><td>columns\* (Col nodes), bind?</td><td>S (name+column-defs+data-rows vs Col nodes+bind)</td></tr>
+<tr><td>BarChart</td><td>labels\<em>, series\</em>, variant? (grouped/stacked), xLabel?, yLabel?, height?</td><td>categories\<em>, series\</em></td><td>G + name (labels→categories; variant/xLabel/yLabel/height missing)</td></tr>
+<tr><td>LineChart</td><td>labels\<em>, series\</em>, variant? (linear/natural/step), xLabel?, yLabel?, height?</td><td>categories\<em>, series\</em></td><td>G + name</td></tr>
+<tr><td>AreaChart</td><td>labels\<em>, series\</em>, variant? (linear/natural/step), xLabel?, yLabel?, height?</td><td>categories\<em>, series\</em></td><td>G + name</td></tr>
+<tr><td>RadarChart</td><td>labels\<em>, series\</em></td><td>categories\<em>, series\</em></td><td>N (labels→categories only)</td></tr>
+<tr><td>HorizontalBarChart</td><td>labels\<em>, series\</em>, variant? (grouped/stacked), xLabel?, yLabel?</td><td>categories\<em>, series\</em></td><td>G + name</td></tr>
+<tr><td>Series</td><td>category\<em>, values\</em> (number[])</td><td>label\<em>, values\</em></td><td>N (category→label only)</td></tr>
+<tr><td>PieChart</td><td>labels\<em> (string[]), values\</em> (number[]), variant? (pie/donut), appearance? (circular/semiCircular)</td><td>slices\* (Slice nodes)</td><td>S (labels+values arrays vs Slice nodes; variant/appearance missing)</td></tr>
+<tr><td>RadialChart</td><td>labels\<em>, values\</em></td><td>slices\*</td><td>S</td></tr>
+<tr><td>SingleStackedBarChart</td><td>labels\<em>, values\</em></td><td>slices\*</td><td>S (name matches; shape does not)</td></tr>
+<tr><td>Slice</td><td>category\<em>, value\</em></td><td>label\<em>, value\</em></td><td>N (category→label only)</td></tr>
+<tr><td>ScatterChart</td><td>datasets\* (ScatterSeriesSchema[]), xLabel?, yLabel?</td><td>series\* (ScatterSeries nodes)</td><td>S + name (datasets→series; schema objects vs component nodes; xLabel/yLabel missing)</td></tr>
+<tr><td>ScatterSeries</td><td>name\<em>, points\</em> (PointSchema[])</td><td>label\<em>, points\</em> (Point nodes)</td><td>S + name (name→label; schema objects vs component nodes)</td></tr>
+<tr><td>Point</td><td>x\<em>, y\</em>, z?</td><td>x\<em>, y\</em></td><td>G (z missing)</td></tr>
+<tr><td>TagBlock</td><td>tags\* (string[]), size? (sm/md/lg)</td><td>items\* (Tag nodes)</td><td>S (strings vs Tag nodes; size missing)</td></tr>
+<tr><td>Tag</td><td>text\*, icon? (Icon ref), size? (sm/md/lg), variant? (neutral/info/success/warning/danger)</td><td>label\*, icon? (string)</td><td>G + name + type (text→label; icon ref vs string; size/variant missing — D4 settled)</td></tr>
+<tr><td>EntityList</td><td>rows\<em> ({left\</em>, right\*, rightVariant=&#x27;text&#x27;}), size=&#x27;default&#x27;, header?, footer?</td><td>items\* (string list)</td><td>S (row objects vs strings; size/header/footer missing)</td></tr>
+<tr><td>MetricIndicatorInline</td><td>value\* (string), subtext?, trend? ({direction, value})</td><td>label\<em>, value\</em> (any), change?</td><td>S + X (no label in React; subtext/trend vs change)</td></tr>
+<tr><td>MetricIndicatorWithStrikethrough</td><td>value\*, subtext?, previousValue?, trend?</td><td>label\<em>, value\</em>, oldValue?</td><td>G + name + X (previousValue→oldValue; label extra; subtext/trend missing)</td></tr>
+<tr><td>Form</td><td>name\<em>, buttons\</em> (Buttons ref), fields=[] (FormControl refs)</td><td>children\*</td><td>S (D5 settled)</td></tr>
+<tr><td>FormControl</td><td>label\<em>, input\</em> (union of 9 field refs; NO SwitchGroup), hint?</td><td>label\<em>, children\</em>, hint?</td><td>S (single field ref vs any children; SwitchGroup excluded in React)</td></tr>
+<tr><td>Label</td><td>text\*</td><td>text\*</td><td>P</td></tr>
+<tr><td>Input</td><td>name\*, placeholder?, type? (text/email/password/number/url), rules?, value? (reactive string)</td><td>label\*, bind?, value?, placeholder?</td><td>S (name-based vs label+bind; type/rules missing — D2 settled)</td></tr>
+<tr><td>TextArea</td><td>name\*, placeholder?, rows?, rules?, value? (reactive string)</td><td>label\*, bind?, value?, placeholder?</td><td>S (rows/rules missing; name vs label+bind)</td></tr>
+<tr><td>Select</td><td>name\<em>, items\</em> (SelectItem refs), placeholder?, rules?, value? (reactive string), size? (small/medium/large)</td><td>options\*, bind?</td><td>S (name/items vs options/bind; placeholder/rules/value/size missing)</td></tr>
+<tr><td>SelectItem</td><td>value\<em>, label\</em></td><td>label\*, value?</td><td>O + G (order swapped; value required→optional)</td></tr>
+<tr><td>DatePicker</td><td>name\*, mode? (single/range), rules?, value? (reactive unknown)</td><td>label\*, bind?, value? (string)</td><td>S (mode/rules missing; name vs label+bind)</td></tr>
+<tr><td>Slider</td><td>name\<em>, variant\</em> (continuous/discrete), min\<em>, max\</em>, step?, defaultValue? (number[]), label?, rules?, value? (reactive number[])</td><td>label\*, bind?, value? (number), min=0, max=100</td><td>S (value scalar vs array; variant required missing; min/max required vs defaulted; name vs bind)</td></tr>
+<tr><td>CheckBoxGroup</td><td>name\<em>, items\</em>, rules?, value? (reactive record&lt;string,boolean&gt;)</td><td>items\*, bind?</td><td>S (name vs bind; rules missing)</td></tr>
+<tr><td>CheckBoxItem</td><td>label\<em>, description\</em>, name\*, defaultChecked?</td><td>label\*, value?</td><td>S (description+name vs value; defaultChecked missing)</td></tr>
+<tr><td>RadioGroup</td><td>name\<em>, items\</em>, defaultValue?, rules?, value? (reactive string)</td><td>items\*, bind?</td><td>S (name vs bind; defaultValue/rules missing)</td></tr>
+<tr><td>RadioItem</td><td>label\<em>, description\</em>, value\*</td><td>label\*, value?</td><td>G (description missing; value required→optional)</td></tr>
+<tr><td>SwitchGroup</td><td>name\<em>, items\</em>, variant? (clear/card/sunk), value? (reactive record)</td><td>items\*, bind?</td><td>S (name vs bind; variant missing)</td></tr>
+<tr><td>SwitchItem</td><td>label?, description?, name\*, defaultChecked?</td><td>label\*, value?</td><td>S (name-based vs label+value)</td></tr>
+<tr><td>Chips</td><td>name\*, type=&#x27;multiple&#x27;, items=[], rules?, defaultValue? (string\</td><td>string[])</td><td>items\*, bind?</td><td>S (name/type/defaultValue vs bind)</td></tr>
+<tr><td>ChipItem</td><td>value\<em>, label\</em>, icon? (Icon ref), disabled?</td><td>label\*, value?</td><td>O + G (order swapped; icon/disabled missing)</td></tr>
+<tr><td>OptionCards</td><td>name\*, type=&#x27;single&#x27;, items=[], rules?, defaultValue?</td><td>items\*, bind?</td><td>S (name/type/defaultValue vs bind)</td></tr>
+<tr><td>OptionCard</td><td>value\<em>, title\</em>, subtitle?, topContent? (Icon\</td><td>Image ref), disabled?</td><td>label\*, value?, description?</td><td>S (value-first; title/subtitle/topContent vs label/description)</td></tr>
+<tr><td>Button</td><td>label\*, action?, variant? (primary/secondary/tertiary), type? (normal/destructive), size? (extra-small/small/medium/large)</td><td>label\*, action?</td><td>G (variant/type/size missing)</td></tr>
+<tr><td>Buttons</td><td>buttons\* (Button refs), direction? (row/column)</td><td>children\* (node list)</td><td>G + name (buttons→children; direction missing)</td></tr>
+<tr><td>IconButton</td><td>name\<em>, icon\</em> (Icon ref), action?, variant?, size?, shape? (square/circle)</td><td>icon\* (string), action?</td><td>S (name missing; icon ref vs string; variant/size/shape missing)</td></tr>
+<tr><td>FollowUpBlock (chat only)</td><td>items\*</td><td>items\*</td><td>P</td></tr>
+<tr><td>FollowUpItem (chat only)</td><td>text\*</td><td>text\*</td><td>P</td></tr>
+<tr><td>ListBlock</td><td>items\*, variant? (number/image), size? (default/small)</td><td>items\*</td><td>G (variant/size missing)</td></tr>
+<tr><td>ListItem</td><td>title\<em>, subtitle?, image? ({src\</em>, alt\*}), actionLabel?, action?</td><td>text\*</td><td>S (title/subtitle/image/action vs single text)</td></tr>
+<tr><td>SnippetCardBlock</td><td>items\* (min 2), layout=&#x27;grid&#x27;, responsive=true, action?, gap?</td><td>title?, items\* (as <code>SnippetBlock</code>)</td><td>G + X + name (title extra; layout/responsive/action/gap missing)</td></tr>
+<tr><td>SnippetCardItem</td><td>id?, lhs\* (IconText\</td><td>ImageText), rhs? (Text\</td><td>BoldText)</td><td>text\*, action? (as <code>SnippetItem</code>)</td><td>S + name (lhs/rhs slots vs text/action)</td></tr>
+<tr><td>OverviewCardBlock</td><td>items\* (min 2), layout=&#x27;grid&#x27;, responsive=true, action?, gap?</td><td>title?, items\* (as <code>OverviewBlock</code>)</td><td>G + X + name</td></tr>
+<tr><td>OverviewCardItem</td><td>id?, top\* (IconText\</td><td>ImageText\</td><td>Text), bottom? (MetricIndicatorInline)</td><td>text\*, action? (as <code>OverviewItem</code>)</td><td>S + name</td></tr>
+<tr><td>ContextCardBlock</td><td>items\* (min 2), layout=&#x27;grid&#x27;, responsive=true, action?, gap?</td><td>title?, items\* (as <code>ContextBlock</code>)</td><td>G + X + name</td></tr>
+<tr><td>ContextCardItem</td><td>id?, title\* (string\</td><td>Tag), body?, bgColor? (gray), bgImageSrc?, bgImageAlt?</td><td>text\*, action? (as <code>ContextItem</code>)</td><td>S + name</td></tr>
+<tr><td>CompositeCardBlock</td><td>items\* (min 2), layout=&#x27;grid&#x27;, responsive=true, action?, gap?</td><td>title?, items\* (as <code>CompositeBlock</code>)</td><td>G + X + name</td></tr>
+<tr><td>CompositeCardItem</td><td>id?, header?, body=[] (Text/BoldText/Metric/IconText/Image/charts/ListBlock/TagBlock/EntityList), footer? ({price?, button?})</td><td>text\*, action? (as <code>CompositeItem</code>)</td><td>S + name</td></tr>
+<tr><td>VisualCardBlock</td><td>items\* (min 2), layout=&#x27;grid&#x27;, responsive=true, action?, gap?</td><td>title?, items\* (as <code>VisualBlock</code>)</td><td>G + X + name</td></tr>
+<tr><td>VisualCardItem</td><td>body\* (BoldText ref), id?, bgImageSrc?, tag? (Tag ref), bgImageAlt?</td><td>text\*, src?, action? (as <code>VisualItem</code>)</td><td>S + name (body BoldText vs text; bgImageSrc vs src; tag vs action)</td></tr>
+</table>
+<h3>Settled example-level gaps (D1–D5, now schema-confirmed)</h3>
+<ul><li><strong>D1 — Stack:</strong> confirmed. All five flex props are schema props</li></ul>
+<p>(optional); Flutter <code>Stack</code> has none. A React program using <code>direction: &quot;row&quot;</code> / <code>wrap: true</code> cannot be expressed in Flutter.</p>
+<ul><li><strong>D2 — TabItem / Input:</strong> confirmed as built-in schemas, not</li></ul>
+<p>illustrations. TabItem is (value, trigger, content); Input is (name, placeholder?, type?, rules?, value?).</p>
+<ul><li><strong>D3 — Col third positional:</strong> confirmed: <code>type</code> enum(string, number,</li></ul>
+<p>action). Flutter <code>Col</code> lacks it, and its second prop is named <code>values</code> where React&#x27;s is <code>data</code>.</p>
+<ul><li><strong>D4 — Tag:</strong> confirmed: (text, icon?, size?, variant?). Flutter&#x27;s</li></ul>
+<p>second slot is a string icon name where React&#x27;s is an Icon ref, and Flutter has no size/variant.</p>
+<ul><li><strong>D5 — Form / FormControl (largest structural divergence):</strong></li></ul>
+<p>confirmed: <code>Form(name, buttons, fields)</code>, <code>FormControl(label, input, hint)</code> with a single field ref (and SwitchGroup excluded from the union). React Form programs are not portable to Flutter as written, and vice versa. Side note: the general-library group note calls Buttons &quot;the third Form argument&quot; while the chat-library note calls it &quot;the second&quot; with the matching example <code>Form(name, buttons, fields)</code> — the schema order agrees with the chat note; the general note is inconsistent with its own schema.</p>
+<h3>Props Flutter has that React lacks (X-list, from the table above)</h3>
+<ul><li>All five card blocks: <code>title</code> (React blocks have no title prop).</li><li><code>MetricIndicatorInline</code> / <code>MetricIndicatorWithStrikethrough</code>: <code>label</code></li></ul>
+<p>(React has no label; value is a bare string).</p>
+<ul><li><code>ImageBlock</code>: <code>caption</code> (React has <code>alt</code> instead).</li><li>All form fields and selection groups: <code>bind</code> (React fields are</li></ul>
+<p><code>name</code>-keyed; there is no bind prop) — and <code>label</code> on Input/TextArea/ Select/DatePicker/Slider (React fields carry <code>name</code>, not <code>label</code>).</p>
+<ul><li><code>CheckBoxItem</code> / <code>SwitchItem</code>: <code>value</code> (React items are <code>name</code>-keyed</li></ul>
+<p>with <code>description</code>/<code>defaultChecked</code>, no value prop).</p>
+<ul><li><code>SectionBlock</code>: <code>title</code> (React has <code>sections</code> + <code>isFoldable</code>).</li><li><code>Slider</code>: declared defaults <code>min=0</code>, <code>max=100</code> (React requires min/max</li></ul>
+<p>with no defaults) — leniency, not a new prop, but a contract difference: a React program omitting min/max is invalid; a Flutter program omitting them renders 0–100.</p>
+<ul><li><code>TextContent</code>: the <code>variant</code> value <code>&#x27;normal&#x27;</code> is not a React size</li></ul>
+<p>value (React: small/default/large/small-heavy/large-heavy).</p>
+<h3>Host primitives with verified props (NOT GenUI — do not count in the 86)</h3>
+<p>Unchanged by the source read (these live outside genui-lib; tables from the fetched API-reference page):</p>
+<table><tr><th>Primitive</th><th>React (documented)</th><th>Flutter host widget</th><th>Divergence</th></tr>
+<tr><td><code>Skeleton</code></td><td><code>count=1</code>, <code>height=&quot;16px&quot;</code>, <code>width=&quot;100%&quot;</code>, <code>borderRadius</code> → <code>--openui-radius-xs</code></td><td><code>count=3</code>, <code>color</code> → grey300, 16px bars</td><td>Default count 3 vs 1; no <code>height</code>/<code>width</code>/<code>borderRadius</code> params</td></tr>
+<tr><td><code>TableSkeleton</code></td><td><code>rows=5</code>, <code>columns=4</code></td><td><code>columns=3</code>, <code>rows=4</code></td><td>Defaults swapped in magnitude (5×4 vs 4×3)</td></tr>
+<tr><td><code>Citation</code> / <code>Sources</code></td><td>0.17-era primitives; props not documented on fetched pages</td><td><code>Citation(index<em>, title</em>, url?, onTap?)</code>; <code>Sources(items*)</code> with <code>SourceItem(title, url?, faviconUrl?)</code></td><td>Flutter <code>Sources</code> row tap is a no-op and <code>url</code> is never opened by the widget itself; <code>Citation.url</code> likewise carried but never navigated. Related GenUI gap: chat <code>Card.sources</code> ([{title, sourceName, url}]) has no Flutter <code>Card</code> equivalent.</td></tr>
+</table>
+<h2>(e) Flutter-internal notes (NOT React gaps)</h2>
+<p>Carried over from <code>flutter-inventory.md</code>. These are findings about the Flutter port itself; none of them implies a React component is missing or a React prop is wrong.</p>
+<ul><li><strong>F1 — <code>CodeBlock.language</code> declared but never read.</strong> The renderer reads</li></ul>
+<p>only <code>code</code> and renders plain monospace text. This is the deliberate post-revert state (syntax_highlight implemented then reverted by user decision; CodeBlock stays plain text until a new highlighting decision). A program passing a language gets it accepted and silently ignored. (New source context: React&#x27;s <code>language</code> is REQUIRED and FIRST, so the Flutter declaration order and requiredness both differ too — see §d.)</p>
+<ul><li><strong>F2 — <code>Image.alt</code> only partially used.</strong> Never used as an accessibility</li></ul>
+<p>label/semantics; its only use is as the error-placeholder text (<code>stringOf(&#x27;alt&#x27;, &#x27;图片加载失败&#x27;)</code>) — shown only when the network image fails, and showing &#x27;图片加载失败&#x27; when alt is absent.</p>
+<ul><li><strong>F3 — Composite-item <code>src</code> dead read.</strong> The five composite item types</li></ul>
+<p>share one renderer case reading <code>props[&#x27;src&#x27;]</code> for a leading image, but only <code>VisualItem</code> declares <code>src</code>. For <code>SnippetItem</code> / <code>OverviewItem</code> / <code>ContextItem</code> / <code>CompositeItem</code> a program cannot supply <code>src</code> through the Lang mapper (a third positional is an <code>excess-args</code> error and is ignored), so the read is dead code for those four types. Harmless, but the shared case implies an API the defs do not offer.</p>
+<ul><li><strong>F4 — 12 parent-read-only components (by design, not a bug).</strong> <code>Col</code>,</li></ul>
+<p><code>Series</code>, <code>Slice</code>, <code>ScatterSeries</code>, <code>Point</code>, <code>SelectItem</code>, <code>ChipItem</code>, <code>FollowUpItem</code>, <code>CheckBoxItem</code>, <code>RadioItem</code>, <code>SwitchItem</code>, <code>OptionCard</code> have no dedicated renderer case; standalone they render <code>SizedBox.shrink</code>, and each is read by its parent component. No registered component is entirely unhandled (F5: none registered-but- unrendered; F6: no other renderer-read-but-undeclared props).</p>
+<ul><li>**F7 — Renderer-side fallbacks that differ in spirit from the declared</li></ul>
+<p>contract (notes, not errors).** Select/Chip/CheckBox/Radio/Switch/ OptionCard <code>value</code> falls back to the item&#x27;s <code>label</code> when absent; Input/TextArea <code>value</code> is only the initial value (bound state wins); Slider value chain is form-state → <code>value</code> → <code>min</code> → 0.0; CalendarHeatmap entries with unparseable <code>date</code> or non-num <code>value</code> are silently skipped; Series non-numeric entries become 0, Slice <code>value</code> / Point <code>x</code>/<code>y</code> become 0 via <code>numOf</code>.</p>
+<ul><li><strong>Declared defaults are rare.</strong> Only four props in the whole Flutter</li></ul>
+<p>library declare a default: <code>TextContent.variant = &#x27;normal&#x27;</code>, <code>Callout</code>/<code>TextCallout.variant = &#x27;info&#x27;</code>, <code>Slider.min = 0</code>, <code>Slider.max = 100</code>. Every other fallback is renderer-side leniency (<code>stringOf</code> → <code>&#x27;&#x27;</code>, <code>nodesOf</code> → <code>[]</code>, <code>numOf</code> → <code>0</code>), not a declared default — so &quot;required&quot; in §d means the mapper rejects an omitted prop, not that the renderer throws. Contrast React, where <code>.default(...)</code> is common (card-block layout/responsive, Chips/OptionCards type and items, EntityList size, IconText variants, EditableTable name/columns/ data, Form fields).</p>
+<h2>Remaining caveats (what the checkout could NOT establish)</h2>
+<p>1. <code>Icon.category</code>: existence confirmed (description + renderer), exact Zod type not established — the schema file lives outside the sparse checkout. 2. Positional call shape for <code>Text</code> / <code>BoldText</code>: first schema key is a defaulted enum (<code>variant</code>) and no repo example shows a positional <code>Text(...)</code> call; their §d verdicts are by NAME, not by position. 3. Whether the 6 non-Condensed extras exist as non-GenUI UI primitives under <code>packages/react-ui/src/components</code>, and the full <code>Icon</code> schema — not checkable from the sparse checkout; not guessed here. 4. The 0.17.0 → 0.18.1 rename question (were the 11 long names already GenUI names in 0.17?) — needs the 0.17 source, not in this checkout. 5. react-lang&#x27;s own arg-mapping rules (positional vs named) live outside genui-lib; the positional reading used here rests on the repo&#x27;s own group-note examples, not on the react-lang source.</p>
+<h2>What would close the remaining gaps</h2>
+<p>1. <strong>Decide the 11 renames</strong> (alias vs rename) — the cheapest fix in this report, and the only one that changes <code>unknown-component</code> failures for existing React programs. An alias table (old short name → new long name) preserves Flutter programs while accepting React ones. 2. <strong>Decide the Form shape</strong> (D5) — the largest structural divergence; it determines whether Form programs are portable at all. Note the Flutter <code>bind</code> model vs React&#x27;s <code>name</code> model is a second, deeper form-system divergence behind the same decision. 3. <strong>Reconcile the two libraries</strong> — either split Flutter&#x27;s single library into general + chat variants or document the merged library as a deliberate deviation (including the missing chat-<code>Card.sources</code>). 4. <strong>Props alignment pass</strong> over §d&#x27;s 75 gap/shape rows, in priority order: charts (labels vs categories; Pie/Radial/SingleStacked labels+values vs slices), card blocks (item-slot shapes), form fields (name vs label+bind), then the long tail of optional styling props (variant/size/direction/flex). 5. <strong>Residual source checks</strong> (small): full <code>Icon</code> schema from <code>components/_shared/icons</code>, react-lang arg mapping for <code>Text</code> / <code>BoldText</code>, 0.17 tag source for the rename question.</p>
+<h2>Sources</h2>
+<p>Inputs (read fully for this diff):</p>
+<ul><li><code>react-source-props.md</code> — React side, read from genui-lib source at</li></ul>
+<p>HEAD <code>f08a660535e55b5b2a24a0eb68568edaf9e4fe4b</code>, react-ui 0.18.1.</p>
+<ul><li><code>react-inventory.md</code> — earlier official side; Lang 1.0 spec + react-ui</li></ul>
+<p>0.18.1 (superseded on props by the source read above).</p>
+<ul><li><code>flutter-inventory.md</code> — Flutter side; HEAD <code>9b22cd8</code>, 95 components.</li></ul>
+<p>Official sources fetched for earlier rounds (2026-10-28):</p>
+<ul><li>https://github.com/thesysdev/openui/tree/main/packages/react-ui — package</li></ul>
+<p>README at <code>main</code> (0.18 category table incl. <code>MarkDownRenderer</code>, <code>...</code> chart tail, peer deps, subpath exports).</p>
+<ul><li>https://docs.langchain.com/oss/python/langchain/frontend/integrations/openui</li></ul>
+<p>— LangChain OpenUI docs (no component signatures; confirms <code>openuiLibrary.prompt()</code> system-prompt flow).</p>
+<ul><li>https://www.openui.com/docs/api-reference/react-ui — <code>AgentInterface</code></li></ul>
+<p>props, two libraries, <code>Skeleton</code> / <code>TableSkeleton</code> prop tables.</p>
+<ul><li>https://www.openui.com/docs/openui-lang/defining-components — Form /</li></ul>
+<p>FormControl prompt signatures, <code>defineComponent</code> / <code>createLibrary</code>.</p>
+<ul><li>https://www.openui.com/docs/openui-lang/specification — Lang 1.0 spec,</li></ul>
+<p>action table, error codes, stored-message format.</p>
+<ul><li>https://www.openui.com/docs/openui-lang/functions — 14 built-in functions.</li><li>https://www.openui.com/docs/openui-lang/whats-new — Lang 1.0 additions.</li><li>https://www.openui.com/docs/openui-lang/system-prompts — prompt generation.</li><li>https://www.openui.com/docs/api-reference/react-lang — runtime API.</li><li>https://www.openui.com/docs/openui-lang/quickstart — library roots.</li><li>https://www.jsdelivr.com/package/npm/@openuidev/react-ui — version 0.18.1.</li></ul>
+</body>
+</html>

@@ -12,7 +12,8 @@ Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外�
   最初的 25 个 MVP 组件是这 86 个的子集。另有 9 个扩展图表组件
   （HeatmapChart、FunnelChart、CalendarHeatmap、MiniBarChart、
   MiniLineChart、StackedLegend、BarChartCondensed、LineChartCondensed、
-  AreaChartCondensed），库内组件总数为 95。
+  AreaChartCondensed），另有 11 个 React 官方名别名（MarkDownRenderer
+  及 5 组 *CardBlock/*CardItem），库内组件 95 个、注册名共 106 个。
 - 生成侧（系统提示）由库定义导出：`OpenUILibrary.prompt()` 会按组件名、
   props 顺序、描述生成给模型的说明，模型只能用库里的组件。
 
@@ -33,7 +34,7 @@ Flutter API，但 `lang.dart` 为了在库上挂接自定义构建器而 import 
 import——这是 Task 3 留下的耦合，见下方“已知取舍”。渲染器在
 `lib/src/renderer.dart`，组件定义在 `lib/src/library.dart`。
 
-## 组件清单（86 个 GenUI + 9 个扩展图表 = 95）
+## 组件清单（86 个 GenUI + 9 个扩展图表 = 95 个组件，另加 11 个 React 官方名别名，共 106 个注册名）
 
 9 个扩展图表见下方“图表”一节（HeatmapChart、FunnelChart、
 CalendarHeatmap、MiniBarChart、MiniLineChart、StackedLegend、

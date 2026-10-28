@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- React official-name aliases (from the schema-level diff against
+  @openuidev/react-ui 0.18.1, see docs/react-1.0-diff/): `MarkDownRenderer`
+  and the five `*CardBlock` / `*CardItem` pairs are now registered with
+  the same props and rendering as their short-name canonicals
+  (`MarkdownRenderer`, `SnippetBlock`/`SnippetItem`, `OverviewBlock`/
+  `OverviewItem`, `ContextBlock`/`ContextItem`, `CompositeBlock`/
+  `CompositeItem`, `VisualBlock`/`VisualItem`), for 106 registered names
+  over 95 components. Alias scope is names only: an alias accepts the
+  canonical's props, not the official Zod schema's props (e.g. the alias
+  takes `text`, React's MarkDownRenderer schema takes `textMarkdown`).
+
 ## 1.0.0 — 2026-10-28
 
 First stable release: a pure-Dart OpenUI Lang parser/evaluator plus a

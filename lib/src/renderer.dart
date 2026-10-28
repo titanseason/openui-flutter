@@ -410,6 +410,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         };
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: style));
       case 'MarkdownRenderer':
+      case 'MarkDownRenderer': // React official-name alias.
         return _MarkdownWidget(text: node.stringOf('text'));
       case 'Callout':
         final variant = node.stringOf('variant', 'info');
@@ -847,6 +848,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'ContextBlock':
       case 'CompositeBlock':
       case 'VisualBlock':
+      // React official-name aliases.
+      case 'SnippetCardBlock':
+      case 'OverviewCardBlock':
+      case 'ContextCardBlock':
+      case 'CompositeCardBlock':
+      case 'VisualCardBlock':
         return Card(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
           margin: const EdgeInsets.symmetric(vertical: 6),
@@ -863,6 +870,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'ContextItem':
       case 'CompositeItem':
       case 'VisualItem':
+      // React official-name aliases.
+      case 'SnippetCardItem':
+      case 'OverviewCardItem':
+      case 'ContextCardItem':
+      case 'CompositeCardItem':
+      case 'VisualCardItem':
         return ListTile(
           title: Text(node.stringOf('text')),
           leading: node.props['src'] is String ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(node.stringOf('src'), width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 48, height: 48, color: Colors.grey.shade200))) : null,
