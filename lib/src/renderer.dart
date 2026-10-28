@@ -520,33 +520,46 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'PieChart':
         return _PieWidget(labels: _strings(node.props['labels']), values: _numbers(node.props['values']), variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
       case 'Form':
+        // Fields render in order, then the Buttons node. `name` is the
+        // form identifier and renders nothing by itself.
+        final formButtons = node.nodeOf('buttons');
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final c in node.nodesOf('children')) _buildNode(c)],
+          children: [for (final c in node.nodesOf('fields')) _buildNode(c), if (formButtons != null) _buildNode(formButtons)],
         );
       case 'Input':
-        final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final initial = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+        // State key is `name`; the old `label`/`bind` props are gone
+        // (the label belongs on FormControl now).
+        final inputKey = node.stringOf('name');
+        final initial = _stateHas(inputKey) ? '${_stateValue(inputKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+        final inputType = node.stringOf('type', 'text');
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: TextFormField(
             initialValue: initial,
             enabled: !_effectiveStreaming,
+            obscureText: inputType == 'password',
+            keyboardType: switch (inputType) {
+              'email' => TextInputType.emailAddress,
+              'number' => TextInputType.number,
+              'url' => TextInputType.url,
+              _ => TextInputType.text,
+            },
             decoration: InputDecoration(
-              labelText: node.stringOf('label'),
               hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
               border: const OutlineInputBorder(),
             ),
-            onChanged: (v) {
-              if (bind != null) _setValue(bind, v);
-            },
+            onChanged: (v) => _setValue(inputKey, v),
           ),
         );
       case 'Select':
+        final selectKey = node.stringOf('name');
         return _SelectWidget(
-          options: node.nodesOf('options'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          items: node.nodesOf('items'),
+          stateKey: selectKey,
+          stateValue: _stateHas(selectKey) ? _stateValue(selectKey) : node.props['value'],
+          placeholder: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
+          size: node.stringOf('size', 'medium'),
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
@@ -587,10 +600,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         };
         return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: button);
       case 'Chips':
+        final chipsKey = node.stringOf('name');
         return _ChipsWidget(
           items: node.nodesOf('items'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          stateKey: chipsKey,
+          stateValue: _stateHas(chipsKey) ? _stateValue(chipsKey) : node.props['defaultValue'],
+          type: node.stringOf('type', 'multiple'),
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
@@ -1022,36 +1037,42 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         );
       // ---- Form (remaining) ----
       case 'FormControl':
+        // The mapper does not enforce the input union: any node is
+        // accepted as `input`. Rules are accepted and stored, not
+        // enforced, except the required marker on the label below.
+        final inputNode = node.nodeOf('input');
+        final inputRules = inputNode?.props['rules'];
+        final requiredMark = inputRules is Map && inputRules['required'] == true ? ' *' : '';
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Text(node.stringOf('label'), style: const TextStyle(fontWeight: FontWeight.bold)), for (final c in node.nodesOf('children')) _buildNode(c), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
+            children: [Text('${node.stringOf('label')}$requiredMark', style: const TextStyle(fontWeight: FontWeight.bold)), if (inputNode != null) _buildNode(inputNode), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
           ),
         );
       case 'Label':
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontWeight: FontWeight.bold)));
       case 'TextArea':
-        final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final initial = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+        final areaKey = node.stringOf('name');
+        final initial = _stateHas(areaKey) ? '${_stateValue(areaKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: TextFormField(
             initialValue: initial,
-            maxLines: 4,
+            maxLines: node.props['rows'] is num ? (node.props['rows'] as num).toInt() : 4,
             enabled: !_effectiveStreaming,
-            decoration: InputDecoration(labelText: node.stringOf('label'), hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
-            onChanged: (v) {
-              if (bind != null) _setValue(bind, v);
-            },
+            decoration: InputDecoration(hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
+            onChanged: (v) => _setValue(areaKey, v),
           ),
         );
       case 'DatePicker':
-        final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final value = bind != null && _stateHas(bind) ? '${_stateValue(bind)}' : (node.props['value'] is String ? node.stringOf('value') : null);
+        // mode range is accepted but renders as the single-date
+        // picker: no range UI is built in this port (documented
+        // deviation).
+        final dateKey = node.stringOf('name');
+        final value = _stateHas(dateKey) ? '${_stateValue(dateKey)}' : (node.props['value'] is String ? node.stringOf('value') : null);
         return DatePickerField(
-          label: node.stringOf('label'),
-          bind: bind,
+          stateKey: dateKey,
           value: value,
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
@@ -1059,56 +1080,69 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           },
         );
       case 'Slider':
-        final bind = node.props['bind'] is String ? node.props['bind'] as String : null;
-        final value = bind != null && _stateHas(bind) && _stateValue(bind) is num ? (_stateValue(bind) as num).toDouble() : (node.props['value'] is num ? (node.props['value'] as num).toDouble() : (node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0));
+        // Value is an array of numbers; single-thumb use takes the
+        // first element, and writes back a one-element array.
+        final sliderKey = node.stringOf('name');
+        final sliderNumbers = _numbers(_stateHas(sliderKey) ? _stateValue(sliderKey) : (node.props['value'] ?? node.props['defaultValue']));
+        final sliderMin = node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0;
+        final sliderMax = node.props['max'] is num ? (node.props['max'] as num).toDouble() : 100.0;
+        final sliderStep = node.props['step'] is num ? (node.props['step'] as num).toDouble() : null;
         return SliderField(
-          label: node.stringOf('label'),
-          bind: bind,
-          value: value,
-          min: node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0,
-          max: node.props['max'] is num ? (node.props['max'] as num).toDouble() : 100,
+          label: node.props['label'] is String ? node.stringOf('label') : null,
+          stateKey: sliderKey,
+          value: sliderNumbers.isNotEmpty ? sliderNumbers.first : sliderMin,
+          min: sliderMin,
+          max: sliderMax,
+          divisions: node.stringOf('variant') == 'discrete' && sliderStep != null && sliderStep > 0 ? ((sliderMax - sliderMin) / sliderStep).round().clamp(1, 1000000) : null,
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
+            if (k != null) _setValue(k, [v]);
           },
         );
       case 'CheckBoxGroup':
+        final checkKey = node.stringOf('name');
         return MultiSelectGroupWidget(
           items: node.nodesOf('items'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          stateKey: checkKey,
+          stateValue: _stateHas(checkKey) ? _stateValue(checkKey) : null,
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
           },
         );
       case 'SwitchGroup':
+        final switchKey = node.stringOf('name');
         return SwitchGroupWidget(
           items: node.nodesOf('items'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          stateKey: switchKey,
+          stateValue: _stateHas(switchKey) ? _stateValue(switchKey) : null,
+          variant: node.stringOf('variant', 'clear'),
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
           },
         );
       case 'RadioGroup':
+        final radioKey = node.stringOf('name');
         return SingleSelectGroupWidget(
           items: node.nodesOf('items'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
+          stateKey: radioKey,
+          stateValue: _stateHas(radioKey) ? _stateValue(radioKey) : node.props['defaultValue'],
           enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
           },
         );
       case 'OptionCards':
+        final cardsKey = node.stringOf('name');
         return SingleSelectGroupWidget(
           items: node.nodesOf('items'),
-          bind: node.props['bind'] is String ? node.props['bind'] as String : null,
-          stateValue: node.props['bind'] is String ? _stateValue(node.props['bind'] as String) : null,
-          enabled: !_effectiveStreaming,
+          stateKey: cardsKey,
+          stateValue: _stateHas(cardsKey) ? _stateValue(cardsKey) : node.props['defaultValue'],
+          multi: node.stringOf('type', 'single') == 'multiple',
           asCards: true,
+          buildNode: _buildNode,
+          enabled: !_effectiveStreaming,
           onChanged: (k, v) {
             if (k != null) _setValue(k, v);
           },
@@ -1582,35 +1616,46 @@ class _MarkdownWidget extends StatelessWidget {
 // ---------------- Select / Chips ----------------
 
 class _SelectWidget extends StatelessWidget {
-  const _SelectWidget({required this.options, required this.bind, required this.stateValue, required this.onChanged, this.enabled = true});
-  final List<ElementNode> options;
-  final String? bind;
+  const _SelectWidget({required this.items, required this.stateKey, required this.stateValue, this.placeholder, this.size = 'medium', required this.onChanged, this.enabled = true});
+  final List<ElementNode> items;
+  final String? stateKey;
   final Object? stateValue;
+  final String? placeholder;
+  final String size;
   final bool enabled;
   final void Function(String?, Object?) onChanged;
   @override
   Widget build(BuildContext context) {
-    if (options.isEmpty) return const SizedBox.shrink();
-    Object? current = stateValue ?? options.first.props['value'] ?? options.first.stringOf('label');
-    final values = options.map((o) => o.props['value'] ?? o.stringOf('label')).toList();
-    if (!values.contains(current)) current = values.first;
+    if (items.isEmpty) return const SizedBox.shrink();
+    // No selection yet shows the placeholder (when given) rather than
+    // pre-selecting the first item.
+    final values = items.map((o) => o.props['value']).toList();
+    final current = stateValue != null && values.contains(stateValue) ? stateValue : null;
+    final fontSize = switch (size) {
+      'small' => 13.0,
+      'large' => 17.0,
+      _ => 15.0,
+    };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: DropdownButtonFormField<Object>(
         initialValue: current,
-        decoration: const InputDecoration(border: OutlineInputBorder()),
-        items: [for (final o in options) DropdownMenuItem(value: o.props['value'] ?? o.stringOf('label'), child: Text(o.stringOf('label')))],
-        onChanged: enabled ? (v) => onChanged(bind, v) : null,
+        style: TextStyle(fontSize: fontSize),
+        decoration: InputDecoration(hintText: placeholder, border: const OutlineInputBorder()),
+        items: [for (final o in items) DropdownMenuItem(value: o.props['value'], child: Text(o.stringOf('label')))],
+        onChanged: enabled ? (v) => onChanged(stateKey, v) : null,
       ),
     );
   }
 }
 
 class _ChipsWidget extends StatefulWidget {
-  const _ChipsWidget({required this.items, required this.bind, required this.stateValue, required this.onChanged, this.enabled = true});
+  const _ChipsWidget({required this.items, required this.stateKey, required this.stateValue, this.type = 'multiple', required this.onChanged, this.enabled = true});
   final List<ElementNode> items;
-  final String? bind;
+  final String? stateKey;
   final Object? stateValue;
+  // single | multiple (React default multiple).
+  final String type;
   final bool enabled;
   final void Function(String?, Object?) onChanged;
   @override
@@ -1619,24 +1664,55 @@ class _ChipsWidget extends StatefulWidget {
 
 class _ChipsWidgetState extends State<_ChipsWidget> {
   Object? _local;
+  final _localSet = <Object?>{};
   @override
   Widget build(BuildContext context) {
-    final selected = widget.stateValue ?? _local;
+    final multi = widget.type == 'multiple';
+    final selectedSingle = multi ? null : (widget.stateValue ?? _local);
+    final selectedSet = multi
+        ? (widget.stateValue is List
+            ? (widget.stateValue as List).toSet()
+            : widget.stateValue != null
+                ? {widget.stateValue}
+                : _localSet)
+        : const <Object?>{};
     return Wrap(
       spacing: 8,
       children: [
         for (final item in widget.items)
           ChoiceChip(
             label: Text(item.stringOf('label')),
-            selected: selected != null && selected == (item.props['value'] ?? item.stringOf('label')),
-            onSelected: widget.enabled
+            // icon is a string name in this port (React takes an Icon
+            // ref); see the ChipItem def in library.dart.
+            avatar: item.props['icon'] is String ? Icon(iconByName(item.stringOf('icon')), size: 18) : null,
+            selected: multi ? selectedSet.contains(item.props['value']) : selectedSingle == item.props['value'],
+            onSelected: (widget.enabled && item.props['disabled'] != true)
                 ? (v) {
-                    if (!v) return;
-                    final value = item.props['value'] ?? item.stringOf('label');
-                    if (widget.bind != null) {
-                      widget.onChanged(widget.bind, value);
+                    final value = item.props['value'];
+                    if (widget.stateKey != null) {
+                      if (multi) {
+                        final next = Set.of(selectedSet);
+                        if (v) {
+                          next.add(value);
+                        } else {
+                          next.remove(value);
+                        }
+                        widget.onChanged(widget.stateKey, next.toList());
+                      } else if (v) {
+                        widget.onChanged(widget.stateKey, value);
+                      }
                     } else {
-                      setState(() => _local = value);
+                      setState(() {
+                        if (multi) {
+                          if (v) {
+                            _localSet.add(value);
+                          } else {
+                            _localSet.remove(value);
+                          }
+                        } else if (v) {
+                          _local = value;
+                        }
+                      });
                     }
                   }
                 : null,

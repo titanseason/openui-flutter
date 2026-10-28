@@ -69,7 +69,7 @@ rev = Series("收入", [120, 145])
     final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([chips])
-chips = Chips([ChipItem("北京", "beijing"), ChipItem("上海", "shanghai")], "city")
+chips = Chips("city", "multiple", [ChipItem("beijing", "北京"), ChipItem("shanghai", "上海")])
 ''');
     controller.finish();
     await tester.pumpWidget(
@@ -80,7 +80,8 @@ chips = Chips([ChipItem("北京", "beijing"), ChipItem("上海", "shanghai")], "
     await tester.pumpAndSettle();
     await tester.tap(find.text('上海'));
     await tester.pumpAndSettle();
-    expect(controller.formState['city'], 'shanghai');
+    // Chips defaults to multiple: state is a list of selected values.
+    expect(controller.formState['city'], ['shanghai']);
     controller.dispose();
   });
 
@@ -193,7 +194,7 @@ tickets = Query("list_tickets", {})
     final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([inp, show])
-inp = Input("城市", "city")
+inp = Input("city")
 show = TextContent("city=" + \$city)
 ''');
     controller.finish();
@@ -214,7 +215,7 @@ show = TextContent("city=" + \$city)
     final controller = OpenUIController(library: openUIStandardLibrary());
     controller.push('''
 root = Stack([area, show])
-area = TextArea("备注", "note")
+area = TextArea("note")
 show = TextContent("note=" + \$note)
 ''');
     controller.finish();

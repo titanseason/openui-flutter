@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Props Batch C (Form family, from the schema-level diff against
+  @openuidev/react-ui 0.18.1) — BREAKING for programs using the old
+  form props: `Form` is now `name`/`buttons`/`fields?` (no `children`);
+  `FormControl` is `label`/`input`/`hint?` (one input node, no
+  `children` list); inputs are keyed by `name` instead of `bind`
+  (`Input` `name`/`placeholder?`/`type?`/`rules?`/`value?`,
+  `TextArea` adds `rows?`, `Select` renames `options` to `items` and
+  adds `size?`, `SelectItem`/`ChipItem`/`OptionCard` are value-first,
+  `DatePicker` adds `mode?`, `Slider` requires `variant`/`min`/`max`
+  with no defaults and takes an array `value`, `CheckBoxItem`/
+  `RadioItem`/`SwitchItem` take `label`/`description`/`name` (or
+  `value`), groups take record/string state under `name`, `Chips`
+  defaults to `multiple` and `OptionCards` to `single`, `OptionCard`
+  is `value`/`title`/`subtitle?`/`topContent?`/`disabled?`).
+  Documented deviations: the FormControl input union is not enforced
+  by the mapper (any node is accepted, so SwitchGroup still renders
+  inside FormControl even though React excludes it); DatePicker
+  `mode` range renders as the single-date picker; ChipItem `icon`
+  stays a string name, not an Icon ref; `rules` are accepted and
+  stored but only `rules.required` has a visible effect (a " *"
+  marker on the FormControl label) — no validation engine is built.
+  The public group/field widgets in extra_widgets.dart rename their
+  `bind` parameter to `stateKey`.
 - Props Batch B (card blocks, from the schema-level diff against
   @openuidev/react-ui 0.18.1): all 10 card-block components now follow
   the React schemas — blocks take `items`/`layout?`/`responsive?`/
@@ -30,8 +53,7 @@
   (schema order would bind a one-arg call to `variant`); icon props
   stay string names, not Icon refs; the chat `Card` sources variant
   is skipped; `Stack`/`Card` gap defaults to no spacing (not React's
-  "m" fallback). Form family, card blocks and EditableTable props are
-  unchanged (later batches).
+  "m" fallback). EditableTable props are unchanged (later batch).
 - Component names aligned directly with @openuidev/react-ui 0.18.1 (from
   the schema-level diff, see docs/react-1.0-diff/) — BREAKING for
   programs using the old short names: `MarkdownRenderer` is now

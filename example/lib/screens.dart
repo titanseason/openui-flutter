@@ -108,8 +108,8 @@ class _FormQueryScreenState extends State<FormQueryScreen> {
     _controller.push('''
 root = Stack([title, form, count, retry])
 title = CardHeader("City Weather", "Type a city, see the row count")
-form = Form([city])
-city = Input("City", "city")
+form = Form("weather", Buttons([Button("Submit", @ToAssistant("submit"))]), [fc])
+fc = FormControl("City", Input("city"))
 count = TextContent("" + @Count(weather.rows))
 weather = Query("get_weather", {"city": \$city}, {"rows": []})
 retry = Button("Refresh", Action([@Run(weather)]))

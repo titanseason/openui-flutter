@@ -69,15 +69,15 @@ void main() {
       'd9 = EntityList([{"left": "张三", "right": "值一"}, {"left": "李四", "right": "值二"}])',
       'd10 = MetricIndicatorInline("100", "收入", {"direction": "up", "value": 10})',
       'd11 = MetricIndicatorWithStrikethrough("100", "收入", "120")',
-      'f1 = FormControl("姓名", [Input("姓名")], "提示")',
+      'f1 = FormControl("姓名", Input("name"), "提示")',
       'f2 = Label("标签")',
-      'f3 = TextArea("备注")',
-      'f4 = DatePicker("日期")',
-      'f5 = Slider("音量", null, 50, 0, 100)',
-      'f6 = CheckBoxGroup([CheckBoxItem("a", "a")])',
-      'f7 = RadioGroup([RadioItem("a", "a")])',
-      'f8 = SwitchGroup([SwitchItem("a", "a")])',
-      'f9 = OptionCards([OptionCard("卡", "a", "描述")])',
+      'f3 = TextArea("note")',
+      'f4 = DatePicker("date")',
+      'f5 = Slider("vol", "continuous", 0, 100, null, null, "音量", null, [50])',
+      'f6 = CheckBoxGroup("cb", [CheckBoxItem("多选a", "desc", "a")])',
+      'f7 = RadioGroup("rg", [RadioItem("单选a", "desc", "a")])',
+      'f8 = SwitchGroup("sw", [SwitchItem("开关a", "desc", "a")])',
+      'f9 = OptionCards("oc", "single", [OptionCard("a", "卡", "描述")])',
       'x1 = Buttons([Button("点", @ToAssistant("hi"))])',
       'x2 = IconButton("搜索", "search", @ToAssistant("hi"))',
       'g1 = ListBlock([ListItem("第一条")])',
@@ -176,15 +176,15 @@ btns = Buttons([Button("点我", @ToAssistant("hi"))])
             library: library,
             response: '''
 root = Stack([fc, lbl, area, date, slider, cb, radio, sw, cards])
-fc = FormControl("姓名", [Input("姓名")], "提示")
+fc = FormControl("姓名", Input("name"), "提示")
 lbl = Label("字段标签")
-area = TextArea("备注")
-date = DatePicker("日期")
-slider = Slider("音量", "vol", 50, 0, 100)
-cb = CheckBoxGroup([CheckBoxItem("多选a", "a")])
-radio = RadioGroup([RadioItem("单选a", "a")])
-sw = SwitchGroup([SwitchItem("开关a", "a")])
-cards = OptionCards([OptionCard("卡片a", "a", "描述")])
+area = TextArea("note")
+date = DatePicker("date")
+slider = Slider("vol", "continuous", 0, 100, null, null, "音量", null, [50])
+cb = CheckBoxGroup("cb", [CheckBoxItem("多选a", "desc", "a")])
+radio = RadioGroup("rg", [RadioItem("单选a", "desc", "a")])
+sw = SwitchGroup("sw", [SwitchItem("开关a", "desc", "a")])
+cards = OptionCards("oc", "single", [OptionCard("a", "卡片a", "描述")])
 ''',
             onStateUpdate: (s) => state = s,
           ),
@@ -192,11 +192,11 @@ cards = OptionCards([OptionCard("卡片a", "a", "描述")])
       ),
     );
     await tester.pumpAndSettle();
-    for (final text in ['姓名', '字段标签', '备注', '日期: 未选择', '音量: 50', '多选a', '单选a', '开关a', '卡片a']) {
+    for (final text in ['姓名', '提示', '字段标签', '未选择', '音量: 50', '多选a', '单选a', '开关a', '卡片a']) {
       expect(find.text(text), findsWidgets);
     }
     await tester.tap(find.text('单选a'));
     await tester.pump();
-    expect(state['bind'], isNull); // RadioGroup here has no bind; tap must not crash
+    expect(state['rg'], 'a');
   });
 }

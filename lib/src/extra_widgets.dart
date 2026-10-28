@@ -112,9 +112,12 @@ class ScatterChartWidget extends StatelessWidget {
 // ---------------- Option groups ----------------
 
 class MultiSelectGroupWidget extends StatefulWidget {
-  const MultiSelectGroupWidget({required this.items, required this.bind, required this.stateValue, required this.onChanged, this.enabled = true});
+  const MultiSelectGroupWidget({required this.items, required this.stateKey, required this.stateValue, required this.onChanged, this.enabled = true});
   final List<ElementNode> items;
-  final String? bind;
+  final String? stateKey;
+  // Record of item name to boolean (React's CheckBoxGroup value
+  // shape); null means "no state entry yet", and each item then
+  // falls back to its defaultChecked prop.
   final Object? stateValue;
   final void Function(String?, Object?) onChanged;
   final bool enabled;
@@ -123,27 +126,35 @@ class MultiSelectGroupWidget extends StatefulWidget {
 }
 
 class _MultiSelectGroupWidgetState extends State<MultiSelectGroupWidget> {
-  final _local = <Object?>{};
+  final _local = <String, bool>{};
+  bool _checked(ElementNode item) {
+    final name = item.stringOf('name');
+    if (widget.stateValue is Map) {
+      final record = widget.stateValue as Map;
+      if (record.containsKey(name)) return record[name] == true;
+    }
+    if (widget.stateKey == null && _local.containsKey(name)) return _local[name]!;
+    return item.props['defaultChecked'] == true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selected = widget.stateValue is List ? (widget.stateValue as List).toSet() : _local;
     return Column(
       children: [
         for (final item in widget.items)
           CheckboxListTile(
             title: Text(item.stringOf('label')),
-            value: selected.contains(item.props['value'] ?? item.stringOf('label')),
+            subtitle: item.props['description'] is String ? Text(item.stringOf('description')) : null,
+            value: _checked(item),
             onChanged: widget.enabled
                 ? (v) {
-                    final value = item.props['value'] ?? item.stringOf('label');
-                    final next = Set.of(selected);
-                    if (v == true) {
-                      next.add(value);
-                    } else {
-                      next.remove(value);
+                    final next = <String, bool>{};
+                    for (final it in widget.items) {
+                      next[it.stringOf('name')] = _checked(it);
                     }
-                    if (widget.bind != null) {
-                      widget.onChanged(widget.bind, next.toList());
+                    next[item.stringOf('name')] = v ?? false;
+                    if (widget.stateKey != null) {
+                      widget.onChanged(widget.stateKey, next);
                     } else {
                       setState(() {
                         _local
@@ -160,92 +171,142 @@ class _MultiSelectGroupWidgetState extends State<MultiSelectGroupWidget> {
 }
 
 class SingleSelectGroupWidget extends StatefulWidget {
-  const SingleSelectGroupWidget({required this.items, required this.bind, required this.stateValue, required this.onChanged, this.enabled = true, this.asCards = false});
+  const SingleSelectGroupWidget({required this.items, required this.stateKey, required this.stateValue, required this.onChanged, this.enabled = true, this.asCards = false, this.multi = false, this.buildNode});
   final List<ElementNode> items;
-  final String? bind;
+  final String? stateKey;
+  // Single: the selected value string (or the group's defaultValue
+  // when no state entry exists yet). Multiple (OptionCards type
+  // multiple): a list of selected value strings.
   final Object? stateValue;
   final void Function(String?, Object?) onChanged;
   final bool enabled;
   final bool asCards;
+  final bool multi;
+  // Renders an OptionCard's topContent node; null renders no top
+  // content (RadioGroup items never carry one).
+  final Widget Function(ElementNode)? buildNode;
   @override
   State<SingleSelectGroupWidget> createState() => _SingleSelectGroupWidgetState();
 }
 
 class _SingleSelectGroupWidgetState extends State<SingleSelectGroupWidget> {
   Object? _local;
+  final _localSet = <Object?>{};
+
+  Set<Object?> _selectedSet(Object? selected) {
+    if (selected is List) return selected.toSet();
+    if (selected is Set) return Set.of(selected);
+    if (selected != null) return {selected};
+    return const {};
+  }
+
+  void _select(Object? value) {
+    if (!widget.enabled) return;
+    if (widget.stateKey != null) {
+      if (widget.multi) {
+        final current = widget.stateValue ?? _localSet;
+        final next = _selectedSet(current);
+        if (next.contains(value)) {
+          next.remove(value);
+        } else {
+          next.add(value);
+        }
+        widget.onChanged(widget.stateKey, next.toList());
+      } else {
+        widget.onChanged(widget.stateKey, value);
+      }
+    } else {
+      setState(() {
+        if (widget.multi) {
+          if (_localSet.contains(value)) {
+            _localSet.remove(value);
+          } else {
+            _localSet.add(value);
+          }
+        } else {
+          _local = value;
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selected = widget.stateValue ?? _local;
+    final selected = widget.stateValue ?? (widget.multi ? _localSet : _local);
+    bool isSelected(Object? value) => widget.multi ? _selectedSet(selected).contains(value) : selected == value;
     if (widget.asCards) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final item in widget.items)
             Builder(builder: (context) {
-              final value = item.props['value'] ?? item.stringOf('label');
-              final isSelected = selected != null && selected == value;
+              final value = item.props['value'];
+              final selectedCard = isSelected(value);
+              final disabled = item.props['disabled'] == true;
+              final top = item.nodeOf('topContent');
+              // OptionCard title/subtitle; a RadioItem never reaches
+              // this branch, so the label fallback is defensive only.
+              final title = item.props['title'] is String ? item.stringOf('title') : item.stringOf('label');
+              final subtitle = item.props['subtitle'] is String ? item.stringOf('subtitle') : (item.props['description'] is String ? item.stringOf('description') : null);
               return Card(
-                color: isSelected ? Colors.blue.shade50 : null,
+                color: selectedCard ? Colors.blue.shade50 : null,
                 shape: RoundedRectangleBorder(
-                  side: BorderSide(color: isSelected ? Colors.blue : Colors.grey.shade300),
+                  side: BorderSide(color: selectedCard ? Colors.blue : Colors.grey.shade300),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: ListTile(
-                  title: Text(item.stringOf('label')),
-                  subtitle: item.props['description'] is String ? Text(item.stringOf('description')) : null,
-                  onTap: widget.enabled
-                      ? () {
-                          if (widget.bind != null) {
-                            widget.onChanged(widget.bind, value);
-                          } else {
-                            setState(() => _local = value);
-                          }
-                        }
-                      : null,
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (top != null && widget.buildNode != null) widget.buildNode!(top),
+                      Text(title),
+                    ],
+                  ),
+                  subtitle: subtitle != null ? Text(subtitle) : null,
+                  onTap: (widget.enabled && !disabled) ? () => _select(value) : null,
                 ),
               );
             }),
         ],
       );
     }
-    return RadioGroup<Object?>(
-      groupValue: selected,
-      onChanged: (v) {
-        if (!widget.enabled) return;
-        if (widget.bind != null) {
-          widget.onChanged(widget.bind, v);
-        } else {
-          setState(() => _local = v);
-        }
-      },
-      child: Column(
-        children: [
-          for (final item in widget.items)
-            ListTile(
-              leading: Radio<Object?>(value: item.props['value'] ?? item.stringOf('label')),
-              title: Text(item.stringOf('label')),
-              onTap: widget.enabled
-                  ? () {
-                      final v = item.props['value'] ?? item.stringOf('label');
-                      if (widget.bind != null) {
-                        widget.onChanged(widget.bind, v);
-                      } else {
-                        setState(() => _local = v);
-                      }
-                    }
-                  : null,
-            ),
-        ],
+    // RadioGroup ancestor manages group value (per-Radio groupValue /
+    // onChanged are deprecated in this Flutter version). Its onChanged
+    // is non-nullable, so the disabled case is handled with
+    // IgnorePointer instead of a null callback.
+    return IgnorePointer(
+      ignoring: !widget.enabled,
+      child: RadioGroup<Object?>(
+        // This branch is single-select only (multi goes through cards).
+        groupValue: selected,
+        onChanged: (v) => _select(v),
+        child: Column(
+          children: [
+            for (final item in widget.items)
+              ListTile(
+                leading: Radio<Object?>(value: item.props['value']),
+                title: Text(item.stringOf('label')),
+                subtitle: item.props['description'] is String ? Text(item.stringOf('description')) : null,
+                onTap: () => _select(item.props['value']),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class SwitchGroupWidget extends StatefulWidget {
-  const SwitchGroupWidget({required this.items, required this.bind, required this.stateValue, required this.onChanged, this.enabled = true});
+  const SwitchGroupWidget({required this.items, required this.stateKey, required this.stateValue, this.variant = 'clear', required this.onChanged, this.enabled = true});
   final List<ElementNode> items;
-  final String? bind;
+  final String? stateKey;
+  // Record of item name to boolean (React's SwitchGroup value shape);
+  // null means "no state entry yet", and each item then falls back
+  // to its defaultChecked prop.
   final Object? stateValue;
+  // clear | card | sunk. Only card changes the chrome (each tile in
+  // a Card); sunk tints the column background.
+  final String variant;
   final void Function(String?, Object?) onChanged;
   final bool enabled;
   @override
@@ -253,48 +314,60 @@ class SwitchGroupWidget extends StatefulWidget {
 }
 
 class _SwitchGroupWidgetState extends State<SwitchGroupWidget> {
-  final _local = <Object?>{};
+  final _local = <String, bool>{};
+  bool _checked(ElementNode item) {
+    final name = item.stringOf('name');
+    if (widget.stateValue is Map) {
+      final record = widget.stateValue as Map;
+      if (record.containsKey(name)) return record[name] == true;
+    }
+    if (widget.stateKey == null && _local.containsKey(name)) return _local[name]!;
+    return item.props['defaultChecked'] == true;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final selected = widget.stateValue is List ? (widget.stateValue as List).toSet() : _local;
-    return Column(
-      children: [
-        for (final item in widget.items)
-          SwitchListTile(
-            title: Text(item.stringOf('label')),
-            value: selected.contains(item.props['value'] ?? item.stringOf('label')),
-            onChanged: widget.enabled
-                ? (v) {
-                    final value = item.props['value'] ?? item.stringOf('label');
-                    final next = Set.of(selected);
-                    if (v) {
-                      next.add(value);
-                    } else {
-                      next.remove(value);
-                    }
-                    if (widget.bind != null) {
-                      widget.onChanged(widget.bind, next.toList());
-                    } else {
-                      setState(() {
-                        _local
-                          ..clear()
-                          ..addAll(next);
-                      });
-                    }
-                  }
-                : null,
-          ),
-      ],
-    );
+    Widget tile(ElementNode item) {
+      final t = SwitchListTile(
+        title: item.props['label'] is String ? Text(item.stringOf('label')) : null,
+        subtitle: item.props['description'] is String ? Text(item.stringOf('description')) : null,
+        value: _checked(item),
+        onChanged: widget.enabled
+            ? (v) {
+                final next = <String, bool>{};
+                for (final it in widget.items) {
+                  next[it.stringOf('name')] = _checked(it);
+                }
+                next[item.stringOf('name')] = v;
+                if (widget.stateKey != null) {
+                  widget.onChanged(widget.stateKey, next);
+                } else {
+                  setState(() {
+                    _local
+                      ..clear()
+                      ..addAll(next);
+                  });
+                }
+              }
+            : null,
+      );
+      if (widget.variant == 'card') return Card(child: t);
+      return t;
+    }
+
+    final column = Column(children: [for (final item in widget.items) tile(item)]);
+    if (widget.variant == 'sunk') {
+      return Container(color: Colors.grey.shade100, child: column);
+    }
+    return column;
   }
 }
 
 // ---------------- Date picker / slider fields ----------------
 
 class DatePickerField extends StatelessWidget {
-  const DatePickerField({required this.label, required this.bind, required this.value, required this.onChanged, this.enabled = true});
-  final String label;
-  final String? bind;
+  const DatePickerField({required this.stateKey, required this.value, required this.onChanged, this.enabled = true});
+  final String? stateKey;
   final String? value;
   final void Function(String?, Object?) onChanged;
   final bool enabled;
@@ -304,14 +377,14 @@ class DatePickerField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Expanded(child: Text('$label: ${value ?? '未选择'}')),
+          Expanded(child: Text(value ?? '未选择')),
           OutlinedButton(
             onPressed: enabled
                 ? () async {
                     final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
                     if (picked != null) {
                       final iso = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-                      onChanged(bind, iso);
+                      onChanged(stateKey, iso);
                     }
                   }
                 : null,
@@ -324,12 +397,14 @@ class DatePickerField extends StatelessWidget {
 }
 
 class SliderField extends StatelessWidget {
-  const SliderField({required this.label, required this.bind, required this.value, required this.min, required this.max, required this.onChanged, this.enabled = true});
-  final String label;
-  final String? bind;
+  const SliderField({required this.label, required this.stateKey, required this.value, required this.min, required this.max, this.divisions, required this.onChanged, this.enabled = true});
+  final String? label;
+  final String? stateKey;
   final double value;
   final double min;
   final double max;
+  // Discrete variant only, from step; null means continuous.
+  final int? divisions;
   final void Function(String?, Object?) onChanged;
   final bool enabled;
   @override
@@ -339,12 +414,13 @@ class SliderField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label: ${value.toStringAsFixed(0)}'),
+          Text(label != null ? '$label: ${value.toStringAsFixed(0)}' : value.toStringAsFixed(0)),
           Slider(
             value: value.clamp(min, max),
             min: min,
             max: max,
-            onChanged: enabled ? (v) => onChanged(bind, v) : null,
+            divisions: divisions,
+            onChanged: enabled ? (v) => onChanged(stateKey, v) : null,
           ),
         ],
       ),

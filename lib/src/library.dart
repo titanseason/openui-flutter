@@ -330,89 +330,133 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('trend', _any),
       ]),
       // ---- Form & input (19) ----
-      const ComponentDef('Form', 'Form container; children are inputs and buttons.', [
-        PropDef('children', _nodes, required: true),
+      // Props follow the @openuidev/react-ui 0.18.1 Zod schemas in
+      // declaration order (see docs/react-1.0-diff/react-source-props.md
+      // §2, "Forms"). Form state is keyed by each input's `name` prop
+      // (the old `bind` prop is gone). `rules` is accepted and stored
+      // on every input; enforcement is out of scope except the
+      // required marker on FormControl labels (see renderer). The
+      // mapper does not enforce FormControl's input union: any node is
+      // accepted as `input`. SwitchGroup is deliberately NOT a
+      // FormControl input in React's schema and stays standalone here.
+      const ComponentDef('Form', 'Form container: name, Buttons node, FormControl fields.', [
+        PropDef('name', _s, required: true),
+        PropDef('buttons', _node, required: true),
+        PropDef('fields', _nodes, defaultValue: const []),
       ]),
-      const ComponentDef('FormControl', 'Field wrapper: label, children, optional hint.', [
+      const ComponentDef('FormControl', 'Field wrapper: label, a single input node, optional hint.', [
         PropDef('label', _s, required: true),
-        PropDef('children', _nodes, required: true),
+        PropDef('input', _node, required: true),
         PropDef('hint', _s),
       ]),
       const ComponentDef('Label', 'Field label text.', [
         PropDef('text', _s, required: true),
       ]),
-      const ComponentDef('Input', 'Single-line text input. bind: state key to write to.', [
-        PropDef('label', _s, required: true),
-        PropDef('bind', _s),
-        PropDef('value', _any),
+      const ComponentDef('Input', 'Single-line text input; state key is name. type: text/email/password/number/url.', [
+        PropDef('name', _s, required: true),
         PropDef('placeholder', _s),
-      ]),
-      const ComponentDef('TextArea', 'Multi-line text input. bind: state key to write to.', [
-        PropDef('label', _s, required: true),
-        PropDef('bind', _s),
+        PropDef('type', _s),
+        PropDef('rules', _any),
         PropDef('value', _any),
+      ]),
+      const ComponentDef('TextArea', 'Multi-line text input; state key is name.', [
+        PropDef('name', _s, required: true),
         PropDef('placeholder', _s),
-      ]),
-      const ComponentDef('Select', 'Dropdown; pass SelectItem nodes as a list.', [
-        PropDef('options', _nodes, required: true),
-        PropDef('bind', _s),
-      ]),
-      const ComponentDef('SelectItem', 'One dropdown option.', [
-        PropDef('label', _s, required: true),
+        PropDef('rows', _n),
+        PropDef('rules', _any),
         PropDef('value', _any),
       ]),
-      const ComponentDef('DatePicker', 'Date picker; writes an ISO date to bind.', [
-        PropDef('label', _s, required: true),
-        PropDef('bind', _s),
-        PropDef('value', _s),
-      ]),
-      const ComponentDef('Slider', 'Slider; writes a number to bind.', [
-        PropDef('label', _s, required: true),
-        PropDef('bind', _s),
-        PropDef('value', _n),
-        PropDef('min', _n, defaultValue: 0),
-        PropDef('max', _n, defaultValue: 100),
-      ]),
-      const ComponentDef('CheckBoxGroup', 'Multi-select group; pass CheckBoxItem nodes.', [
+      const ComponentDef('Select', 'Dropdown; items are SelectItem nodes, state key is name. size: small/medium/large.', [
+        PropDef('name', _s, required: true),
         PropDef('items', _nodes, required: true),
-        PropDef('bind', _s),
+        PropDef('placeholder', _s),
+        PropDef('rules', _any),
+        PropDef('value', _any),
+        PropDef('size', _s),
       ]),
-      const ComponentDef('CheckBoxItem', 'One checkbox option.', [
+      const ComponentDef('SelectItem', 'One dropdown option: value first, then label.', [
+        PropDef('value', _s, required: true),
         PropDef('label', _s, required: true),
+      ]),
+      const ComponentDef('DatePicker', 'Date picker; state key is name. mode range is accepted but renders as the single-date picker (documented deviation, see renderer).', [
+        PropDef('name', _s, required: true),
+        PropDef('mode', _s),
+        PropDef('rules', _any),
         PropDef('value', _any),
       ]),
-      const ComponentDef('RadioGroup', 'Single-select group; pass RadioItem nodes.', [
+      const ComponentDef('Slider', 'Slider; state key is name, value is an array of numbers (single-thumb use takes the first element). variant/min/max are required with no defaults.', [
+        PropDef('name', _s, required: true),
+        PropDef('variant', _s, required: true),
+        PropDef('min', _n, required: true),
+        PropDef('max', _n, required: true),
+        PropDef('step', _n),
+        PropDef('defaultValue', _any),
+        PropDef('label', _s),
+        PropDef('rules', _any),
+        PropDef('value', _any),
+      ]),
+      const ComponentDef('CheckBoxGroup', 'Multi-select group; state is a record of item name to boolean, keyed by name.', [
+        PropDef('name', _s, required: true),
         PropDef('items', _nodes, required: true),
-        PropDef('bind', _s),
-      ]),
-      const ComponentDef('RadioItem', 'One radio option.', [
-        PropDef('label', _s, required: true),
+        PropDef('rules', _any),
         PropDef('value', _any),
       ]),
-      const ComponentDef('SwitchGroup', 'Switch group; pass SwitchItem nodes.', [
+      const ComponentDef('CheckBoxItem', 'One checkbox option: label, description, state name, optional defaultChecked.', [
+        PropDef('label', _s, required: true),
+        PropDef('description', _s, required: true),
+        PropDef('name', _s, required: true),
+        PropDef('defaultChecked', _b),
+      ]),
+      const ComponentDef('RadioGroup', 'Single-select group; state is the selected item value string, keyed by name.', [
+        PropDef('name', _s, required: true),
         PropDef('items', _nodes, required: true),
-        PropDef('bind', _s),
-      ]),
-      const ComponentDef('SwitchItem', 'One switch option.', [
-        PropDef('label', _s, required: true),
+        PropDef('defaultValue', _s),
+        PropDef('rules', _any),
         PropDef('value', _any),
       ]),
-      const ComponentDef('Chips', 'Quick-choice chips; pass ChipItem nodes as a list.', [
+      const ComponentDef('RadioItem', 'One radio option: label, description, value.', [
+        PropDef('label', _s, required: true),
+        PropDef('description', _s, required: true),
+        PropDef('value', _s, required: true),
+      ]),
+      const ComponentDef('SwitchGroup', 'Switch group (standalone: NOT a FormControl input in React\'s schema); state is a record of item name to boolean, keyed by name. variant: clear/card/sunk.', [
+        PropDef('name', _s, required: true),
         PropDef('items', _nodes, required: true),
-        PropDef('bind', _s),
-      ]),
-      const ComponentDef('ChipItem', 'One chip option.', [
-        PropDef('label', _s, required: true),
+        PropDef('variant', _s),
         PropDef('value', _any),
       ]),
-      const ComponentDef('OptionCards', 'Selectable cards; pass OptionCard nodes.', [
-        PropDef('items', _nodes, required: true),
-        PropDef('bind', _s),
-      ]),
-      const ComponentDef('OptionCard', 'One selectable card: label, optional description.', [
-        PropDef('label', _s, required: true),
-        PropDef('value', _any),
+      const ComponentDef('SwitchItem', 'One switch option: state name required, label/description optional, optional defaultChecked.', [
+        PropDef('label', _s),
         PropDef('description', _s),
+        PropDef('name', _s, required: true),
+        PropDef('defaultChecked', _b),
+      ]),
+      const ComponentDef('Chips', 'Quick-choice chips; state key is name. type: single/multiple (default multiple).', [
+        PropDef('name', _s, required: true),
+        PropDef('type', _s, defaultValue: 'multiple'),
+        PropDef('items', _nodes, defaultValue: const []),
+        PropDef('rules', _any),
+        PropDef('defaultValue', _any),
+      ]),
+      const ComponentDef('ChipItem', 'One chip option: value first, then label; icon is a string name (React takes an Icon ref; this port keeps the string name).', [
+        PropDef('value', _s, required: true),
+        PropDef('label', _s, required: true),
+        PropDef('icon', _s),
+        PropDef('disabled', _b),
+      ]),
+      const ComponentDef('OptionCards', 'Selectable cards; state key is name. type: single/multiple (default single).', [
+        PropDef('name', _s, required: true),
+        PropDef('type', _s, defaultValue: 'single'),
+        PropDef('items', _nodes, defaultValue: const []),
+        PropDef('rules', _any),
+        PropDef('defaultValue', _any),
+      ]),
+      const ComponentDef('OptionCard', 'One selectable card: value first, then title; topContent is an Icon or Image node ref.', [
+        PropDef('value', _s, required: true),
+        PropDef('title', _s, required: true),
+        PropDef('subtitle', _s),
+        PropDef('topContent', _node),
+        PropDef('disabled', _b),
       ]),
       // ---- Actions & feedback (3) ----
       const ComponentDef('Button', 'Button with an optional action. variant: primary/secondary/tertiary; type: normal/destructive; size: extra-small/small/medium/large.', [
