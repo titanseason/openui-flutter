@@ -20,9 +20,9 @@ void main() {
   test('library now has all 95 component names', () {
     final names = library.components.map((c) => c.name).toList();
     // 86 GenUI names plus 9 extra chart components added in Task 6,
-    // plus 11 React official-name aliases (106 registered names).
-    expect(names.length, 106);
-    expect(names.toSet().length, 106);
+    // 86 GenUI names (React 0.18.1 names) plus 9 extra chart components.
+    expect(names.length, 95);
+    expect(names.toSet().length, 95);
     for (final name in ['HeatmapChart', 'FunnelChart', 'CalendarHeatmap', 'MiniBarChart', 'MiniLineChart', 'StackedLegend', 'BarChartCondensed', 'LineChartCondensed', 'AreaChartCondensed']) {
       expect(names, contains(name), reason: 'missing $name');
     }
@@ -32,7 +32,7 @@ void main() {
       'EditableTable', 'AreaChart', 'RadarChart', 'HorizontalBarChart', 'RadialChart', 'SingleStackedBarChart', 'ScatterChart', 'ScatterSeries', 'Point', 'TagBlock', 'Tag', 'EntityList', 'MetricIndicatorInline', 'MetricIndicatorWithStrikethrough',
       'FormControl', 'Label', 'TextArea', 'DatePicker', 'Slider', 'CheckBoxGroup', 'CheckBoxItem', 'RadioGroup', 'RadioItem', 'SwitchGroup', 'SwitchItem', 'OptionCards', 'OptionCard',
       'Buttons', 'IconButton', 'ListBlock', 'ListItem',
-      'SnippetBlock', 'SnippetItem', 'OverviewBlock', 'OverviewItem', 'ContextBlock', 'ContextItem', 'CompositeBlock', 'CompositeItem', 'VisualBlock', 'VisualItem',
+      'SnippetCardBlock', 'SnippetCardItem', 'OverviewCardBlock', 'OverviewCardItem', 'ContextCardBlock', 'ContextCardItem', 'CompositeCardBlock', 'CompositeCardItem', 'VisualCardBlock', 'VisualCardItem',
     ]) {
       expect(names, contains(name), reason: 'missing $name');
     }
@@ -80,11 +80,11 @@ void main() {
       'x1 = Buttons([Button("点", @ToAssistant("hi"))])',
       'x2 = IconButton("search", @ToAssistant("hi"))',
       'g1 = ListBlock([ListItem("第一条")])',
-      'h1 = SnippetBlock("摘要", [SnippetItem("条目")])',
-      'h2 = OverviewBlock("概览", [OverviewItem("条目")])',
-      'h3 = ContextBlock("上下文", [ContextItem("条目")])',
-      'h4 = CompositeBlock("组合", [CompositeItem("条目")])',
-      'h5 = VisualBlock("视觉", [VisualItem("条目", "https://example.com/a.png")])',
+      'h1 = SnippetCardBlock("摘要", [SnippetCardItem("条目")])',
+      'h2 = OverviewCardBlock("概览", [OverviewCardItem("条目")])',
+      'h3 = ContextCardBlock("上下文", [ContextCardItem("条目")])',
+      'h4 = CompositeCardBlock("组合", [CompositeCardItem("条目")])',
+      'h5 = VisualCardBlock("视觉", [VisualCardItem("条目", "https://example.com/a.png")])',
     ];
     final ids = snippets.map((s) => s.split(' = ').first).toList();
     final program = 'root = Stack([${ids.join(', ')}])\n${snippets.join('\n')}\n';
@@ -99,7 +99,7 @@ void main() {
       'EditableTable', 'AreaChart', 'RadarChart', 'HorizontalBarChart', 'RadialChart', 'SingleStackedBarChart', 'ScatterChart', 'ScatterSeries', 'Point', 'TagBlock', 'Tag', 'EntityList', 'MetricIndicatorInline', 'MetricIndicatorWithStrikethrough',
       'FormControl', 'Label', 'TextArea', 'DatePicker', 'Slider', 'CheckBoxGroup', 'RadioGroup', 'SwitchGroup', 'OptionCards',
       'Buttons', 'IconButton', 'ListBlock', 'ListItem',
-      'SnippetBlock', 'SnippetItem', 'OverviewBlock', 'OverviewItem', 'ContextBlock', 'ContextItem', 'CompositeBlock', 'CompositeItem', 'VisualBlock', 'VisualItem',
+      'SnippetCardBlock', 'SnippetCardItem', 'OverviewCardBlock', 'OverviewCardItem', 'ContextCardBlock', 'ContextCardItem', 'CompositeCardBlock', 'CompositeCardItem', 'VisualCardBlock', 'VisualCardItem',
     ]) {
       expect(found, contains(name), reason: 'not in tree: $name');
     }
@@ -152,7 +152,7 @@ tags = TagBlock([Tag("标签")])
 ents = EntityList(["张三"])
 m1 = MetricIndicatorInline("收入", "100", "+10%")
 m2 = MetricIndicatorWithStrikethrough("收入", "100", "120")
-snip = SnippetBlock("摘要标题", [SnippetItem("摘要条目")])
+snip = SnippetCardBlock("摘要标题", [SnippetCardItem("摘要条目")])
 lst = ListBlock([ListItem("列表第一条")])
 btns = Buttons([Button("点我", @ToAssistant("hi"))])
 ''',

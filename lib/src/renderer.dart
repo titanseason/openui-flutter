@@ -409,8 +409,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           _ => const TextStyle(fontSize: 15),
         };
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: style));
-      case 'MarkdownRenderer':
-      case 'MarkDownRenderer': // React official-name alias.
+      case 'MarkDownRenderer':
         return _MarkdownWidget(text: node.stringOf('text'));
       case 'Callout':
         final variant = node.stringOf('variant', 'info');
@@ -843,12 +842,6 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'ListItem':
         return ListTile(leading: const Text('•'), title: Text(node.stringOf('text')));
       // ---- Composite cards ----
-      case 'SnippetBlock':
-      case 'OverviewBlock':
-      case 'ContextBlock':
-      case 'CompositeBlock':
-      case 'VisualBlock':
-      // React official-name aliases.
       case 'SnippetCardBlock':
       case 'OverviewCardBlock':
       case 'ContextCardBlock':
@@ -865,12 +858,6 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
             ),
           ),
         );
-      case 'SnippetItem':
-      case 'OverviewItem':
-      case 'ContextItem':
-      case 'CompositeItem':
-      case 'VisualItem':
-      // React official-name aliases.
       case 'SnippetCardItem':
       case 'OverviewCardItem':
       case 'ContextCardItem':
@@ -1027,7 +1014,7 @@ class _Skeleton extends StatelessWidget {
 }
 
 // ---------------- Markdown (flutter_markdown_plus) ----------------
-// MarkdownRenderer now uses the flutter_markdown_plus package (full
+// MarkDownRenderer now uses the flutter_markdown_plus package (full
 // Markdown: headings, lists, tables, links, code blocks, inline code,
 // bold/italic, blockquotes, etc.) instead of the previous hand-written
 // subset. MarkdownBody sizes to its content, so it fits inside the

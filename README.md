@@ -12,8 +12,9 @@ Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外�
   最初的 25 个 MVP 组件是这 86 个的子集。另有 9 个扩展图表组件
   （HeatmapChart、FunnelChart、CalendarHeatmap、MiniBarChart、
   MiniLineChart、StackedLegend、BarChartCondensed、LineChartCondensed、
-  AreaChartCondensed），另有 11 个 React 官方名别名（MarkDownRenderer
-  及 5 组 *CardBlock/*CardItem），库内组件 95 个、注册名共 106 个。
+  AreaChartCondensed），库内组件总数为 95。组件名与
+  @openuidev/react-ui 0.18.1 直接对齐（含 MarkDownRenderer 及
+  5 组 *CardBlock/*CardItem）。
 - 生成侧（系统提示）由库定义导出：`OpenUILibrary.prompt()` 会按组件名、
   props 顺序、描述生成给模型的说明，模型只能用库里的组件。
 
@@ -34,7 +35,7 @@ Flutter API，但 `lang.dart` 为了在库上挂接自定义构建器而 import 
 import——这是 Task 3 留下的耦合，见下方“已知取舍”。渲染器在
 `lib/src/renderer.dart`，组件定义在 `lib/src/library.dart`。
 
-## 组件清单（86 个 GenUI + 9 个扩展图表 = 95 个组件，另加 11 个 React 官方名别名，共 106 个注册名）
+## 组件清单（86 个 GenUI + 9 个扩展图表 = 95）
 
 9 个扩展图表见下方“图表”一节（HeatmapChart、FunnelChart、
 CalendarHeatmap、MiniBarChart、MiniLineChart、StackedLegend、
@@ -43,7 +44,7 @@ BarChartCondensed、LineChartCondensed、AreaChartCondensed）。
 布局 13：Stack, Card, Tabs, TabItem, Accordion, AccordionItem, Steps,
 StepsItem, Carousel, Separator, Modal, SectionBlock, SectionItem。
 
-内容 16：CardHeader, TextContent, Text, BoldText, MarkdownRenderer,
+内容 16：CardHeader, TextContent, Text, BoldText, MarkDownRenderer,
 Callout, TextCallout, Image, ImageBlock, ImageGallery, ImageText,
 ImageTextLarge, IconText, CodeBlock, InlineHeader, Icon。
 
@@ -61,9 +62,9 @@ SwitchGroup, SwitchItem, Chips, ChipItem, OptionCards, OptionCard。
 
 对话引导 4：FollowUpBlock, FollowUpItem, ListBlock, ListItem。
 
-组合卡片 10：SnippetBlock/SnippetItem, OverviewBlock/OverviewItem,
-ContextBlock/ContextItem, CompositeBlock/CompositeItem,
-VisualBlock/VisualItem。
+组合卡片 10：SnippetCardBlock/SnippetCardItem, OverviewCardBlock/OverviewCardItem,
+ContextCardBlock/ContextCardItem, CompositeCardBlock/CompositeCardItem,
+VisualCardBlock/VisualCardItem。
 
 注意：props 仍是 MVP 精简版，不是官方 Zod 的 1:1 复刻；组合卡片
 用 Block/Item 命名（见 library.dart 头注）；Modal 渲染为真正的
@@ -71,7 +72,7 @@ AlertDialog（同一位置出现新的 Modal 语句时会重新打开，关闭�
 重开）；渲染器现在会包一层 Material，保证
 ListTile/Chip/TextField 等在没有 Scaffold 的宿主里也能用。
 
-Markdown 说明：`MarkdownRenderer` 用 flutter_markdown_plus
+Markdown 说明：`MarkDownRenderer` 用 flutter_markdown_plus
 （`MarkdownBody`，版本见 pubspec，当前解析为 1.0.12），支持全量
 Markdown：标题、列表、表格、链接、引用、代码围栏、行内代码、
 粗体/斜体等。`CodeBlock` 是纯文本等宽渲染，没有引入高亮依赖

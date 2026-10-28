@@ -173,11 +173,11 @@ rows = [{"priority": "高"}, {"priority": "低"}]
 
   test('library prompt lists all 95 components', () {
     // 86 GenUI names plus 9 extra chart components added in Task 6,
-    // plus 11 React official-name aliases (106 registered names).
-    expect(library.components.length, 106);
+    // 86 GenUI names (React 0.18.1 names) plus 9 extra chart components.
+    expect(library.components.length, 95);
     expect(library.prompt(), contains('Tabs('));
     expect(library.prompt(), contains('TabItem('));
     expect(library.prompt(), contains('Accordion('));
-    expect(library.prompt(), contains('SnippetBlock('));
+    expect(library.prompt(), contains('SnippetCardBlock('));
   });
 }

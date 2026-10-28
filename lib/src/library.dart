@@ -7,27 +7,20 @@ const _nodes = PropType.nodeList;
 const _any = PropType.any;
 const _act = PropType.action;
 
-/// The full library: 95 components (GenUI names from @openuidev/react-ui
-/// 0.17.0, de-duplicated by name: layout 13, content 16, data 21,
-/// form 19, actions 3, dialogue 4, composite cards 10, plus 9 extra
-/// chart components) and 11 React official-name aliases, for 106
-/// registered names in total.
+/// The full library: 95 components. Names are aligned directly with
+/// @openuidev/react-ui 0.18.1 (see docs/react-1.0-diff/): layout 13,
+/// content 16, data 21, form 19, actions 3, dialogue 4, composite
+/// cards 10 (SnippetCardBlock/SnippetCardItem and so on, plus
+/// MarkDownRenderer), plus 9 extra chart components.
 ///
 /// Props are an MVP subset, not a 1:1 copy of the official Zod schemas:
 /// one representative prop per intent, in positional-argument order.
 /// This order is the contract: OpenUI Lang maps positional arguments
 /// to props in this order, and `library.prompt()` prints it for the model.
-///
-/// Composite card names use the Block/Item pattern of the other pairs
-/// (Tabs/TabItem, ListBlock/ListItem): SnippetBlock/SnippetItem and so
-/// on. The official React names keep the Card suffix
-/// (SnippetCardBlock/SnippetCardItem, ...); those 10 names plus
-/// MarkDownRenderer are registered below as aliases with the same props
-/// and rendering as their short-name canonicals, so programs written
-/// against either naming work. Alias scope is names only: an alias
-/// accepts the canonical's props, not the official Zod schema's props
-/// (e.g. the alias takes `text`, while React's MarkDownRenderer schema
-/// takes `textMarkdown`); props-level alignment is separate work.
+/// Name alignment is names only: a component accepts this library's
+/// props, not the official Zod schema's props (e.g. MarkDownRenderer
+/// takes `text` here, while React's schema takes `textMarkdown`);
+/// props-level alignment is separate work.
 ///
 /// The canonical library constructor. Use this for all new code.
 OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> functions = const []}) {
@@ -94,7 +87,7 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
       const ComponentDef('BoldText', 'Bold inline text.', [
         PropDef('text', _s, required: true),
       ]),
-      const ComponentDef('MarkdownRenderer', 'Markdown text rendered by flutter_markdown_plus (full Markdown).', [
+      const ComponentDef('MarkDownRenderer', 'Markdown text rendered by flutter_markdown_plus (full Markdown).', [
         PropDef('text', _s, required: true),
       ]),
       const ComponentDef('Callout', 'Tip/warning block. variant: info, warning, error.', [
@@ -362,93 +355,43 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('text', _s, required: true),
       ]),
       // ---- Composite cards (10) ----
-      const ComponentDef('SnippetBlock', 'Snippet card block; pass SnippetItem nodes.', [
+      const ComponentDef('SnippetCardBlock', 'Snippet card block; pass SnippetCardItem nodes.', [
         PropDef('title', _s),
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('SnippetItem', 'One snippet item: text and optional action.', [
+      const ComponentDef('SnippetCardItem', 'One snippet item: text and optional action.', [
         PropDef('text', _s, required: true),
         PropDef('action', _act),
       ]),
-      const ComponentDef('OverviewBlock', 'Overview card block; pass OverviewItem nodes.', [
+      const ComponentDef('OverviewCardBlock', 'Overview card block; pass OverviewCardItem nodes.', [
         PropDef('title', _s),
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('OverviewItem', 'One overview item: text and optional action.', [
+      const ComponentDef('OverviewCardItem', 'One overview item: text and optional action.', [
         PropDef('text', _s, required: true),
         PropDef('action', _act),
       ]),
-      const ComponentDef('ContextBlock', 'Context card block; pass ContextItem nodes.', [
+      const ComponentDef('ContextCardBlock', 'Context card block; pass ContextCardItem nodes.', [
         PropDef('title', _s),
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('ContextItem', 'One context item: text and optional action.', [
+      const ComponentDef('ContextCardItem', 'One context item: text and optional action.', [
         PropDef('text', _s, required: true),
         PropDef('action', _act),
       ]),
-      const ComponentDef('CompositeBlock', 'Composite card block; pass CompositeItem nodes.', [
+      const ComponentDef('CompositeCardBlock', 'Composite card block; pass CompositeCardItem nodes.', [
         PropDef('title', _s),
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('CompositeItem', 'One composite item: text and optional action.', [
+      const ComponentDef('CompositeCardItem', 'One composite item: text and optional action.', [
         PropDef('text', _s, required: true),
         PropDef('action', _act),
       ]),
-      const ComponentDef('VisualBlock', 'Visual card block; pass VisualItem nodes.', [
+      const ComponentDef('VisualCardBlock', 'Visual card block; pass VisualCardItem nodes.', [
         PropDef('title', _s),
         PropDef('items', _nodes, required: true),
       ]),
-      const ComponentDef('VisualItem', 'One visual item: text, optional image src and action.', [
-        PropDef('text', _s, required: true),
-        PropDef('src', _s),
-        PropDef('action', _act),
-      ]),
-      // ---- React official-name aliases (11) ----
-      // Same props and rendering as the canonical component named in
-      // each description; these names are what @openuidev/react-ui
-      // 0.18.1 registers (see docs/react-1.0-diff/). Adding an alias
-      // here without the matching renderer case below renders nothing:
-      // the renderer switches on the node name.
-      const ComponentDef('MarkDownRenderer', 'Alias of MarkdownRenderer (official React name).', [
-        PropDef('text', _s, required: true),
-      ]),
-      const ComponentDef('SnippetCardBlock', 'Alias of SnippetBlock (official React name).', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('SnippetCardItem', 'Alias of SnippetItem (official React name).', [
-        PropDef('text', _s, required: true),
-        PropDef('action', _act),
-      ]),
-      const ComponentDef('OverviewCardBlock', 'Alias of OverviewBlock (official React name).', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('OverviewCardItem', 'Alias of OverviewItem (official React name).', [
-        PropDef('text', _s, required: true),
-        PropDef('action', _act),
-      ]),
-      const ComponentDef('ContextCardBlock', 'Alias of ContextBlock (official React name).', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('ContextCardItem', 'Alias of ContextItem (official React name).', [
-        PropDef('text', _s, required: true),
-        PropDef('action', _act),
-      ]),
-      const ComponentDef('CompositeCardBlock', 'Alias of CompositeBlock (official React name).', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('CompositeCardItem', 'Alias of CompositeItem (official React name).', [
-        PropDef('text', _s, required: true),
-        PropDef('action', _act),
-      ]),
-      const ComponentDef('VisualCardBlock', 'Alias of VisualBlock (official React name).', [
-        PropDef('title', _s),
-        PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('VisualCardItem', 'Alias of VisualItem (official React name).', [
+      const ComponentDef('VisualCardItem', 'One visual item: text, optional image src and action.', [
         PropDef('text', _s, required: true),
         PropDef('src', _s),
         PropDef('action', _act),
