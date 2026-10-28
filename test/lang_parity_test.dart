@@ -127,6 +127,36 @@ m = Modal("标题", [TextContent("弹窗内容")])
     expect(find.byType(AlertDialog), findsNothing);
   });
 
+  testWidgets('replacement Modal at same position opens after first is closed', (tester) async {
+    Widget widgetFor(String response) => MaterialApp(
+      home: OpenUIRenderer(library: library, response: response),
+    );
+    await tester.pumpWidget(
+      widgetFor('''
+root = Stack([m])
+m = Modal("标题一", [TextContent("内容一")])
+'''),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('内容一'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    // A different Modal statement at the same position (same Stack
+    // child slot, so Flutter reuses the _ModalWidget state) must open
+    // again; the first statement's dismissed flag must not block it.
+    await tester.pumpWidget(
+      widgetFor('''
+root = Stack([m2])
+m2 = Modal("标题二", [TextContent("内容二")])
+'''),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('内容二'), findsOneWidget);
+  });
+
   testWidgets('bound EditableTable writes cells to form state', (tester) async {
     final states = <Map<String, Object?>>[];
     await tester.pumpWidget(

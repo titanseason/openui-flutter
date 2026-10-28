@@ -854,9 +854,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 /// A Modal node renders nothing inline and shows its content as a
 /// real overlay dialog once, on first build. The dialog is shown
 /// from a post-frame callback (never during build); the shown and
-/// dismissed flags live in this widget's state, so they reset only
-/// when the Modal node leaves the tree and this state is disposed,
-/// and a closed dialog never re-opens on a later rebuild.
+/// dismissed flags live in this widget's state, so they reset when
+/// the Modal node leaves the tree and this state is disposed, or
+/// when a different Modal statement takes the same position (see
+/// didUpdateWidget), and a closed dialog never re-opens on a later
+/// rebuild of the same statement.
 class _ModalWidget extends StatefulWidget {
   const _ModalWidget({required this.node, required this.buildNode});
   final ElementNode node;
@@ -869,6 +871,7 @@ class _ModalWidgetState extends State<_ModalWidget> {
   var _dialogShown = false;
   var _dismissed = false;
   var _showScheduled = false;
+  var _reopenAfterClose = false;
 
   @override
   void initState() {
@@ -879,6 +882,25 @@ class _ModalWidgetState extends State<_ModalWidget> {
   @override
   void didUpdateWidget(covariant _ModalWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // The brief's guard is keyed by statement, not by widget instance:
+    // Flutter reuses this stateful element by position, so a different
+    // Modal statement at the same position must not inherit the first
+    // statement's dismissed flag. Note: node identity alone is not a
+    // key — every re-parse creates new ElementNode objects, so
+    // identical() would reset on every rebuild and re-open a closed
+    // dialog; statementId is the stable per-statement key.
+    if (widget.node.statementId != oldWidget.node.statementId) {
+      if (_dialogShown) {
+        // The old dialog is still open; do not stack a second one on
+        // top. Clear the dismissed flag and re-open once it closes.
+        _reopenAfterClose = true;
+        _dismissed = false;
+      } else {
+        _dismissed = false;
+        _dialogShown = false;
+        _showScheduled = false;
+      }
+    }
     _scheduleShow();
   }
 
@@ -902,8 +924,15 @@ class _ModalWidgetState extends State<_ModalWidget> {
           actions: [TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('关闭'))],
         ),
       ).then((_) {
-        if (mounted) setState(() => _dismissed = true);
-        _dialogShown = false;
+        if (_reopenAfterClose) {
+          _reopenAfterClose = false;
+          _dialogShown = false;
+          _dismissed = false;
+          _scheduleShow();
+        } else {
+          if (mounted) setState(() => _dismissed = true);
+          _dialogShown = false;
+        }
       });
     });
   }
