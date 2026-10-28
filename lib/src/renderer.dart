@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:syntax_highlight/syntax_highlight.dart';
 
 import 'controller.dart';
 import 'extra_widgets.dart';
@@ -614,13 +613,12 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'IconText':
         return Row(children: [Icon(iconByName(node.stringOf('icon')), size: 20), const SizedBox(width: 6), Expanded(child: Text(node.stringOf('text')))]);
       case 'CodeBlock':
-        return _CodeBlockWidget(
-          code: node.stringOf('code'),
-          language: node.props['language'] is String ? node.stringOf('language') : null,
-          // The supplied OpenUI theme decides the grammar theme: a dark
-          // surface means a dark grammar theme. Old mode has no supplied
-          // theme (_theme is light()), so its appearance is unchanged.
-          isDark: _theme.colors.surface.computeLuminance() < 0.5,
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.all(10),
+          color: Colors.grey.shade100,
+          child: Text(node.stringOf('code'), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
         );
       case 'InlineHeader':
         return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)));
@@ -1266,104 +1264,4 @@ class _PiePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PiePainter old) => old.slices != slices || old.total != total || old.palette != palette;
-}
-
-/// Read-only CodeBlock with syntax highlighting via syntax_highlight
-/// (Serverpod, VSCode TextMate grammars, TextSpan output).
-/// Unknown/absent languages, and any grammar/theme init failure, fall
-/// back to plain monospace text — never a crash, never an empty block.
-/// While grammars/themes are still loading, plain text shows first and
-/// highlighting appears once the async load completes.
-class _CodeBlockWidget extends StatefulWidget {
-  const _CodeBlockWidget({required this.code, this.language, required this.isDark});
-  final String code;
-  final String? language;
-  final bool isDark;
-
-  @override
-  State<_CodeBlockWidget> createState() => _CodeBlockWidgetState();
-}
-
-class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
-  static const _supported = {'css', 'dart', 'go', 'html', 'java', 'javascript', 'json', 'kotlin', 'python', 'rust', 'serverpod_protocol', 'sql', 'swift', 'typescript', 'yaml'};
-  static const _aliases = {'js': 'javascript', 'ts': 'typescript', 'py': 'python', 'yml': 'yaml'};
-
-  // Shared across CodeBlocks: each grammar and each theme loads once.
-  // NOTE: these cache results, not futures. The package itself caches
-  // grammars in its own static map, so a later widget only needs to
-  // know a language is already initialised — it must not await a
-  // future completed in an earlier test, which flutter_test's
-  // per-test async zones do not reliably resume.
-  static final _initializedLanguages = <String>{};
-  static HighlighterTheme? _lightTheme;
-  static HighlighterTheme? _darkTheme;
-
-  Highlighter? _highlighter;
-
-  static String? _normalize(String? raw) {
-    final l = raw?.trim().toLowerCase();
-    if (l == null || l.isEmpty) return null;
-    final a = _aliases[l] ?? l;
-    return _supported.contains(a) ? a : null;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(covariant _CodeBlockWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.language != widget.language || oldWidget.isDark != widget.isDark) {
-      _highlighter = null;
-      _load();
-    }
-  }
-
-  Future<void> _load() async {
-    final lang = _normalize(widget.language);
-    if (lang == null) return;
-    try {
-      if (!_initializedLanguages.contains(lang)) {
-        await Highlighter.initialize([lang]);
-        _initializedLanguages.add(lang);
-      }
-      HighlighterTheme theme;
-      if (widget.isDark) {
-        _darkTheme ??= await HighlighterTheme.loadDarkTheme();
-        theme = _darkTheme!;
-      } else {
-        _lightTheme ??= await HighlighterTheme.loadLightTheme();
-        theme = _lightTheme!;
-      }
-      if (!mounted) return;
-      setState(() => _highlighter = Highlighter(language: lang, theme: theme));
-    } catch (_) {
-      // Grammar/theme asset missing or unloadable: stay on plain text.
-      if (mounted) setState(() => _highlighter = null);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    TextSpan? span;
-    if (_highlighter != null) {
-      try {
-        span = _highlighter!.highlight(widget.code);
-      } catch (_) {
-        span = null;
-      }
-    }
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(10),
-      color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100,
-      child: span == null
-          ? Text(widget.code, style: const TextStyle(fontFamily: 'monospace', fontSize: 13))
-          : Text.rich(span, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
-    );
-  }
 }
