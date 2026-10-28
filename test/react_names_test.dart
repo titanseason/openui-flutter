@@ -62,7 +62,7 @@ void main() {
               response: '''
 root = Stack([md, block])
 md = MarkDownRenderer("# Hi")
-block = SnippetCardBlock("Tips", [SnippetCardItem("first")])
+block = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "Tips"), Text("first"))])
 ''',
             ),
           ),

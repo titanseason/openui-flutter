@@ -5,6 +5,7 @@ const _n = PropType.number;
 const _l = PropType.list;
 const _b = PropType.boolean;
 const _nodes = PropType.nodeList;
+const _node = PropType.node;
 const _any = PropType.any;
 const _act = PropType.action;
 
@@ -453,46 +454,80 @@ OpenUILibrary openUIStandardLibrary({String root = 'Stack', List<FunctionDef> fu
         PropDef('action', _act),
       ]),
       // ---- Composite cards (10) ----
+      // Props follow the @openuidev/react-ui 0.18.1 Zod schemas in
+      // declaration order (see docs/react-1.0-diff/react-source-props.md
+      // §2, "Card blocks"). All five blocks share items/layout/
+      // responsive/action/gap and have NO title prop. React's
+      // items `.min(2)` constraint is NOT enforced here: no min-length
+      // machinery exists in the mapper (documented deviation).
+      // `layout` is grid by default; SnippetCardBlock is grid-only in
+      // React, so a carousel layout on it falls back to grid in the
+      // renderer. `responsive` is accepted but has no visible effect.
       const ComponentDef('SnippetCardBlock', 'Snippet card block; pass SnippetCardItem nodes.', [
-        PropDef('title', _s),
         PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('SnippetCardItem', 'One snippet item: text and optional action.', [
-        PropDef('text', _s, required: true),
+        PropDef('layout', _s, defaultValue: 'grid'),
+        PropDef('responsive', _b, defaultValue: true),
         PropDef('action', _act),
+        PropDef('gap', _any),
+      ]),
+      const ComponentDef('SnippetCardItem', 'Snippet item: lhs node required, rhs node optional.', [
+        PropDef('id', _s),
+        PropDef('lhs', _node, required: true),
+        PropDef('rhs', _node),
       ]),
       const ComponentDef('OverviewCardBlock', 'Overview card block; pass OverviewCardItem nodes.', [
-        PropDef('title', _s),
         PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('OverviewCardItem', 'One overview item: text and optional action.', [
-        PropDef('text', _s, required: true),
+        PropDef('layout', _s, defaultValue: 'grid'),
+        PropDef('responsive', _b, defaultValue: true),
         PropDef('action', _act),
+        PropDef('gap', _any),
+      ]),
+      const ComponentDef('OverviewCardItem', 'Overview item: top node required, bottom MetricIndicatorInline optional.', [
+        PropDef('id', _s),
+        PropDef('top', _node, required: true),
+        PropDef('bottom', _node),
       ]),
       const ComponentDef('ContextCardBlock', 'Context card block; pass ContextCardItem nodes.', [
-        PropDef('title', _s),
         PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('ContextCardItem', 'One context item: text and optional action.', [
-        PropDef('text', _s, required: true),
+        PropDef('layout', _s, defaultValue: 'grid'),
+        PropDef('responsive', _b, defaultValue: true),
         PropDef('action', _act),
+        PropDef('gap', _any),
+      ]),
+      const ComponentDef('ContextCardItem', 'Context item: title is a string or a Tag node; gray bg or bg image optional.', [
+        PropDef('id', _s),
+        PropDef('title', _any, required: true),
+        PropDef('body', _s),
+        PropDef('bgColor', _s),
+        PropDef('bgImageSrc', _s),
+        PropDef('bgImageAlt', _s),
       ]),
       const ComponentDef('CompositeCardBlock', 'Composite card block; pass CompositeCardItem nodes.', [
-        PropDef('title', _s),
         PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('CompositeCardItem', 'One composite item: text and optional action.', [
-        PropDef('text', _s, required: true),
+        PropDef('layout', _s, defaultValue: 'grid'),
+        PropDef('responsive', _b, defaultValue: true),
         PropDef('action', _act),
+        PropDef('gap', _any),
+      ]),
+      const ComponentDef('CompositeCardItem', 'Composite item: optional header node, body node list, footer {price, button}.', [
+        PropDef('id', _s),
+        PropDef('header', _node),
+        PropDef('body', _nodes, defaultValue: const []),
+        PropDef('footer', _any),
       ]),
       const ComponentDef('VisualCardBlock', 'Visual card block; pass VisualCardItem nodes.', [
-        PropDef('title', _s),
         PropDef('items', _nodes, required: true),
-      ]),
-      const ComponentDef('VisualCardItem', 'One visual item: text, optional image src and action.', [
-        PropDef('text', _s, required: true),
-        PropDef('src', _s),
+        PropDef('layout', _s, defaultValue: 'grid'),
+        PropDef('responsive', _b, defaultValue: true),
         PropDef('action', _act),
+        PropDef('gap', _any),
+      ]),
+      const ComponentDef('VisualCardItem', 'Visual item: BoldText body required, optional Tag and bg image.', [
+        PropDef('body', _node, required: true),
+        PropDef('id', _s),
+        PropDef('bgImageSrc', _s),
+        PropDef('tag', _node),
+        PropDef('bgImageAlt', _s),
       ]),
     ],
   );

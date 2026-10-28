@@ -136,6 +136,13 @@ class ElementNode {
     return const [];
   }
 
+  /// The single node held by a node-ref prop, or null when the prop is
+  /// absent or not a node (e.g. ContextCardItem's string title).
+  ElementNode? nodeOf(String prop) {
+    final v = props[prop];
+    return v is ElementNode ? v : null;
+  }
+
   static List<ElementNode> _flattenNodes(List list) {
     final out = <ElementNode>[];
     for (final e in list) {

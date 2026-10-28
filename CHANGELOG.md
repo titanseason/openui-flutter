@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Props Batch B (card blocks, from the schema-level diff against
+  @openuidev/react-ui 0.18.1): all 10 card-block components now follow
+  the React schemas — blocks take `items`/`layout?`/`responsive?`/
+  `action?`/`gap?` (no `title`); items take node refs, e.g.
+  SnippetCardItem `id?`/`lhs`/`rhs?`, OverviewCardItem `id?`/`top`/
+  `bottom?`, ContextCardItem `id?`/`title` (string or Tag node)/
+  `body?`/`bgColor?`/`bgImageSrc?`/`bgImageAlt?`, CompositeCardItem
+  `id?`/`header?`/`body?`/`footer?`, VisualCardItem `body` (BoldText)/
+  `id?`/`bgImageSrc?`/`tag?`/`bgImageAlt?`. Documented deviations:
+  items `.min(2)` not enforced; `responsive` accepted with no visible
+  effect; absent `gap` defaults to 8px; SnippetCardBlock `carousel`
+  falls back to grid (its schema is grid-only); bg image is decorative
+  with a translucent scrim, `bgImageAlt` not surfaced.
 - Props Batch A (from the schema-level diff against @openuidev/react-ui
   0.18.1): layout, content, Col, charts, data-display, actions,
   dialogue and host-primitive props now follow the React schemas —

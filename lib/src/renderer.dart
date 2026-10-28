@@ -1183,31 +1183,57 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           onTap: node.props['action'] != null && node.props['actionLabel'] is! String ? () => _dispatch(node.props['action']) : null,
         );
       // ---- Composite cards ----
+      // Blocks share items/layout/responsive/action/gap (React 0.18.1
+      // schemas); `responsive` is accepted with no visible effect.
       case 'SnippetCardBlock':
       case 'OverviewCardBlock':
       case 'ContextCardBlock':
       case 'CompositeCardBlock':
       case 'VisualCardBlock':
-        return Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), for (final c in node.nodesOf('items')) _buildNode(c)],
-            ),
+        return _cardBlock(node);
+      case 'SnippetCardItem':
+        final lhs = node.nodeOf('lhs');
+        final rhs = node.nodeOf('rhs');
+        return _cardItemCard([if (lhs != null) _buildNode(lhs), if (rhs != null) _buildNode(rhs)]);
+      case 'OverviewCardItem':
+        final top = node.nodeOf('top');
+        final bottom = node.nodeOf('bottom');
+        return _cardItemCard([if (top != null) _buildNode(top), if (bottom != null) _buildNode(bottom)]);
+      case 'ContextCardItem':
+        return _bgCardItem(
+          node,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              if (node.nodeOf('title') != null) _buildNode(node.nodeOf('title')!),
+              if (node.props['body'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('body'))),
+            ],
           ),
         );
-      case 'SnippetCardItem':
-      case 'OverviewCardItem':
-      case 'ContextCardItem':
       case 'CompositeCardItem':
+        final header = node.nodeOf('header');
+        final footer = node.props['footer'];
+        final price = footer is Map ? footer['price'] : null;
+        final button = footer is Map ? footer['button'] : null;
+        return _cardItemCard([
+          if (header != null) _buildNode(header),
+          for (final c in node.nodesOf('body')) _buildNode(c),
+          if (price is ElementNode || button is ElementNode)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [if (price is ElementNode) Expanded(child: _buildNode(price)), if (button is ElementNode) _buildNode(button)]),
+            ),
+        ]);
       case 'VisualCardItem':
-        return ListTile(
-          title: Text(node.stringOf('text')),
-          leading: node.props['src'] is String ? ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(node.stringOf('src'), width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 48, height: 48, color: Colors.grey.shade200))) : null,
-          onTap: node.props['action'] != null ? () => _dispatch(node.props['action']) : null,
+        final body = node.nodeOf('body');
+        final tag = node.nodeOf('tag');
+        return _bgCardItem(
+          node,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [if (body != null) _buildNode(body), if (tag != null) Padding(padding: const EdgeInsets.only(top: 6), child: _buildNode(tag))],
+          ),
         );
       default:
         // Col, Series, Slice, ScatterSeries, Point, SelectItem, ChipItem,
@@ -1216,6 +1242,82 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
         // are empty.
         return const SizedBox.shrink();
     }
+  }
+
+  // ---- Composite card helpers ----
+
+  Widget _cardItemCard(List<Widget> children) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+      margin: const EdgeInsets.all(4),
+      child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children)),
+    );
+  }
+
+  /// Gap for card blocks: a number is logical pixels, a string uses the
+  /// React gap scale, absent gap defaults to 8.
+  double _cardGap(ElementNode node) {
+    final gap = node.props['gap'];
+    if (gap is num) return gap.toDouble();
+    if (gap is String) return _gapValue(gap);
+    return 8;
+  }
+
+  Widget _cardBlock(ElementNode node) {
+    // SnippetCardBlock is grid-only in React; a carousel layout on it
+    // falls back to grid.
+    final layout = node.stringOf('layout', 'grid');
+    final effectiveLayout = node.component == 'SnippetCardBlock' && layout == 'carousel' ? 'grid' : layout;
+    final gap = _cardGap(node);
+    final items = [for (final c in node.nodesOf('items')) _buildNode(c)];
+    final Widget content;
+    if (effectiveLayout == 'carousel') {
+      content = SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [for (final w in items) Padding(padding: EdgeInsets.only(right: gap), child: SizedBox(width: 280, child: w))]),
+      );
+    } else {
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.isFinite ? (constraints.maxWidth - gap) / 2 : 280.0;
+          return Wrap(spacing: gap, runSpacing: gap, children: [for (final w in items) SizedBox(width: width, child: w)]);
+        },
+      );
+    }
+    final Widget block = Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: content);
+    // `responsive` is accepted with no visible effect (see library).
+    if (node.props['action'] != null) {
+      return InkWell(onTap: () => _dispatch(node.props['action']), child: block);
+    }
+    return block;
+  }
+
+  /// Card item with an optional gray background or background image.
+  /// With a bg image the content sits on a translucent white scrim so
+  /// text stays readable; the image itself is decorative (alt text is
+  /// not surfaced, matching the previous alt handling for card items).
+  Widget _bgCardItem(ElementNode node, Widget content) {
+    final bgImage = node.props['bgImageSrc'] is String ? node.stringOf('bgImageSrc') : null;
+    final gray = node.stringOf('bgColor') == 'gray';
+    if (bgImage == null) {
+      return Card(
+        color: gray ? Colors.grey.shade200 : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+        margin: const EdgeInsets.all(4),
+        child: Padding(padding: const EdgeInsets.all(12), child: content),
+      );
+    }
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
+      margin: const EdgeInsets.all(4),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned.fill(child: Image.network(bgImage, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const SizedBox.shrink())),
+          Container(color: Colors.white.withValues(alpha: 0.75), padding: const EdgeInsets.all(12), child: content),
+        ],
+      ),
+    );
   }
 
   List<String> _strings(Object? v) {

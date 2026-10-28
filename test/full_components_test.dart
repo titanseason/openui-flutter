@@ -81,11 +81,11 @@ void main() {
       'x1 = Buttons([Button("点", @ToAssistant("hi"))])',
       'x2 = IconButton("搜索", "search", @ToAssistant("hi"))',
       'g1 = ListBlock([ListItem("第一条")])',
-      'h1 = SnippetCardBlock("摘要", [SnippetCardItem("条目")])',
-      'h2 = OverviewCardBlock("概览", [OverviewCardItem("条目")])',
-      'h3 = ContextCardBlock("上下文", [ContextCardItem("条目")])',
-      'h4 = CompositeCardBlock("组合", [CompositeCardItem("条目")])',
-      'h5 = VisualCardBlock("视觉", [VisualCardItem("条目", "https://example.com/a.png")])',
+      'h1 = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("摘要右"))])',
+      'h2 = OverviewCardBlock([OverviewCardItem(null, IconText("search", null, null, "概览顶"), MetricIndicatorInline("100", "收入"))])',
+      'h3 = ContextCardBlock([ContextCardItem(null, "上下文标题", "上下文正文")])',
+      'h4 = CompositeCardBlock([CompositeCardItem(null, Text("组合头"), [Text("组合体")], {"price": BoldText("¥9"), "button": Button("买", @ToAssistant("buy"))})])',
+      'h5 = VisualCardBlock([VisualCardItem(BoldText("视觉体"), null, null, Tag("视觉标"))])',
     ];
     final ids = snippets.map((s) => s.split(' = ').first).toList();
     final program = 'root = Stack([${ids.join(', ')}])\n${snippets.join('\n')}\n';
@@ -153,7 +153,7 @@ tags = TagBlock(["标签"])
 ents = EntityList([{"left": "张三", "right": "详情"}])
 m1 = MetricIndicatorInline("100", "收入", {"direction": "up", "value": 10})
 m2 = MetricIndicatorWithStrikethrough("100", "收入", "120")
-snip = SnippetCardBlock("摘要标题", [SnippetCardItem("摘要条目")])
+snip = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("摘要右"))])
 lst = ListBlock([ListItem("列表第一条")])
 btns = Buttons([Button("点我", @ToAssistant("hi"))])
 ''',
@@ -162,7 +162,7 @@ btns = Buttons([Button("点我", @ToAssistant("hi"))])
       ),
     );
     await tester.pumpAndSettle();
-    for (final text in ['标签', '张三', '摘要标题', '摘要条目', '列表第一条', '点我']) {
+    for (final text in ['标签', '张三', '摘要左', '摘要右', '列表第一条', '点我']) {
       expect(find.text(text), findsWidgets);
     }
   });
