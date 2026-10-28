@@ -241,6 +241,47 @@ git add lib/src/lang.dart lib/src/renderer.dart test/lang_parity_test.dart
 git commit -m "feat: stored messages, parse callbacks, dialog Modal, bound EditableTable, Query error view"
 ```
 
+### Task 4b: CodeBlock syntax highlighting (added 2026-10-28 by user decision, runs after Task 4, before Task 5)
+
+**Files:**
+- Modify: `lib/src/renderer.dart`, `pubspec.yaml`
+- Test: `test/codeblock_test.dart`
+
+**Interfaces:**
+- Consumes: existing `CodeBlock` component (code string prop, language prop if present; check the library definition before implementing).
+- Produces: `CodeBlock` rendering via `syntax_highlight` (Serverpod, VSCode TextMate grammars, `TextSpan` output) when a language is recognised, falling back to plain monospace text for unknown/absent languages; highlighting must follow the theme (dark theme → dark grammar theme, light theme → light grammar theme) when a theme is supplied, otherwise the existing appearance.
+
+- [ ] **Step 1: Write the failing test**
+
+```dart
+testWidgets('CodeBlock highlights Dart keywords', (tester) async {
+  // Pump a CodeBlock with Dart code containing 'void' and 'print'.
+  // Expect: the code text is found and the widget tree contains a
+  // RichText with more than one TextSpan style (highlighting applied).
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `~/flutter/bin/flutter test test/codeblock_test.dart`
+Expected: FAIL (highlighting not applied, single style).
+
+- [ ] **Step 3: Implement CodeBlock highlighting with syntax_highlight**
+
+Add `syntax_highlight` to pubspec (user-approved; flutter_highlight is explicitly OUT). Initialise grammars/themes as the package requires (bundled assets, no extra host setup). Do not change CodeBlock's props or positional order.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `~/flutter/bin/flutter test test/codeblock_test.dart && ~/flutter/bin/flutter analyze`
+Expected: PASS, no issues.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add lib/src/renderer.dart pubspec.yaml test/codeblock_test.dart
+git commit -m "feat: CodeBlock syntax highlighting with syntax_highlight"
+```
+
 ### Task 5: Hand primitives (skeleton, citations, sources)
 
 **Files:**
