@@ -114,7 +114,14 @@ class _AgentInterfaceState extends State<AgentInterface> {
     final loaded = await widget.storage.loadThread(id) ??
         _threads.firstWhere((t) => t.id == id, orElse: () => throw StateError('unknown thread $id'));
     if (!mounted) return;
+    // Render the loaded thread, not the list entry: a storage that
+    // returns fresh copies (any file/DB-backed storage) may hold
+    // messages the listed entry does not, and controller indices
+    // must line up with the rendered copy.
+    final updated = _threads.map((t) => t.id == id ? loaded : t).toList();
+    if (!updated.any((t) => t.id == id)) updated.add(loaded);
     setState(() {
+      _threads = updated;
       _selectedId = id;
       _titleController = TextEditingController(text: loaded.title);
       for (var i = 0; i < loaded.messages.length; i++) {
@@ -156,6 +163,7 @@ class _AgentInterfaceState extends State<AgentInterface> {
     _streaming = true;
     _composerController.clear();
     var thread = _selected;
+    final createdThread = thread == null;
     if (thread == null) {
       thread = AgentThread(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -167,12 +175,33 @@ class _AgentInterfaceState extends State<AgentInterface> {
       _titleController = TextEditingController(text: thread.title);
     }
     final history = List<AgentMessage>.of(thread.messages);
+    final beforeLength = thread.messages.length;
     final userMessage = AgentMessage(role: 'user', text: prompt);
     thread.messages.add(userMessage);
     final assistantIndex = thread.messages.length;
     thread.messages.add(const AgentMessage(role: 'assistant', text: ''));
     final controller = _controllerFor(assistantIndex, thread.messages[assistantIndex]);
-    await widget.storage.saveThread(thread);
+    try {
+      await widget.storage.saveThread(thread);
+    } catch (_) {
+      // The first save is outside the streaming try/finally below, so
+      // a failure here must not leave the composer disabled forever
+      // with the prompt already cleared: roll back the optimistic
+      // appends (and a just-created thread), restore the prompt, and
+      // re-enable the composer so the user can retry.
+      thread.messages.removeRange(beforeLength, thread.messages.length);
+      if (createdThread) {
+        final failedThread = thread;
+        _threads = _threads.where((t) => t.id != failedThread.id).toList();
+        _selectedId = null;
+        _titleController?.dispose();
+        _titleController = null;
+      }
+      if (!mounted) return;
+      _composerController.text = prompt;
+      setState(() => _streaming = false);
+      return;
+    }
     if (!mounted) return;
     setState(() => _streaming = true);
     var accumulated = '';

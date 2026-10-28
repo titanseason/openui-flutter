@@ -40,11 +40,11 @@ class FakeLlm implements AgentLlm {
 AgentThread thread(String id, String title, List<AgentMessage> messages) =>
     AgentThread(id: id, title: title, messages: messages);
 
-Future<void> pumpShell(WidgetTester tester, FakeStorage storage) async {
+Future<void> pumpShell(WidgetTester tester, AgentStorage storage) async {
   await pumpShellWithLlm(tester, storage, FakeLlm());
 }
 
-Future<void> pumpShellWithLlm(WidgetTester tester, FakeStorage storage, AgentLlm llm) async {
+Future<void> pumpShellWithLlm(WidgetTester tester, AgentStorage storage, AgentLlm llm) async {
   await tester.pumpWidget(
     MaterialApp(
       home: AgentInterface(storage: storage, llm: llm),
@@ -63,6 +63,50 @@ class GatedLlm implements AgentLlm {
   Stream<String> send(List<AgentMessage> history, String prompt) async* {
     await gate.future;
     yield 'root = Stack([TextContent("hi")])';
+  }
+}
+
+/// Storage whose [loadThread] returns a fresh copy that differs from
+/// the listed entry — the shape any file/DB-backed storage has. The
+/// shell must render the loaded copy, not the stale list entry.
+class FreshCopyStorage implements AgentStorage {
+  @override
+  Future<List<AgentThread>> listThreads() async => [
+        thread('t1', 'Thread One', [
+          const AgentMessage(role: 'user', text: 'listed only'),
+        ]),
+      ];
+
+  @override
+  Future<AgentThread?> loadThread(String id) async => thread(id, 'Thread One', [
+        const AgentMessage(role: 'user', text: 'loaded fresh'),
+        const AgentMessage(
+          role: 'assistant',
+          text: 'root = Stack([TextContent("fresh")])',
+          openUiResponse: 'root = Stack([TextContent("fresh")])',
+        ),
+      ]);
+
+  @override
+  Future<void> saveThread(AgentThread thread) async {}
+
+  @override
+  Future<void> deleteThread(String id) async {}
+}
+
+/// Storage whose first [saveThread] throws and later saves succeed,
+/// so a failed send can be retried.
+class ThrowOnceStorage extends FakeStorage {
+  ThrowOnceStorage(super.threads);
+  var throwNextSave = true;
+
+  @override
+  Future<void> saveThread(AgentThread thread) async {
+    if (throwNextSave) {
+      throwNextSave = false;
+      throw Exception('save failed');
+    }
+    return super.saveThread(thread);
   }
 }
 
@@ -120,6 +164,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(storage.threads.containsKey('t1'), isFalse);
     expect(storage.deleteCalls, contains('t1'));
+  });
+
+  testWidgets('switching threads renders the freshly loaded thread', (tester) async {
+    await pumpShell(tester, FreshCopyStorage());
+    await tester.tap(find.text('Thread One'));
+    await tester.pumpAndSettle();
+    expect(find.text('loaded fresh'), findsOneWidget);
+    expect(find.text('fresh'), findsOneWidget);
+    expect(find.text('listed only'), findsNothing);
+  });
+
+  testWidgets('a throwing save before streaming restores the composer', (tester) async {
+    final storage = ThrowOnceStorage({
+      't1': thread('t1', 'Thread One', []),
+    });
+    await pumpShell(tester, storage);
+    await tester.tap(find.text('Thread One'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('agent-composer')), 'hello fail');
+    await tester.tap(find.byKey(const Key('agent-send')));
+    await tester.pumpAndSettle();
+    // Prompt restored, composer usable again, no phantom message sent.
+    expect(find.text('hello fail'), findsOneWidget);
+    final send = tester.widget<IconButton>(find.byKey(const Key('agent-send')));
+    expect(send.onPressed, isNotNull);
+    expect(storage.threads['t1']!.messages, isEmpty);
+
+    // Retry now succeeds: the first failure did not poison the shell.
+    await tester.tap(find.byKey(const Key('agent-send')));
+    await tester.pumpAndSettle();
+    expect(find.text('hi'), findsOneWidget);
+  });
+
+  testWidgets('a throwing save from welcome state rolls back the new thread', (tester) async {
+    final storage = ThrowOnceStorage({'t1': thread('t1', 'Thread One', [])});
+    await pumpShell(tester, storage);
+    // No thread selected: welcome state.
+    expect(find.text('Welcome to OpenUI'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('agent-composer')), 'hello new');
+    await tester.tap(find.byKey(const Key('agent-send')));
+    await tester.pumpAndSettle();
+    // Back to welcome (no half-created thread selected), prompt restored.
+    expect(find.text('Welcome to OpenUI'), findsOneWidget);
+    expect(find.text('hello new'), findsOneWidget);
+    final send = tester.widget<IconButton>(find.byKey(const Key('agent-send')));
+    expect(send.onPressed, isNotNull);
   });
 
   testWidgets('composer send is disabled while streaming', (tester) async {
