@@ -171,7 +171,7 @@ rows = [{"priority": "高"}, {"priority": "低"}]
     expect(lib.prompt(), contains('@Percent(part: number, total?: number) -> string'));
   });
 
-  test('library prompt lists all 86 components', () {
+  test('library prompt lists all 95 components', () {
     // 86 GenUI names plus 9 extra chart components added in Task 6.
     expect(library.components.length, 95);
     expect(library.prompt(), contains('Tabs('));

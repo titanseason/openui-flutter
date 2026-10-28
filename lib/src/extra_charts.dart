@@ -215,6 +215,11 @@ class FlRadarChartWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
+    // fl_chart asserts non-empty dataSets, so an empty series list
+    // (e.g. a Query returning nothing) renders the bordered empty box
+    // instead of crashing the whole render, mirroring the old painter's
+    // early return.
+    if (series.isEmpty) return _chartBox(height: 240, chart: const SizedBox.shrink());
     // fl_chart asserts at least 3 radar entries per data set. A 1- or
     // 2-axis radar is geometrically degenerate, so pad with zero
     // entries (and empty titles) rather than crashing.

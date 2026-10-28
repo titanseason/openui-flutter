@@ -17,7 +17,7 @@ void _collect(ElementNode node, Set<String> out) {
 void main() {
   final library = openUIMvpLibrary();
 
-  test('library now has all 86 GenUI component names', () {
+  test('library now has all 95 component names', () {
     final names = library.components.map((c) => c.name).toList();
     // 86 GenUI names plus 9 extra chart components added in Task 6.
     expect(names.length, 95);

@@ -106,6 +106,24 @@ c2 = AreaChartCondensed(["一", "二"], [Series("面紧", [1, 2])])
     expect(find.text('面紧'), findsNothing);
   });
 
+  testWidgets('radar chart with an empty series renders without crashing', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SingleChildScrollView(
+          child: OpenUIRenderer(
+            library: openUIMvpLibrary(),
+            response: '''
+root = RadarChart(["一", "二"], [])
+''',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The bordered empty box, not a fl_chart assertion failure.
+    expect(find.byType(FlRadarChartWidget), findsOneWidget);
+  });
+
   testWidgets('radar chart honours a custom theme palette', (tester) async {
     final controller = OpenUIController(
       library: openUIMvpLibrary(),
