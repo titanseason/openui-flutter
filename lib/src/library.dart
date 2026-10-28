@@ -200,6 +200,39 @@ OpenUILibrary openUIMvpLibrary({String root = 'Stack', List<FunctionDef> functio
         PropDef('x', _n, required: true),
         PropDef('y', _n, required: true),
       ]),
+      // ---- Extra charts (Task 6; fl_chart except Heatmap/Funnel/
+      // CalendarHeatmap, which have no fl_chart equivalent) ----
+      const ComponentDef('HeatmapChart', 'Heatmap: categories plus Series nodes.', [
+        PropDef('categories', _l, required: true),
+        PropDef('series', _nodes, required: true),
+      ]),
+      const ComponentDef('FunnelChart', 'Funnel; pass Slice nodes.', [
+        PropDef('slices', _nodes, required: true),
+      ]),
+      const ComponentDef('CalendarHeatmap', 'Calendar heatmap; values are {date, value} maps.', [
+        PropDef('values', _l, required: true),
+      ]),
+      const ComponentDef('MiniBarChart', 'Mini bar chart; values are numbers.', [
+        PropDef('values', _l, required: true),
+      ]),
+      const ComponentDef('MiniLineChart', 'Mini line chart; values are numbers.', [
+        PropDef('values', _l, required: true),
+      ]),
+      const ComponentDef('StackedLegend', 'Legend swatches; pass Series nodes.', [
+        PropDef('series', _nodes, required: true),
+      ]),
+      const ComponentDef('BarChartCondensed', 'Condensed bar chart: categories plus Series nodes.', [
+        PropDef('categories', _l, required: true),
+        PropDef('series', _nodes, required: true),
+      ]),
+      const ComponentDef('LineChartCondensed', 'Condensed line chart: categories plus Series nodes.', [
+        PropDef('categories', _l, required: true),
+        PropDef('series', _nodes, required: true),
+      ]),
+      const ComponentDef('AreaChartCondensed', 'Condensed area chart: categories plus Series nodes.', [
+        PropDef('categories', _l, required: true),
+        PropDef('series', _nodes, required: true),
+      ]),
       const ComponentDef('TagBlock', 'Tag list; pass Tag nodes.', [
         PropDef('items', _nodes, required: true),
       ]),

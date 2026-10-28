@@ -19,8 +19,12 @@ void main() {
 
   test('library now has all 86 GenUI component names', () {
     final names = library.components.map((c) => c.name).toList();
-    expect(names.length, 86);
-    expect(names.toSet().length, 86);
+    // 86 GenUI names plus 9 extra chart components added in Task 6.
+    expect(names.length, 95);
+    expect(names.toSet().length, 95);
+    for (final name in ['HeatmapChart', 'FunnelChart', 'CalendarHeatmap', 'MiniBarChart', 'MiniLineChart', 'StackedLegend', 'BarChartCondensed', 'LineChartCondensed', 'AreaChartCondensed']) {
+      expect(names, contains(name), reason: 'missing $name');
+    }
     for (final name in [
       'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem',
       'Text', 'BoldText', 'TextCallout', 'ImageBlock', 'ImageGallery', 'ImageText', 'ImageTextLarge', 'IconText', 'CodeBlock', 'InlineHeader', 'Icon',

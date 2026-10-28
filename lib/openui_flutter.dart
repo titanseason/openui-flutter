@@ -1,4 +1,5 @@
 export 'src/controller.dart';
+export 'src/extra_charts.dart';
 export 'src/extra_widgets.dart';
 export 'src/lang.dart';
 export 'src/library.dart';

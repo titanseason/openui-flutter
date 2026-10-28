@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import 'extra_charts.dart';
 import 'lang.dart';
 
 /// Icon name to Material icon. Unknown names fall back to a neutral dot
@@ -70,229 +69,42 @@ IconData iconByName(String name) {
 
 const _palette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
 
-List<double> _seriesValues(ElementNode series) {
-  return ((series.props['values'] as List?) ?? const []).map((e) => (e as num?)?.toDouble() ?? 0).toList();
-}
-
-// ---------------- Radar ----------------
+// ---------------- Radar / radial / stacked / scatter (fl_chart) ----------------
+// These keep their public names and signatures (a palette parameter was
+// added so the theme palette threads through, closing Task 2's deferred
+// minor); the implementations live in extra_charts.dart.
 
 class RadarChartWidget extends StatelessWidget {
-  const RadarChartWidget({required this.categories, required this.series});
+  const RadarChartWidget({required this.categories, required this.series, this.palette = _palette});
   final List<String> categories;
   final List<ElementNode> series;
+  final List<Color> palette;
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 240,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        children: [
-          Expanded(child: CustomPaint(painter: _RadarPainter(categories: categories, series: series), size: Size.infinite)),
-          Wrap(
-            spacing: 12,
-            children: [for (var i = 0; i < series.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 4), Text(series[i].stringOf('label'))])],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FlRadarChartWidget(categories: categories, series: series, palette: palette);
 }
-
-class _RadarPainter extends CustomPainter {
-  _RadarPainter({required this.categories, required this.series});
-  final List<String> categories;
-  final List<ElementNode> series;
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (categories.isEmpty || series.isEmpty) return;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 16;
-    var maxV = 1.0;
-    final values = [for (final s in series) _seriesValues(s)];
-    for (final list in values) {
-      for (final v in list) {
-        maxV = math.max(maxV, v);
-      }
-    }
-    final axisPaint = Paint()
-      ..color = Colors.grey.shade300
-      ..style = PaintingStyle.stroke;
-    for (var i = 0; i < categories.length; i++) {
-      final angle = -math.pi / 2 + i * 2 * math.pi / categories.length;
-      final end = center + Offset(math.cos(angle), math.sin(angle)) * radius;
-      canvas.drawLine(center, end, axisPaint);
-      final tp = TextPainter(text: TextSpan(text: categories[i], style: const TextStyle(fontSize: 10, color: Colors.grey)), textDirection: TextDirection.ltr)..layout();
-      final labelPos = center + Offset(math.cos(angle), math.sin(angle)) * (radius + 6);
-      tp.paint(canvas, Offset(labelPos.dx - tp.width / 2, labelPos.dy - tp.height / 2));
-    }
-    for (var si = 0; si < series.length; si++) {
-      final path = Path();
-      for (var ci = 0; ci < categories.length; ci++) {
-        if (ci >= values[si].length) continue;
-        final angle = -math.pi / 2 + ci * 2 * math.pi / categories.length;
-        final r = values[si][ci] / maxV * radius;
-        final p = center + Offset(math.cos(angle), math.sin(angle)) * r;
-        if (ci == 0) {
-          path.moveTo(p.dx, p.dy);
-        } else {
-          path.lineTo(p.dx, p.dy);
-        }
-      }
-      path.close();
-      canvas.drawPath(path, Paint()..color = _palette[si % _palette.length].withValues(alpha: 0.25));
-      canvas.drawPath(path, Paint()
-        ..color = _palette[si % _palette.length]
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarPainter old) => old.categories != categories || old.series != series;
-}
-
-// ---------------- Radial / single stacked ----------------
 
 class RadialChartWidget extends StatelessWidget {
-  const RadialChartWidget({required this.slices});
+  const RadialChartWidget({required this.slices, this.palette = _palette});
   final List<ElementNode> slices;
+  final List<Color> palette;
   @override
-  Widget build(BuildContext context) {
-    final maxV = slices.fold<double>(1, (m, s) => math.max(m, s.numOf('value')));
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        children: [
-          SizedBox(height: 180, child: CustomPaint(painter: _RadialPainter(slices: slices, maxV: maxV), size: Size.infinite)),
-          for (var i = 0; i < slices.length; i++) Row(children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
-        ],
-      ),
-    );
-  }
-}
-
-class _RadialPainter extends CustomPainter {
-  _RadialPainter({required this.slices, required this.maxV});
-  final List<ElementNode> slices;
-  final double maxV;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final outer = math.min(size.width, size.height) / 2 - 8;
-    for (var i = 0; i < slices.length; i++) {
-      final radius = outer - i * 14;
-      if (radius <= 0) break;
-      canvas.drawCircle(center, radius, Paint()
-        ..color = Colors.grey.shade200
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 10);
-      final sweep = slices[i].numOf('value') / maxV * math.pi * 2;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -math.pi / 2, sweep, false, Paint()
-        ..color = _palette[i % _palette.length]
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
-        ..strokeCap = StrokeCap.round);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadialPainter old) => old.slices != slices || old.maxV != maxV;
+  Widget build(BuildContext context) => FlRadialChartWidget(slices: slices, palette: palette);
 }
 
 class SingleStackedBarWidget extends StatelessWidget {
-  const SingleStackedBarWidget({required this.slices});
+  const SingleStackedBarWidget({required this.slices, this.palette = _palette});
   final List<ElementNode> slices;
+  final List<Color> palette;
   @override
-  Widget build(BuildContext context) {
-    final total = slices.fold<double>(0, (s, n) => s + n.numOf('value'));
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              for (var i = 0; i < slices.length; i++)
-                Expanded(
-                  flex: (slices[i].numOf('value') * 100).round().clamp(1, 10000),
-                  child: Container(height: 24, color: _palette[i % _palette.length]),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 12,
-            children: [for (var i = 0; i < slices.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 4), Text('${slices[i].stringOf('label')} (${total == 0 ? 0 : (slices[i].numOf('value') / total * 100).round()}%)')])],
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FlStackedBarWidget(slices: slices, palette: palette);
 }
-
-// ---------------- Scatter ----------------
 
 class ScatterChartWidget extends StatelessWidget {
-  const ScatterChartWidget({required this.series});
+  const ScatterChartWidget({required this.series, this.palette = _palette});
   final List<ElementNode> series;
+  final List<Color> palette;
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 240,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        children: [
-          Expanded(child: CustomPaint(painter: _ScatterPainter(series: series), size: Size.infinite)),
-          Wrap(
-            spacing: 12,
-            children: [for (var i = 0; i < series.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _palette[i % _palette.length]), const SizedBox(width: 4), Text(series[i].stringOf('label'))])],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ScatterPainter extends CustomPainter {
-  _ScatterPainter({required this.series});
-  final List<ElementNode> series;
-  @override
-  void paint(Canvas canvas, Size size) {
-    var minX = double.infinity, maxX = -double.infinity, minY = double.infinity, maxY = -double.infinity;
-    final all = <List<(double, double)>>[];
-    for (final s in series) {
-      final pts = <(double, double)>[];
-      for (final p in s.nodesOf('points')) {
-        final x = p.numOf('x');
-        final y = p.numOf('y');
-        pts.add((x, y));
-        minX = math.min(minX, x);
-        maxX = math.max(maxX, x);
-        minY = math.min(minY, y);
-        maxY = math.max(maxY, y);
-      }
-      all.add(pts);
-    }
-    if (all.isEmpty || minX == double.infinity) return;
-    final spanX = (maxX - minX) == 0 ? 1 : maxX - minX;
-    final spanY = (maxY - minY) == 0 ? 1 : maxY - minY;
-    for (var si = 0; si < all.length; si++) {
-      for (final (x, y) in all[si]) {
-        final px = 16 + (x - minX) / spanX * (size.width - 32);
-        final py = 8 + (size.height - 16) - (y - minY) / spanY * (size.height - 16);
-        canvas.drawCircle(Offset(px, py), 5, Paint()..color = _palette[si % _palette.length]);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ScatterPainter old) => old.series != series;
+  Widget build(BuildContext context) => FlScatterChartWidget(series: series, palette: palette);
 }
 
 // ---------------- Option groups ----------------

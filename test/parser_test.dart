@@ -172,7 +172,8 @@ rows = [{"priority": "高"}, {"priority": "低"}]
   });
 
   test('library prompt lists all 86 components', () {
-    expect(library.components.length, 86);
+    // 86 GenUI names plus 9 extra chart components added in Task 6.
+    expect(library.components.length, 95);
     expect(library.prompt(), contains('Tabs('));
     expect(library.prompt(), contains('TabItem('));
     expect(library.prompt(), contains('Accordion('));

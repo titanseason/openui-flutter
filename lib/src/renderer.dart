@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'controller.dart';
+import 'extra_charts.dart';
 import 'extra_widgets.dart';
 import 'lang.dart';
 import 'primitives.dart';
@@ -688,15 +689,39 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'AreaChart':
         return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'RadarChart':
-        return RadarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'));
+        return RadarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'HorizontalBarChart':
         return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
       case 'RadialChart':
-        return RadialChartWidget(slices: node.nodesOf('slices'));
+        return RadialChartWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
       case 'SingleStackedBarChart':
-        return SingleStackedBarWidget(slices: node.nodesOf('slices'));
+        return SingleStackedBarWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
       case 'ScatterChart':
-        return ScatterChartWidget(series: node.nodesOf('series'));
+        return ScatterChartWidget(series: node.nodesOf('series'), palette: _theme.chartPalette);
+      case 'HeatmapChart':
+        return HeatmapChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette);
+      case 'FunnelChart':
+        return FunnelChartWidget(slices: node.nodesOf('slices'), palette: _theme.chartPalette);
+      case 'CalendarHeatmap':
+        return CalendarHeatmapWidget(
+          values: [
+            for (final e in (node.props['values'] as List? ?? const []))
+              if (e is Map) Map<String, Object?>.fromEntries(e.entries.map((en) => MapEntry('${en.key}', en.value))),
+          ],
+          palette: _theme.chartPalette,
+        );
+      case 'MiniBarChart':
+        return MiniBarChartWidget(values: _numbers(node.props['values']), palette: _theme.chartPalette);
+      case 'MiniLineChart':
+        return MiniLineChartWidget(values: _numbers(node.props['values']), palette: _theme.chartPalette);
+      case 'StackedLegend':
+        return StackedLegendWidget(series: node.nodesOf('series'), palette: _theme.chartPalette);
+      case 'BarChartCondensed':
+        return FlBarChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false);
+      case 'LineChartCondensed':
+        return FlLineChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false);
+      case 'AreaChartCondensed':
+        return FlLineChartWidget(categories: _strings(node.props['categories']), series: node.nodesOf('series'), palette: _theme.chartPalette, height: 120, showLegend: false, area: true);
       case 'TagBlock':
         return Wrap(spacing: 8, children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
       case 'Tag':
@@ -872,6 +897,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 
   List<String> _strings(Object? v) {
     if (v is List) return v.map((e) => '$e').toList();
+    return const [];
+  }
+
+  List<double> _numbers(Object? v) {
+    if (v is List) return v.map((e) => (e as num?)?.toDouble() ?? 0).toList();
     return const [];
   }
 }
@@ -1145,107 +1175,17 @@ class _ChartWidget extends StatelessWidget {
   final List<Color> palette;
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 220,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        children: [
-          Expanded(child: CustomPaint(painter: _ChartPainter(kind: kind, categories: categories, series: series, palette: palette), size: Size.infinite)),
-          Wrap(
-            spacing: 12,
-            children: [for (var i = 0; i < series.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: palette[i % palette.length]), const SizedBox(width: 4), Text(series[i].stringOf('label'))])],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChartPainter extends CustomPainter {
-  _ChartPainter({required this.kind, required this.categories, required this.series, this.palette = _palette});
-  final _ChartKind kind;
-  final List<String> categories;
-  final List<ElementNode> series;
-  final List<Color> palette;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final values = <List<double>>[];
-    var maxV = 1.0;
-    for (final s in series) {
-      final list = ((s.props['values'] as List?) ?? const []).map((e) => (e as num?)?.toDouble() ?? 0).toList();
-      values.add(list);
-      for (final v in list) {
-        maxV = math.max(maxV, v);
-      }
-    }
-    if (categories.isEmpty || values.isEmpty) return;
-    final plotW = size.width - 32;
-    final plotH = size.height - 24;
-    final stepX = plotW / categories.length;
-    if (kind == _ChartKind.bar) {
-      final groupW = stepX * 0.7;
-      final barW = groupW / values.length;
-      for (var ci = 0; ci < categories.length; ci++) {
-        for (var si = 0; si < values.length; si++) {
-          if (ci >= values[si].length) continue;
-          final h = values[si][ci] / maxV * plotH;
-          final rect = Rect.fromLTWH(16 + ci * stepX + (stepX - groupW) / 2 + si * barW + 1, 8 + plotH - h, barW - 2, h);
-          canvas.drawRect(rect, Paint()..color = palette[si % palette.length]);
-        }
-      }
-    } else if (kind == _ChartKind.hbar) {
-      final rowH = plotH / categories.length;
-      final groupH = rowH * 0.7;
-      final barH = groupH / values.length;
-      for (var ci = 0; ci < categories.length; ci++) {
-        for (var si = 0; si < values.length; si++) {
-          if (ci >= values[si].length) continue;
-          final w = values[si][ci] / maxV * plotW;
-          final rect = Rect.fromLTWH(16, 8 + ci * rowH + (rowH - groupH) / 2 + si * barH + 1, w, barH - 2);
-          canvas.drawRect(rect, Paint()..color = palette[si % palette.length]);
-        }
-      }
-    } else {
-      for (var si = 0; si < values.length; si++) {
-        final paint = Paint()
-          ..color = palette[si % palette.length]
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke;
-        final path = Path();
-        for (var ci = 0; ci < categories.length; ci++) {
-          if (ci >= values[si].length) continue;
-          final x = 16 + ci * stepX + stepX / 2;
-          final y = 8 + plotH - values[si][ci] / maxV * plotH;
-          if (ci == 0) {
-            path.moveTo(x, y);
-          } else {
-            path.lineTo(x, y);
-          }
-          canvas.drawCircle(Offset(x, y), 3, Paint()..color = palette[si % palette.length]);
-        }
-        if (kind == _ChartKind.area && categories.isNotEmpty) {
-          final fill = Path.from(path);
-          final firstX = 16 + stepX / 2;
-          final lastX = 16 + (categories.length - 1) * stepX + stepX / 2;
-          fill.lineTo(lastX, 8 + plotH);
-          fill.lineTo(firstX, 8 + plotH);
-          fill.close();
-          canvas.drawPath(fill, Paint()..color = palette[si % palette.length].withValues(alpha: 0.2));
-        }
-        canvas.drawPath(path, paint);
-      }
-    }
-    final labelStyle = const TextStyle(fontSize: 10, color: Colors.grey);
-    for (var ci = 0; ci < categories.length; ci++) {
-      final tp = TextPainter(text: TextSpan(text: categories[ci], style: labelStyle), textDirection: TextDirection.ltr)..layout();
-      tp.paint(canvas, Offset(16 + ci * stepX + stepX / 2 - tp.width / 2, 8 + plotH + 4));
+    switch (kind) {
+      case _ChartKind.bar:
+        return FlBarChartWidget(categories: categories, series: series, palette: palette);
+      case _ChartKind.hbar:
+        return FlBarChartWidget(categories: categories, series: series, palette: palette, horizontal: true);
+      case _ChartKind.line:
+        return FlLineChartWidget(categories: categories, series: series, palette: palette);
+      case _ChartKind.area:
+        return FlLineChartWidget(categories: categories, series: series, palette: palette, area: true);
     }
   }
-
-  @override
-  bool shouldRepaint(covariant _ChartPainter old) => old.kind != kind || old.categories != categories || old.series != series || old.palette != palette;
 }
 
 class _PieWidget extends StatelessWidget {
@@ -1253,40 +1193,5 @@ class _PieWidget extends StatelessWidget {
   final List<ElementNode> slices;
   final List<Color> palette;
   @override
-  Widget build(BuildContext context) {
-    final total = slices.fold<double>(0, (s, n) => s + n.numOf('value'));
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-      child: Column(
-        children: [
-          SizedBox(height: 180, child: CustomPaint(painter: _PiePainter(slices: slices, total: total == 0 ? 1 : total, palette: palette), size: Size.infinite)),
-          for (var i = 0; i < slices.length; i++)
-            Row(children: [Container(width: 10, height: 10, color: palette[i % palette.length]), const SizedBox(width: 6), Text('${slices[i].stringOf('label')} (${slices[i].numOf('value')})')]),
-        ],
-      ),
-    );
-  }
-}
-
-class _PiePainter extends CustomPainter {
-  _PiePainter({required this.slices, required this.total, this.palette = _palette});
-  final List<ElementNode> slices;
-  final double total;
-  final List<Color> palette;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 8;
-    var start = -math.pi / 2;
-    for (var i = 0; i < slices.length; i++) {
-      final sweep = slices[i].numOf('value') / total * math.pi * 2;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, true, Paint()..color = palette[i % palette.length]);
-      start += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PiePainter old) => old.slices != slices || old.total != total || old.palette != palette;
+  Widget build(BuildContext context) => FlPieChartWidget(slices: slices, palette: palette);
 }
