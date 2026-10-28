@@ -17,6 +17,26 @@
   Counts are now general 82, chat 84, union 86 — exactly React's
   0.18.1 registration. The example dashboard program and all tests
   that used the deleted names now use React charts.
+- BREAKING, React 0.18.1 full alignment (general library): gap
+  defaults and scale now match React (`--openui-space`: none 0,
+  xs 6, s 8, m 12, l 18, xl 24, 2xl 36; Stack/Card absent gap falls
+  back to "m" = 12, card-block absent gap to 12). Programs that
+  relied on zero default spacing now get 12px; the card golden
+  was regenerated for the new spacing.
+- React 0.18.1 full alignment (general library): the mapper now
+  enforces schema unions — card-block items min(2) and matching
+  item types, Snippet layout grid-only (other values error and
+  fall back to grid), the FormControl input whitelist (Input,
+  TextArea, Select, DatePicker, Slider, CheckBoxGroup, RadioGroup,
+  Chips, OptionCards), Form fields (FormControl only), Tabs/
+  Accordion/Steps/Buttons item types, chart series/dataset/point
+  types, and the content unions (TabItem/AccordionItem content,
+  Modal children, Card children, Carousel slides). Violations in
+  lists drop the item with a type-mismatch; a bad FormControl
+  input or a short block drops the node. Content unions are
+  general-library only (React's chat variants are wider); loading
+  placeholders are never filtered. Tests that used 1-item blocks
+  or SwitchGroup-in-FormControl now use React-valid programs.
 - Token-level incremental parsing: `StreamingParser.push` no longer
   runs two full parses per chunk. Two `IncrementalOpenUIParser`
   instances (stable lines, display text) cache line parses by line

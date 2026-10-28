@@ -349,22 +349,16 @@ root = OptionCards("plan", "single", [OptionCard("pro", "Pro", "Paid tier", Icon
     expect(find.text('Star'), findsOneWidget);
   });
 
-  testWidgets('SwitchGroup inside FormControl still renders: the input union is not enforced', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SingleChildScrollView(
-          child: OpenUIRenderer(
-            library: library,
-            response: '''
-root = FormControl("Toggles", SwitchGroup("toggles", [SwitchItem("Alerts", null, "alerts")]))
-''',
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Toggles'), findsOneWidget);
-    expect(find.text('Alerts'), findsOneWidget);
+  test('FormControl rejects SwitchGroup: the input union is enforced', () {
+    // React's FormControl input union is Input, TextArea, Select,
+    // DatePicker, Slider, CheckBoxGroup, RadioGroup, Chips,
+    // OptionCards — SwitchGroup is not a member, so the node drops.
+    final r = parseOpenUI('root = FormControl("Toggles", SwitchGroup("toggles", [SwitchItem("Alerts", null, "alerts")]))', library);
+    expect(r.root, isNull);
+    expect(r.errors.map((e) => e.code), contains('type-mismatch'));
+    final ok = parseOpenUI('root = FormControl("City", Input("city"))', library);
+    expect(ok.errors, isEmpty);
+    expect(ok.root, isNotNull);
   });
 
   test('old form programs fail with the mapper behaviour they actually hit', () {

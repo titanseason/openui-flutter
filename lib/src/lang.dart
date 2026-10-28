@@ -1487,6 +1487,189 @@ class _Evaluator {
       }
       props[prop.name] = value;
     }
+    // React schema unions the defs do not carry. A list union drops
+    // disallowed items (one type-mismatch each); a required single
+    // node outside its union, and card-block items under min(2),
+    // drop the node. Content unions apply to the general library
+    // only: React's chat variants are wider (unions.ts), and chat
+    // alignment is out of scope. Placeholder nodes (__Skeleton,
+    // __QueryError) are never filtered.
+    void filterNodes(String prop, Set<String> allowed) {
+      final value = props[prop];
+      if (value is! List) return;
+      final kept = <Object?>[];
+      for (final item in value) {
+        if (item is ElementNode && !item.component.startsWith('__') && !allowed.contains(item.component)) {
+          _err(OpenUIError('type-mismatch', 'wrong type for $prop on ${e.name}'));
+          continue;
+        }
+        kept.add(item);
+      }
+      props[prop] = kept;
+    }
+
+    const blockItems = {
+      'SnippetCardBlock': 'SnippetCardItem',
+      'OverviewCardBlock': 'OverviewCardItem',
+      'ContextCardBlock': 'ContextCardItem',
+      'CompositeCardBlock': 'CompositeCardItem',
+      'VisualCardBlock': 'VisualCardItem',
+    };
+    final blockItem = blockItems[e.name];
+    if (blockItem != null) {
+      filterNodes('items', {blockItem});
+      final items = props['items'];
+      // A loading list is a skeleton placeholder, not a short list.
+      final loading = items is List && items.any((i) => i is ElementNode && i.component.startsWith('__'));
+      if (items is List && items.length < 2 && !loading) {
+        _err(OpenUIError('type-mismatch', '${e.name} items must contain at least 2 items'));
+        dropped = true;
+      }
+      if (e.name == 'SnippetCardBlock') {
+        // Snippet's schema is grid-only; any other layout is invalid
+        // and falls back to the default, as with any wrong-typed
+        // optional prop that has a default.
+        final layout = props['layout'];
+        if (layout is String && layout != 'grid') {
+          _err(OpenUIError('type-mismatch', 'SnippetCardBlock layout must be "grid"'));
+          props['layout'] = 'grid';
+        }
+      }
+    }
+    if (e.name == 'FormControl') {
+      final input = props['input'];
+      if (input is ElementNode &&
+          !{
+            'Input',
+            'TextArea',
+            'Select',
+            'DatePicker',
+            'Slider',
+            'CheckBoxGroup',
+            'RadioGroup',
+            'Chips',
+            'OptionCards',
+          }.contains(input.component)) {
+        _err(OpenUIError('type-mismatch', 'wrong type for input on FormControl'));
+        dropped = true;
+      }
+    }
+    const listUnions = <String, Map<String, Set<String>>>{
+      'Tabs': {
+        'items': {'TabItem'},
+      },
+      'Accordion': {
+        'items': {'AccordionItem'},
+      },
+      'Steps': {
+        'items': {'StepsItem'},
+      },
+      'Buttons': {
+        'buttons': {'Button'},
+      },
+      'Form': {
+        'fields': {'FormControl'},
+      },
+      'BarChart': {
+        'series': {'Series'},
+      },
+      'LineChart': {
+        'series': {'Series'},
+      },
+      'AreaChart': {
+        'series': {'Series'},
+      },
+      'HorizontalBarChart': {
+        'series': {'Series'},
+      },
+      'RadarChart': {
+        'series': {'Series'},
+      },
+      'ScatterChart': {
+        'datasets': {'ScatterSeries'},
+      },
+      'ScatterSeries': {
+        'points': {'Point'},
+      },
+    };
+    for (final entry in (listUnions[e.name] ?? {}).entries) {
+      filterNodes(entry.key, entry.value);
+    }
+    if (!library.byName.containsKey('FollowUpBlock')) {
+      // General-library content unions (React unions.ts).
+      const contentChildUnion = {
+        'TextContent',
+        'MarkDownRenderer',
+        'CardHeader',
+        'Callout',
+        'TextCallout',
+        'CodeBlock',
+        'Image',
+        'ImageBlock',
+        'ImageGallery',
+        'Separator',
+        'HorizontalBarChart',
+        'RadarChart',
+        'PieChart',
+        'RadialChart',
+        'SingleStackedBarChart',
+        'ScatterChart',
+        'AreaChart',
+        'BarChart',
+        'LineChart',
+        'Table',
+        'TagBlock',
+        'Form',
+        'Buttons',
+        'IconButton',
+        'Steps',
+        'InlineHeader',
+        'EntityList',
+        'EditableTable',
+        'SnippetCardBlock',
+        'OverviewCardBlock',
+        'ContextCardBlock',
+        'CompositeCardBlock',
+        'VisualCardBlock',
+      };
+      if (e.name == 'TabItem' || e.name == 'AccordionItem') {
+        filterNodes('content', contentChildUnion);
+      }
+      if (e.name == 'Modal') {
+        filterNodes('children', contentChildUnion);
+      }
+      if (e.name == 'Card') {
+        filterNodes('children', {...contentChildUnion, 'Tabs', 'Carousel', 'Stack'});
+      }
+      if (e.name == 'Carousel') {
+        final children = props['children'];
+        if (children is List) {
+          final keptSlides = <Object?>[];
+          for (final slide in children) {
+            if (slide is List) {
+              final kept = <Object?>[];
+              for (final n in slide) {
+                if (n is ElementNode && !n.component.startsWith('__') && !contentChildUnion.contains(n.component)) {
+                  _err(OpenUIError('type-mismatch', 'wrong type for children on Carousel'));
+                  continue;
+                }
+                kept.add(n);
+              }
+              keptSlides.add(kept);
+            } else if (slide is ElementNode) {
+              if (slide.component.startsWith('__') || contentChildUnion.contains(slide.component)) {
+                keptSlides.add([slide]);
+              } else {
+                _err(OpenUIError('type-mismatch', 'wrong type for children on Carousel'));
+              }
+            } else {
+              _err(OpenUIError('type-mismatch', 'wrong type for children on Carousel'));
+            }
+          }
+          props['children'] = keptSlides;
+        }
+      }
+    }
     if (dropped) return null;
     return ElementNode(e.name, props, '');
   }

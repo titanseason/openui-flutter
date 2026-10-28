@@ -1451,12 +1451,13 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   /// Gap for card blocks: a number is logical pixels, a string uses the
-  /// React gap scale, absent gap defaults to 8.
+  /// React gap scale, absent gap defaults to 12 (React's
+  /// --openui-small/medium-card-gap, i.e. space-m).
   double _cardGap(ElementNode node) {
     final gap = node.props['gap'];
     if (gap is num) return gap.toDouble();
     if (gap is String) return _gapValue(gap);
-    return 8;
+    return 12;
   }
 
   Widget _cardBlock(ElementNode node) {
@@ -1560,24 +1561,24 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   }
 
   // ---- Flex layout (Stack / Card) ----
-  // Gap values follow the React gap scale. When gap is absent this
-  // port inserts no spacing (a documented deviation from React's
-  // renderer fallback of "m"), so existing programs keep their layout;
-  // an explicit gap value is always honoured.
+  // Gap values follow React's --openui-space scale (none 0, xs 6,
+  // s 8, m 12, l 18, xl 24, 2xl 36). When gap is absent, React's
+  // renderers fall back to "m" (12).
   double _gapValue(String? gap) => switch (gap) {
         'none' => 0,
-        'xs' => 4,
+        'xs' => 6,
         's' => 8,
         'm' => 12,
-        'l' => 16,
+        'l' => 18,
         'xl' => 24,
-        '2xl' => 32,
+        '2xl' => 36,
         _ => 0,
       };
 
   Widget _flexLayout(ElementNode node, List<Widget> children) {
     final direction = node.stringOf('direction', 'column');
-    final gap = _gapValue(node.props['gap'] is String ? node.stringOf('gap') : null);
+    // Absent gap falls back to "m" (12), as in React's renderers.
+    final gap = node.props['gap'] is String ? _gapValue(node.stringOf('gap')) : 12.0;
     final alignName = node.props['align'] is String ? node.stringOf('align') : (direction == 'row' ? 'start' : 'stretch');
     final crossAxis = switch (alignName) {
       'start' => CrossAxisAlignment.start,

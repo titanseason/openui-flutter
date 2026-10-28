@@ -91,11 +91,11 @@ void main() {
       'x1 = Buttons([Button("点", @ToAssistant("hi"))])',
       'x2 = IconButton("搜索", "search", @ToAssistant("hi"))',
       'g1 = ListBlock([ListItem("第一条")])',
-      'h1 = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右"))])',
-      'h2 = OverviewCardBlock([OverviewCardItem(null, IconText("search", null, null, "概览顶"), MetricIndicatorInline("100", "收入"))])',
-      'h3 = ContextCardBlock([ContextCardItem(null, "上下文标题", "上下文正文")])',
-      'h4 = CompositeCardBlock([CompositeCardItem(null, Text("text", "组合头"), [Text("text", "组合体")], {"price": BoldText("text", "¥9"), "button": Button("买", @ToAssistant("buy"))})])',
-      'h5 = VisualCardBlock([VisualCardItem(BoldText("text", "视觉体"), null, null, Tag("视觉标"))])',
+      'h1 = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右")), SnippetCardItem(null, IconText("search", null, null, "摘要左二"), Text("text", "摘要右二"))])',
+      'h2 = OverviewCardBlock([OverviewCardItem(null, IconText("search", null, null, "概览顶"), MetricIndicatorInline("100", "收入")), OverviewCardItem(null, IconText("search", null, null, "概览顶二"), MetricIndicatorInline("200", "支出"))])',
+      'h3 = ContextCardBlock([ContextCardItem(null, "上下文标题", "上下文正文"), ContextCardItem(null, "上下文标题二", "上下文正文二")])',
+      'h4 = CompositeCardBlock([CompositeCardItem(null, Text("text", "组合头"), [Text("text", "组合体")], {"price": BoldText("text", "¥9"), "button": Button("买", @ToAssistant("buy"))}), CompositeCardItem(null, Text("text", "组合头二"), [Text("text", "组合体二")], {"price": BoldText("text", "¥10"), "button": Button("买二", @ToAssistant("buy2"))})])',
+      'h5 = VisualCardBlock([VisualCardItem(BoldText("text", "视觉体"), null, null, Tag("视觉标")), VisualCardItem(BoldText("text", "视觉体二"), null, null, Tag("视觉标二"))])',
     ];
     final ids = snippets.map((s) => s.split(' = ').first).toList();
     final program = 'root = Stack([${ids.join(', ')}])\n${snippets.join('\n')}\n';
@@ -172,7 +172,7 @@ tags = TagBlock(["标签"])
 ents = EntityList([{"left": "张三", "right": "详情"}])
 m1 = MetricIndicatorInline("100", "收入", {"direction": "up", "value": 10})
 m2 = MetricIndicatorWithStrikethrough("100", "收入", "120")
-snip = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右"))])
+snip = SnippetCardBlock([SnippetCardItem(null, IconText("search", null, null, "摘要左"), Text("text", "摘要右")), SnippetCardItem(null, IconText("search", null, null, "摘要左二"), Text("text", "摘要右二"))])
 lst = ListBlock([ListItem("列表第一条")])
 btns = Buttons([Button("点我", @ToAssistant("hi"))])
 ''',

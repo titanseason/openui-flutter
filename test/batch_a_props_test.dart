@@ -45,7 +45,7 @@ void main() {
     expect(requiredNames('Image'), ['alt']);
   });
 
-  test('Text value-first deviation: one-arg call binds to value', () {
+  test('Text React order: variant first, value second', () {
     final r = parseOpenUI('root = Stack([t])\nt = Text("text", "hello")', library);
     expect(r.errors, isEmpty);
     final node = r.root!.nodesOf('children').single;
