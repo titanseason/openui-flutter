@@ -205,4 +205,4 @@ cd example && flutter test
 
 ## License
 
-首次发布前确定。
+Apache License 2.0，见 [LICENSE](./LICENSE)。

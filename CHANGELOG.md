@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- License: Apache License 2.0 (`LICENSE`, copyright 2026
+  titanseason). This clears the license item from the
+  pre-publish checklist; repository/homepage URLs and the
+  pub.dev account are still pending.
 - Renderer dispatch is now a registry: the built-in component
   switch is replaced by a `_builtinBuilders` map (73 names → 68
   functions; Text/BoldText share one, the five card blocks share

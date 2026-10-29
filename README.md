@@ -221,4 +221,5 @@ parity evidence (inventories, prop diffs, conformance notes), and
 
 ## License
 
-To be decided before the first publish.
+Licensed under the Apache License, Version 2.0. See
+[LICENSE](./LICENSE).
