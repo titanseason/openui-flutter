@@ -45,7 +45,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
           }
           return (title: widget.categories[ci], rows: rows);
         },
-        builder: (context, hoverPos) => CustomPaint(painter: _BarPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, horizontal: widget.horizontal, hidden: hidden, hoverPos: hoverPos)),
+        builder: (context, hoverPos, _) => CustomPaint(painter: _BarPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, horizontal: widget.horizontal, hidden: hidden, hoverPos: hoverPos)),
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );
@@ -85,7 +85,7 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
           }
           return (title: widget.categories[ci], rows: rows);
         },
-        builder: (context, hoverPos) => CustomPaint(painter: _LinePainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, hidden: hidden, hoverPos: hoverPos)),
+        builder: (context, hoverPos, _) => CustomPaint(painter: _LinePainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, hidden: hidden, hoverPos: hoverPos)),
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );
@@ -130,7 +130,7 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
                   rows: [(label: widget.labels[i], value: _fmtNum(v), color: _colorAt(widget.palette, i))],
                 );
               },
-              builder: (context, _) => CustomPaint(painter: _PiePainter(labels: widget.labels, values: widget.values, variant: widget.variant, appearance: widget.appearance, palette: widget.palette, hidden: hidden)),
+              builder: (context, _, __) => CustomPaint(painter: _PiePainter(labels: widget.labels, values: widget.values, variant: widget.variant, appearance: widget.appearance, palette: widget.palette, hidden: hidden)),
             ),
           ),
           for (var i = 0; i < widget.labels.length; i++)
@@ -192,7 +192,7 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
                   }
                   return (title: widget.categories[axis], rows: rows);
                 },
-                builder: (context, _) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden)),
+                builder: (context, _, __) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden)),
               ),
             ),
           ),
@@ -237,7 +237,7 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
                   rows: [(label: widget.labels[hit], value: _fmtNum(v), color: _colorAt(widget.palette, hit))],
                 );
               },
-              builder: (context, _) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden)),
+              builder: (context, _, __) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden)),
             ),
           ),
           for (var i = 0; i < widget.labels.length; i++)
@@ -257,41 +257,64 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
   }
 }
 
-class SingleStackedBarWidget extends StatelessWidget {
+class SingleStackedBarWidget extends StatefulWidget {
   const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
   @override
+  State<SingleStackedBarWidget> createState() => _SingleStackedBarWidgetState();
+}
+
+class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
+  // Hovering a legend row highlights its segment and dims the rest,
+  // like React's SegmentedBar. (Track hover comes through the
+  // _HoverArea builder, so the two never fight.)
+  int? _legendHovered;
+
+  @override
   Widget build(BuildContext context) {
-    final total = values.fold<double>(0, (a, b) => a + b);
-    final padded = [for (var i = 0; i < labels.length; i++) i < values.length ? values[i] : 0.0];
+    final total = widget.values.fold<double>(0, (a, b) => a + b);
+    final padded = [for (var i = 0; i < widget.labels.length; i++) i < widget.values.length ? widget.values[i] : 0.0];
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
-            height: 48,
+            height: 20,
             child: _HoverArea(
               onHover: (pos, area) {
-                final seg = _stackedSegmentAt(pos.dy, area.height, padded, total);
+                final seg = _stackedSegmentAtX(pos.dx, area.width, padded, total);
                 if (seg < 0) return null;
                 final v = padded[seg];
                 final pct = total == 0 ? 0.0 : v / total * 100;
-                final color = _colorAt(palette, seg);
+                final color = _colorAt(widget.palette, seg);
                 return (
-                  title: labels[seg],
-                  rows: [(label: labels[seg], value: _fmtNum(v), color: color), (label: 'Percentage', value: '${pct.toStringAsFixed(1)}%', color: color)],
+                  title: widget.labels[seg],
+                  rows: [(label: widget.labels[seg], value: _fmtNum(v), color: color), (label: 'Percentage', value: '${pct.toStringAsFixed(1)}%', color: color)],
                 );
               },
-              builder: (context, _) => CustomPaint(painter: _StackedBarPainter(values: padded, palette: palette, total: total)),
+              builder: (context, hoverPos, area) {
+                final trackHovered = hoverPos == null ? null : _stackedSegmentAtX(hoverPos.dx, area.width, padded, total);
+                return CustomPaint(painter: _StackedBarPainter(values: padded, palette: widget.palette, total: total, hoveredSegment: _legendHovered ?? trackHovered));
+              },
             ),
           ),
-          const SizedBox(height: 6),
+          // React's gap between the bar and the DefaultLegend.
+          const SizedBox(height: 12),
           Wrap(
             spacing: 12,
-            children: [for (var i = 0; i < labels.length; i++) Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 4), Text('${labels[i]} (${total == 0 ? 0 : ((i < values.length ? values[i] : 0) / total * 100).round()}%)')])],
+            children: [
+              for (var i = 0; i < widget.labels.length; i++)
+                MouseRegion(
+                  onEnter: (_) => setState(() => _legendHovered = i),
+                  onExit: (_) => setState(() => _legendHovered = null),
+                  // No toggle and no dim on the row itself: React's
+                  // SegmentedBar only hover-highlights.
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(widget.palette, i)), const SizedBox(width: 4), Text(widget.labels[i]), const SizedBox(width: 6), Text(total == 0 ? '0.0%' : '${(padded[i] / total * 100).toStringAsFixed(1)}%')]),
+                ),
+            ],
           ),
         ],
       ),
@@ -335,7 +358,7 @@ class _ScatterChartWidgetState extends State<ScatterChartWidget> with _LegendTog
                     rows: [(label: 'x', value: _fmtNum(d.x), color: color), (label: 'y', value: _fmtNum(d.y), color: color)],
                   );
                 },
-                builder: (context, _) => CustomPaint(painter: _ScatterPainter(layout: layout, palette: widget.palette)),
+                builder: (context, _, __) => CustomPaint(painter: _ScatterPainter(layout: layout, palette: widget.palette)),
               ),
             ),
           ),

@@ -216,14 +216,17 @@ void main() {
   testWidgets('stacked tooltip shows value and percentage, legend has no toggle', (tester) async {
     await pumpChart(tester, 'root = SingleStackedBarChart(["A", "B"], [1, 3])');
     final area = paintArea(tester);
-    // Segment A is the bottom quarter of the 48px column.
-    final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height - 6));
+    // The horizontal track: segment A is the first quarter, so a
+    // point well inside the left quarter hits it.
+    final gesture = await hoverAt(tester, area.topLeft + Offset(100, area.size.height / 2));
     expect(tipTitle(tester), 'A');
     expect(find.text('1'), findsOneWidget);
-    expect(find.text('25.0%'), findsOneWidget);
+    // Tooltip row and legend row both show 25.0%.
+    expect(find.text('25.0%'), findsNWidgets(2));
     await gesture.removePointer();
+    await tester.pump();
     // React's SegmentedBar has no legend visibility toggle.
-    await tester.tap(find.text('A (25%)'));
+    await tester.tap(find.text('A'));
     await tester.pump();
     expect(find.byType(Opacity), findsNothing);
   });

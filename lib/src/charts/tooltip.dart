@@ -136,17 +136,18 @@ int _scatterDotAt(Offset pos, ScatterPlot plot, List<ScatterDot> dots) {
   return best;
 }
 
-/// Vertical single-stacked-bar segment by y, mirroring
-/// [_StackedBarPainter] (segments stack upward from the bottom).
-/// Phase 3 turns the track horizontal and rewrites this.
-int _stackedSegmentAt(double dy, double height, List<double> values, double total) {
-  if (total <= 0 || values.isEmpty || height <= 0 || dy < 0 || dy > height) return -1;
-  var y = height;
+/// Single stacked bar segment by x, left to right, mirroring the
+/// painter exactly: 4px padding, 2px gaps, 2px minimum segment
+/// width. Hovering a gap returns -1 (no segment).
+int _stackedSegmentAtX(double dx, double width, List<double> values, double total) {
+  if (total <= 0 || values.isEmpty || width <= 0 || dx < 0 || dx > width) return -1;
+  const pad = 4.0, gap = 2.0;
+  final innerW = width - pad * 2 - gap * (values.length - 1);
+  var x = pad;
   for (var i = 0; i < values.length; i++) {
-    final h = height * values[i] / total;
-    if (h <= 0) continue;
-    y -= h;
-    if (dy >= y) return i;
+    final w = math.max(2.0, innerW * values[i] / total);
+    if (dx >= x && dx < x + w) return i;
+    x += w + gap;
   }
   return -1;
 }
@@ -205,7 +206,10 @@ class _ChartTip extends StatelessWidget {
 class _HoverArea extends StatefulWidget {
   const _HoverArea({required this.onHover, required this.builder});
   final TipData? Function(Offset pos, Size area) onHover;
-  final Widget Function(BuildContext context, Offset? hoverPos) builder;
+  // The builder also gets the paint area size, so a painter that
+  // needs the area for its own hit math (the stacked track) can
+  // derive a hovered index without extra state.
+  final Widget Function(BuildContext context, Offset? hoverPos, Size area) builder;
   @override
   State<_HoverArea> createState() => _HoverAreaState();
 }
@@ -255,7 +259,7 @@ class _HoverAreaState extends State<_HoverArea> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                widget.builder(context, _hoverPos),
+                widget.builder(context, _hoverPos, area),
                 if (_tip != null && left != null && top != null)
                   Positioned(left: left, top: top, child: _ChartTip(tip: _tip!)),
               ],

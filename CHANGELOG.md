@@ -7,6 +7,13 @@
   parts of `charts.dart`): no behavior change, all tests and
   goldens pass unchanged. The chart test moved to
   `test/charts/` alongside.
+- Single stacked bar is now a horizontal track (React parity,
+  Phase 3a): 20px tall, full width, segments sized by share of
+  total with 4px padding, 2px gaps, 2px minimum width and
+  rounded outer corners, plus the centered 1px accent line.
+  Hovering a segment or a legend row highlights it and dims the
+  rest; there is still no legend toggle. The legend now shows
+  label + percentage at 1 decimal, like React's DefaultLegend.
 - Chart axes and negative values (React parity, Phase 2):
   vertical charts (bar, line, area) and the scatter chart now
   draw a value axis with horizontal gridlines and d3-style nice
