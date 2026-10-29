@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Charts moved to their own folder (`lib/src/charts/`, one file
+  per chart type plus a shared `common.dart`, wired together as
+  parts of `charts.dart`): no behavior change, all tests and
+  goldens pass unchanged. The chart test moved to
+  `test/charts/` alongside.
 - Charts are fully self-drawn (`CustomPainter` in
   `extra_charts.dart`): fl_chart is removed, so the package's
   only third-party dependency is flutter_markdown_plus.

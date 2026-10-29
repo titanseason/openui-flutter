@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'controller.dart';
-import 'extra_charts.dart';
+import 'charts/charts.dart';
 import 'extra_widgets.dart';
 import 'lang.dart';
 import 'primitives.dart';
