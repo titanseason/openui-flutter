@@ -7,6 +7,18 @@
   parts of `charts.dart`): no behavior change, all tests and
   goldens pass unchanged. The chart test moved to
   `test/charts/` alongside.
+- Chart tooltips and legend toggles (React parity, Phase 1):
+  hovering a chart shows a tooltip card (title + one row per
+  series) and touch drag moves it; touch end hides it and a
+  stationary tap shows nothing, matching React's touch
+  semantics. Bars get a hovered-column highlight and lines get
+  active dots. Tapping a legend entry hides its series (pie
+  slices re-normalize over the visible ones, radial rings keep
+  their radii, scales never rescale on toggle). The single
+  stacked bar has a tooltip (value + percentage) but no legend
+  toggle, like React's SegmentedBar. Still missing: Y axis and
+  grid (Phase 2), scroll mode and legend forms (Phase 3),
+  calibration defaults (Phase 4).
 - Charts are fully self-drawn (`CustomPainter` in
   `extra_charts.dart`): fl_chart is removed, so the package's
   only third-party dependency is flutter_markdown_plus.

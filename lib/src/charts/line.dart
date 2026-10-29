@@ -3,7 +3,7 @@ part of openui_charts;
 // ---------------- Line / area ----------------
 
 class _LinePainter extends CustomPainter {
-  _LinePainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.area, required this.curved, required this.step});
+  _LinePainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.area, required this.curved, required this.step, this.hidden = const {}, this.hoverPos});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
@@ -11,6 +11,8 @@ class _LinePainter extends CustomPainter {
   final bool area;
   final bool curved;
   final bool step;
+  final Set<int> hidden;
+  final Offset? hoverPos;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -21,6 +23,7 @@ class _LinePainter extends CustomPainter {
     double px(int ci) => size.width * ci / denom;
     double py(double v) => plotH * (1 - v / maxY);
     for (var si = 0; si < all.length; si++) {
+      if (hidden.contains(si)) continue;
       final vals = all[si];
       if (vals.isEmpty) continue;
       final pts = [for (var ci = 0; ci < vals.length; ci++) Offset(px(ci), py(vals[ci]))];
@@ -59,6 +62,16 @@ class _LinePainter extends CustomPainter {
         ..strokeWidth = 2);
       for (final p in pts) {
         canvas.drawCircle(p, 4, Paint()..color = color);
+      }
+      // React's activeDots (default on): the hovered point gets a
+      // white ring so it reads as selected. Crosshair lines are
+      // opt-in in React, so no vertical line here.
+      if (hoverPos != null) {
+        final ci = _lineCategoryAtX(hoverPos!.dx, size.width, n);
+        if (ci >= 0 && ci < pts.length) {
+          canvas.drawCircle(pts[ci], 6, Paint()..color = Colors.white);
+          canvas.drawCircle(pts[ci], 4, Paint()..color = color);
+        }
       }
     }
     for (var ci = 0; ci < n; ci++) {

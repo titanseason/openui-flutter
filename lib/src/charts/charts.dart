@@ -30,4 +30,5 @@ part 'radar.dart';
 part 'radial.dart';
 part 'scatter.dart';
 part 'stacked.dart';
+part 'tooltip.dart';
 part 'widgets.dart';

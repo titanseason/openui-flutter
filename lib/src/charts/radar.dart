@@ -3,11 +3,12 @@ part of openui_charts;
 // ---------------- Radar ----------------
 
 class _RadarPainter extends CustomPainter {
-  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV});
+  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV, this.hidden = const {}});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
   final double maxV;
+  final Set<int> hidden;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -50,6 +51,7 @@ class _RadarPainter extends CustomPainter {
     // the center.
     final scale = maxV > 0 ? radius / maxV : 0.0;
     for (var si = 0; si < all.length; si++) {
+      if (hidden.contains(si)) continue;
       final vals = all[si];
       double val(int i) => i < vals.length ? vals[i] : 0;
       final color = _colorAt(palette, si);

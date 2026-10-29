@@ -3,16 +3,25 @@ part of openui_charts;
 // ---------------- Pie ----------------
 
 class _PiePainter extends CustomPainter {
-  _PiePainter({required this.labels, required this.values, required this.variant, required this.appearance, required this.palette});
+  _PiePainter({required this.labels, required this.values, required this.variant, required this.appearance, required this.palette, this.hidden = const {}});
   final List<String> labels;
   final List<double> values;
   final String variant;
   final String appearance;
   final List<Color> palette;
+  final Set<int> hidden;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final total = values.fold<double>(0, (a, b) => a + b);
+    // Hidden slices drop out and the rest re-normalize over the
+    // visible values, like React's legend toggle.
+    final visible = <int>[];
+    var total = 0.0;
+    for (var i = 0; i < labels.length; i++) {
+      if (hidden.contains(i)) continue;
+      visible.add(i);
+      total += i < values.length ? values[i] : 0;
+    }
     if (total <= 0 || labels.isEmpty) return;
     final center = Offset(size.width / 2, size.height / 2);
     final outerR = math.min(size.width, size.height) / 2 - 4;
@@ -24,7 +33,7 @@ class _PiePainter extends CustomPainter {
     final fullSweep = semi ? math.pi : math.pi * 2;
     var angle = semi ? math.pi : 0.0;
     final gap = 2 / outerR; // ~2px arc gap between sections.
-    for (var i = 0; i < labels.length; i++) {
+    for (final i in visible) {
       final v = i < values.length ? values[i] : 0;
       final sweep = v / total * fullSweep;
       if (sweep <= 0) continue;
