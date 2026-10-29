@@ -151,8 +151,10 @@ btns = Buttons([Button("一"), Button("二")], "column")
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('甲 (3.0)'), findsOneWidget);
-    expect(find.text('乙 (1.0)'), findsOneWidget);
+    expect(find.text('甲'), findsOneWidget);
+    expect(find.text('75.0%'), findsOneWidget);
+    expect(find.text('乙'), findsOneWidget);
+    expect(find.text('25.0%'), findsOneWidget);
     expect(find.text('一'), findsOneWidget);
     expect(find.text('二'), findsOneWidget);
   });

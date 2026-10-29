@@ -3,13 +3,16 @@ part of openui_charts;
 // ---------------- Pie ----------------
 
 class _PiePainter extends CustomPainter {
-  _PiePainter({required this.labels, required this.values, required this.variant, required this.appearance, required this.palette, this.hidden = const {}});
+  _PiePainter({required this.labels, required this.values, required this.variant, required this.appearance, required this.palette, this.hidden = const {}, this.hovered});
   final List<String> labels;
   final List<double> values;
   final String variant;
   final String appearance;
   final List<Color> palette;
   final Set<int> hidden;
+  // Legend or slice hover: the hovered slice stays full, the rest
+  // dim, like React's stacked-legend linking.
+  final int? hovered;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -41,10 +44,11 @@ class _PiePainter extends CustomPainter {
       final a0 = angle + inset;
       final a1 = angle + sweep - inset;
       if (a1 > a0) {
+        final color = _colorAt(palette, i);
+        final paint = Paint()..color = (hovered != null && hovered != i) ? color.withValues(alpha: 0.4) : color;
         if (donut && outerR > 42) {
           final midR = (outerR + 40) / 2;
-          canvas.drawArc(Rect.fromCircle(center: center, radius: midR), a0, a1 - a0, false, Paint()
-            ..color = _colorAt(palette, i)
+          canvas.drawArc(Rect.fromCircle(center: center, radius: midR), a0, a1 - a0, false, paint
             ..style = PaintingStyle.stroke
             ..strokeWidth = outerR - 40);
         } else {
@@ -52,7 +56,7 @@ class _PiePainter extends CustomPainter {
             ..moveTo(center.dx, center.dy)
             ..arcTo(Rect.fromCircle(center: center, radius: outerR), a0, a1 - a0, false)
             ..close();
-          canvas.drawPath(path, Paint()..color = _colorAt(palette, i));
+          canvas.drawPath(path, paint);
         }
       }
       // Section title, white on the slice; skipped for slivers

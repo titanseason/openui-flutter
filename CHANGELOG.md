@@ -7,6 +7,14 @@
   parts of `charts.dart`): no behavior change, all tests and
   goldens pass unchanged. The chart test moved to
   `test/charts/` alongside.
+- Chart legends (React parity, Phase 3b): pie/radial now use the
+  stacked legend — 32px rows with the label on the left and the
+  share on the right, re-normalized over the visible slices at 1
+  decimal, past 6 items behind "Show more"/"Show less", and
+  hovering a row (or a slice/ring) highlights it and dims the
+  rest. Series legends collapse by measured width behind a
+  "N more" / "Show Less" toggle like React's DefaultLegend.
+  Hidden rows dim to 0.3 (was 0.4).
 - Single stacked bar is now a horizontal track (React parity,
   Phase 3a): 20px tall, full width, segments sized by share of
   total with 4px padding, 2px gaps, 2px minimum width and

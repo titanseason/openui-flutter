@@ -94,7 +94,7 @@ void main() {
     await pumpChart(tester, 'root = BarChart(["A", "B"], [Series("S1", [10, 20]), Series("S2", [30, 40])])');
     await tester.tap(find.text('S1'));
     await tester.pump();
-    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.4), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.3), findsOneWidget);
     final area = paintArea(tester);
     final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width * 0.25, area.size.height * 0.5));
     expect(tipTitle(tester), 'A');
@@ -107,7 +107,7 @@ void main() {
     await gesture.removePointer();
     await tester.tap(find.text('S1'));
     await tester.pump();
-    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.4), findsNothing);
+    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.3), findsNothing);
   });
 
   testWidgets('pie tooltip follows slices, hiding one re-normalizes the rest', (tester) async {
@@ -122,10 +122,11 @@ void main() {
     await tester.pump();
     expect(tipTitle(tester), 'A');
     await gesture.removePointer();
-    // Hide A: B now covers the whole circle.
-    await tester.tap(find.text('A (1.0)'));
     await tester.pump();
-    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.4), findsOneWidget);
+    // Hide A: B now covers the whole circle.
+    await tester.tap(find.text('A'));
+    await tester.pump();
+    expect(find.byWidgetPredicate((w) => w is Opacity && w.opacity == 0.3), findsOneWidget);
     final gesture2 = await hoverAt(tester, center + const Offset(0, 43));
     expect(tipTitle(tester), 'B');
     await gesture2.removePointer();
@@ -142,7 +143,8 @@ void main() {
     await tester.pump();
     expect(tipTitle(tester), 'R2');
     await gesture.removePointer();
-    await tester.tap(find.text('R1 (3.0)'));
+    await tester.pump();
+    await tester.tap(find.text('R1'));
     await tester.pump();
     final gesture2 = await hoverAt(tester, center + const Offset(82, 0));
     expect(find.byKey(const Key('chart-tip-title')), findsNothing);
@@ -237,5 +239,43 @@ void main() {
     final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height / 2));
     expect(find.byKey(const Key('chart-tip-title')), findsNothing);
     await gesture.removePointer();
+  });
+
+  testWidgets('series legend collapses behind N more and expands', (tester) async {
+    await pumpChart(
+      tester,
+      'root = BarChart(["A"], [Series("AlphaSeriesNameOne", [1]), Series("BetaSeriesNameTwo", [2]), Series("GammaSeriesNameThree", [3]), Series("DeltaSeriesNameFour", [4]), Series("EpsilonSeriesNameFive", [5])])',
+    );
+    // Five long names cannot fit one 800px row: a "N more" button
+    // appears (the exact count depends on the test font, so only
+    // the shape is pinned).
+    expect(find.textContaining(RegExp(r'^\d+ more$')), findsOneWidget);
+    expect(find.text('EpsilonSeriesNameFive'), findsNothing);
+    await tester.tap(find.textContaining(RegExp(r'^\d+ more$')));
+    await tester.pump();
+    expect(find.text('Show Less'), findsOneWidget);
+    expect(find.text('EpsilonSeriesNameFive'), findsOneWidget);
+  });
+
+  testWidgets('stacked legend shows 6 rows then Show more', (tester) async {
+    await pumpChart(tester, 'root = PieChart(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"], [1, 1, 1, 1, 1, 1, 1, 1])');
+    expect(find.text('P6'), findsOneWidget);
+    expect(find.text('P7'), findsNothing);
+    expect(find.text('Show more'), findsOneWidget);
+    await tester.tap(find.text('Show more'));
+    await tester.pump();
+    expect(find.text('P7'), findsOneWidget);
+    expect(find.text('P8'), findsOneWidget);
+    expect(find.text('Show less'), findsOneWidget);
+  });
+
+  testWidgets('stacked legend percentages re-normalize over visible slices', (tester) async {
+    await pumpChart(tester, 'root = PieChart(["A", "B"], [1, 3])');
+    expect(find.text('25.0%'), findsOneWidget);
+    expect(find.text('75.0%'), findsOneWidget);
+    await tester.tap(find.text('A'));
+    await tester.pump();
+    // Only B is visible now, so it is 100% of the visible total.
+    expect(find.text('100.0%'), findsOneWidget);
   });
 }

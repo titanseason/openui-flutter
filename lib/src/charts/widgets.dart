@@ -104,8 +104,21 @@ class PieChartWidget extends StatefulWidget {
 }
 
 class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieChartWidget> {
+  int? _legendHovered;
+
   @override
   Widget build(BuildContext context) {
+    // Shared by the tooltip hit test and the hover dim: the painter
+    // re-normalizes over the visible slices, so the hit test runs
+    // on the same filtered values.
+    int? pieHit(Offset pos, Size area) {
+      final visible = <int>[for (var i = 0; i < widget.labels.length; i++) if (!hidden.contains(i)) i];
+      final vals = [for (final i in visible) i < widget.values.length ? widget.values[i] : 0.0];
+      final hit = widget.appearance == 'semiCircular' ? _semiPieSliceAt(pos, area, vals) : _pieSliceAt(pos, area, vals);
+      if (hit < 0) return null;
+      return visible[hit];
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
@@ -117,33 +130,18 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
             width: double.infinity,
             child: _HoverArea(
               onHover: (pos, area) {
-                // The painter re-normalizes over the visible slices,
-                // so the hit test runs on the same filtered values.
-                final visible = <int>[for (var i = 0; i < widget.labels.length; i++) if (!hidden.contains(i)) i];
-                final vals = [for (final i in visible) i < widget.values.length ? widget.values[i] : 0.0];
-                final hit = widget.appearance == 'semiCircular' ? _semiPieSliceAt(pos, area, vals) : _pieSliceAt(pos, area, vals);
-                if (hit < 0) return null;
-                final i = visible[hit];
+                final i = pieHit(pos, area);
+                if (i == null) return null;
                 final v = i < widget.values.length ? widget.values[i] : 0.0;
                 return (
                   title: widget.labels[i],
                   rows: [(label: widget.labels[i], value: _fmtNum(v), color: _colorAt(widget.palette, i))],
                 );
               },
-              builder: (context, _, __) => CustomPaint(painter: _PiePainter(labels: widget.labels, values: widget.values, variant: widget.variant, appearance: widget.appearance, palette: widget.palette, hidden: hidden)),
+              builder: (context, hoverPos, area) => CustomPaint(painter: _PiePainter(labels: widget.labels, values: widget.values, variant: widget.variant, appearance: widget.appearance, palette: widget.palette, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : pieHit(hoverPos, area)))),
             ),
           ),
-          for (var i = 0; i < widget.labels.length; i++)
-            GestureDetector(
-              onTap: () => toggleLegend(i),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Opacity(
-                  opacity: hidden.contains(i) ? 0.4 : 1.0,
-                  child: Row(children: [Container(width: 10, height: 10, color: _colorAt(widget.palette, i)), const SizedBox(width: 6), Text('${widget.labels[i]} (${i < widget.values.length ? widget.values[i] : 0})')]),
-                ),
-              ),
-            ),
+          _StackedLegend(labels: widget.labels, values: widget.values, palette: widget.palette, hidden: hidden, onToggle: toggleLegend, onHover: (i) => setState(() => _legendHovered = i)),
         ],
       ),
     );
@@ -213,9 +211,19 @@ class RadialChartWidget extends StatefulWidget {
 }
 
 class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggle<RadialChartWidget> {
+  int? _legendHovered;
+
   @override
   Widget build(BuildContext context) {
     final maxV = widget.values.fold<double>(1, (m, v) => math.max(m, v));
+    // Rings keep their index-based radii when hidden, so the hit
+    // index is already the original one.
+    int? ringHit(Offset pos, Size area) {
+      final hit = _radialRingAt(pos, area, widget.labels.length);
+      if (hit < 0 || hidden.contains(hit)) return null;
+      return hit;
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
@@ -227,30 +235,18 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
             width: double.infinity,
             child: _HoverArea(
               onHover: (pos, area) {
-                // Rings keep their index-based radii when hidden, so
-                // the hit index is already the original one.
-                final hit = _radialRingAt(pos, area, widget.labels.length);
-                if (hit < 0 || hidden.contains(hit)) return null;
+                final hit = ringHit(pos, area);
+                if (hit == null) return null;
                 final v = hit < widget.values.length ? widget.values[hit] : 0.0;
                 return (
                   title: widget.labels[hit],
                   rows: [(label: widget.labels[hit], value: _fmtNum(v), color: _colorAt(widget.palette, hit))],
                 );
               },
-              builder: (context, _, __) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden)),
+              builder: (context, hoverPos, area) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : ringHit(hoverPos, area)))),
             ),
           ),
-          for (var i = 0; i < widget.labels.length; i++)
-            GestureDetector(
-              onTap: () => toggleLegend(i),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Opacity(
-                  opacity: hidden.contains(i) ? 0.4 : 1.0,
-                  child: Row(children: [Container(width: 10, height: 10, color: _colorAt(widget.palette, i)), const SizedBox(width: 6), Text('${widget.labels[i]} (${i < widget.values.length ? widget.values[i] : 0})')]),
-                ),
-              ),
-            ),
+          _StackedLegend(labels: widget.labels, values: widget.values, palette: widget.palette, hidden: hidden, onToggle: toggleLegend, onHover: (i) => setState(() => _legendHovered = i)),
         ],
       ),
     );

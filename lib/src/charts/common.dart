@@ -10,37 +10,156 @@ List<double> _seriesValues(ElementNode series) {
 
 const _axisStyle = TextStyle(fontSize: 10, color: Colors.grey);
 
-/// Legend row used by every chart widget in this file: a swatch
+/// Legend used by the cartesian/radar/scatter widgets: a swatch
 /// Container per series (the colour test in controller_theme_test
 /// pins this exact shape) plus the series label. With [onToggle]
 /// the rows become tappable (React parity: clicking a legend entry
-/// hides its series) and hidden rows dim; without it the tree is
-/// exactly the old one, so the colour test still holds.
-class ChartLegend extends StatelessWidget {
+/// hides its series) and hidden rows dim to 0.3. Like React's
+/// DefaultLegend, items that don't fit the width collapse behind
+/// a "N more" / "Show Less" toggle; when everything fits, the tree
+/// is the old one, so the colour test still holds.
+class ChartLegend extends StatefulWidget {
   const ChartLegend({required this.labels, required this.palette, this.hidden = const {}, this.onToggle});
   final List<String> labels;
   final List<Color> palette;
   final Set<int> hidden;
   final void Function(int index)? onToggle;
   @override
+  State<ChartLegend> createState() => _ChartLegendState();
+}
+
+class _ChartLegendState extends State<ChartLegend> {
+  bool _expanded = false;
+
+  Widget _row(int i) {
+    final row = Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(widget.palette, i)), const SizedBox(width: 4), Text(widget.labels[i])]);
+    if (widget.onToggle == null) return row;
+    return GestureDetector(
+      onTap: () => widget.onToggle!(i),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Opacity(
+          opacity: widget.hidden.contains(i) ? 0.3 : 1.0,
+          child: row,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        var shown = widget.labels.length;
+        var hasMore = false;
+        var hiddenCount = 0;
+        if (available.isFinite && widget.labels.length > 1) {
+          // Greedy fit by measured width, exactly like React's
+          // DefaultLegend: item widths plus the 12px gaps.
+          final style = DefaultTextStyle.of(context).style;
+          double itemW(int i) {
+            final tp = TextPainter(text: TextSpan(text: widget.labels[i], style: style), textDirection: TextDirection.ltr)..layout();
+            return 10 + 4 + tp.width;
+          }
+
+          double buttonW(String text) {
+            final tp = TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr)..layout();
+            return tp.width + 2 + 16;
+          }
+
+          int fit(double width) {
+            var count = 0;
+            var used = 0.0;
+            for (var i = 0; i < widget.labels.length; i++) {
+              final w = itemW(i) + (count > 0 ? 12 : 0);
+              if (used + w <= width) {
+                used += w;
+                count++;
+              } else {
+                break;
+              }
+            }
+            return count;
+          }
+
+          shown = fit(available);
+          if (shown < widget.labels.length) {
+            // Reserve the toggle button, then refit (React measures
+            // the rendered button; one refit pass is enough here).
+            hiddenCount = widget.labels.length - shown;
+            shown = fit(available - buttonW('$hiddenCount more') - 12);
+            if (shown == 0) shown = 1;
+            hiddenCount = widget.labels.length - shown;
+            hasMore = true;
+          }
+        }
+        final visible = _expanded ? widget.labels.length : shown;
+        return Wrap(
+          spacing: 12,
+          children: [
+            for (var i = 0; i < visible; i++) _row(i),
+            if (hasMore)
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [Text(_expanded ? 'Show Less' : '$hiddenCount more'), const SizedBox(width: 2), Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16)]),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// React's stacked legend (the pie/radial default): one 32px row
+/// per slice with the label on the left and the share on the right,
+/// re-normalized over the visible slices at 1 decimal. Rows hover
+/// (highlight in the chart) and tap (toggle); hidden rows dim to
+/// 0.3. Past 6 items only the first 6 show until "Show more".
+class _StackedLegend extends StatefulWidget {
+  const _StackedLegend({required this.labels, required this.values, required this.palette, this.hidden = const {}, required this.onToggle, required this.onHover});
+  final List<String> labels;
+  final List<double> values;
+  final List<Color> palette;
+  final Set<int> hidden;
+  final void Function(int index) onToggle;
+  final void Function(int? index) onHover;
+  @override
+  State<_StackedLegend> createState() => _StackedLegendState();
+}
+
+class _StackedLegendState extends State<_StackedLegend> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleTotal = [for (var i = 0; i < widget.values.length; i++) if (!widget.hidden.contains(i)) widget.values[i]].fold<double>(0, (a, b) => a + b);
+    final showAll = _expanded || widget.labels.length <= 6;
+    final shown = showAll ? widget.labels.length : 6;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < labels.length; i++)
-          if (onToggle == null)
-            Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 4), Text(labels[i])])
-          else
-            GestureDetector(
-              onTap: () => onToggle!(i),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: Opacity(
-                  opacity: hidden.contains(i) ? 0.4 : 1.0,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, color: _colorAt(palette, i)), const SizedBox(width: 4), Text(labels[i])]),
+        for (var i = 0; i < shown; i++)
+          GestureDetector(
+            onTap: () => widget.onToggle(i),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              onEnter: (_) => widget.onHover(i),
+              onExit: (_) => widget.onHover(null),
+              child: Opacity(
+                opacity: widget.hidden.contains(i) ? 0.3 : 1.0,
+                child: SizedBox(
+                  height: 32,
+                  child: Row(children: [Container(width: 10, height: 10, color: _colorAt(widget.palette, i)), const SizedBox(width: 8), Expanded(child: Text(widget.labels[i])), Text(visibleTotal == 0 ? '0.0%' : '${(widget.values[i] / visibleTotal * 100).toStringAsFixed(1)}%')]),
                 ),
               ),
             ),
+          ),
+        if (widget.labels.length > 6)
+          GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [Text(_expanded ? 'Show less' : 'Show more'), const SizedBox(width: 2), Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16)]),
+          ),
       ],
     );
   }

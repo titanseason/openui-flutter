@@ -26,7 +26,7 @@ scatter = ScatterChart([ScatterSeries("散", [Point(1, 2), Point(3, 4)])])
       ),
     );
     await tester.pumpAndSettle();
-    for (final text in ['柱', '线', '面', '横', '饼一 (3.0)', '饼二 (1.0)', '雷达', '径一 (3.0)', '径二 (1.0)', '堆一', '75.0%', '堆二', '25.0%', '散']) {
+    for (final text in ['柱', '线', '面', '横', '饼一', '饼二', '雷达', '径一', '径二', '堆一', '75.0%', '堆二', '25.0%', '散']) {
       expect(find.text(text), findsWidgets);
     }
   });
