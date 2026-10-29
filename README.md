@@ -215,8 +215,6 @@ new images before committing: a regenerated golden is a claim, not
 a pass. The `example/` app has four screens (rich answer, business
 dashboard, form + Query, theme & custom components).
 
-Further reading: `docs/react-1.0-diff/` holds the React 0.18.1
-parity evidence (inventories, prop diffs, conformance notes), and
 `CHANGELOG.md` records each change, including breaking ones.
 
 ## License

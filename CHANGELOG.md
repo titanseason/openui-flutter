@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.18.0
 
+- First published release. Version tracks React's 0.18 line
+  (the component set matches `@openuidev/react-ui` 0.18.1);
+  the patch number is this package's own counter.
 - License: Apache License 2.0 (`LICENSE`, copyright 2026
   titanseason). This clears the license item from the
   pre-publish checklist; repository/homepage URLs and the

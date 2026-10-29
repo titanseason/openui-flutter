@@ -199,9 +199,7 @@ cd example && flutter test
 提交：重新生成的金测是一项主张，不是“通过”。`example/` 有
 4 个屏（富回答、业务看板、表单 + Query、主题与自定义组件）。
 
-深入阅读：`docs/react-1.0-diff/` 存着 React 0.18.1 的对齐证据
-（清单、props 差异、一致性说明），`CHANGELOG.md` 记录每次
-变更（含破坏性变更）。
+`CHANGELOG.md` 记录每次变更（含破坏性变更）。
 
 ## License
 
