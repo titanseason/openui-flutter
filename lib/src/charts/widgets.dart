@@ -8,10 +8,11 @@ part of openui_charts;
 // stacked bar, whose React counterpart has no legend toggle.
 
 class BarChartWidget extends StatefulWidget {
-  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false, this.density = 'default', this.condensed = false, this.tickVariant, this.onTap});
+  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false, this.density = 'default', this.condensed = false, this.tickVariant, this.colors = const ChartColors(), this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
+  final ChartColors colors;
   final double height;
   final bool showLegend;
   final bool horizontal;
@@ -44,7 +45,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
     }
 
     if (widget.horizontal) return _buildHorizontal(all, tooltipFor);
-    return _chartBox(
+    return _chartBox(colors: widget.colors, 
       height: widget.height,
       chart: LayoutBuilder(
         builder: (context, constraints) {
@@ -59,7 +60,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
           return Column(
             children: [
               Expanded(
-                child: _HoverArea(
+                child: _HoverArea(colors: widget.colors, 
                   onHover: (pos, area) {
                     final content = toContent(pos)!;
                     return tooltipFor(_categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length));
@@ -73,11 +74,11 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
                     final plot = SizedBox(
                       width: layout.contentWidth,
                       height: chartH,
-                      child: CustomPaint(key: const Key('chart-plot'), painter: _BarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos))),
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _BarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos), colors: widget.colors)),
                     );
                     return Row(
                       children: [
-                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH))),
+                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH, colors: widget.colors))),
                         Expanded(child: layout.needsScroll ? SingleChildScrollView(controller: scrollController, scrollDirection: Axis.horizontal, child: plot) : plot),
                       ],
                     );
@@ -95,7 +96,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
   }
 
   Widget _buildHorizontal(List<List<double>> all, TipData? Function(int ci) tooltipFor) {
-    return _chartBox(
+    return _chartBox(colors: widget.colors, 
       height: widget.height,
       chart: LayoutBuilder(
         builder: (context, constraints) {
@@ -105,7 +106,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
           return Column(
             children: [
               Expanded(
-                child: _HoverArea(
+                child: _HoverArea(colors: widget.colors, 
                   onHover: (pos, area) {
                     final content = toContent(pos)!;
                     return tooltipFor(_categoryAtY(content.dy, layout.contentH, widget.categories.length));
@@ -122,7 +123,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
                     final paint = SizedBox(
                       width: viewport.width,
                       height: layout.contentH,
-                      child: CustomPaint(key: const Key('chart-plot'), painter: _HBarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: contentHover)),
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _HBarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: contentHover, colors: widget.colors)),
                     );
                     if (!layout.needsScroll) return paint;
                     return SingleChildScrollView(controller: scrollController, child: paint);
@@ -131,7 +132,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
               ),
               // Fixed bottom value axis (labels only; the gridlines
               // scroll with the rows).
-              SizedBox(width: double.infinity, height: layout.stripH, child: CustomPaint(painter: _HBarAxisPainter(layout: layout))),
+              SizedBox(width: double.infinity, height: layout.stripH, child: CustomPaint(painter: _HBarAxisPainter(layout: layout, colors: widget.colors))),
               if (layout.needsScroll)
                 _scrollButtons(canBack: canScrollBack, canForward: canScrollForward, onBack: () => scrollSnap(false, layout.rowH, widget.categories.length), onForward: () => scrollSnap(true, layout.rowH, widget.categories.length), direction: Axis.vertical),
             ],
@@ -144,10 +145,11 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
 }
 
 class LineChartWidget extends StatefulWidget {
-  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = true, this.step = false, this.showDots = false, this.density = 'default', this.condensed = false, this.tickVariant, this.onTap});
+  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = true, this.step = false, this.showDots = false, this.density = 'default', this.condensed = false, this.tickVariant, this.colors = const ChartColors(), this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
+  final ChartColors colors;
   final double height;
   final bool showLegend;
   // React's density / condensed / tickVariant, as on BarChartWidget.
@@ -170,7 +172,7 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in widget.series) _seriesValues(s)];
-    return _chartBox(
+    return _chartBox(colors: widget.colors, 
       height: widget.height,
       chart: LayoutBuilder(
         builder: (context, constraints) {
@@ -185,7 +187,7 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
           return Column(
             children: [
               Expanded(
-                child: _HoverArea(
+                child: _HoverArea(colors: widget.colors, 
                   onHover: (pos, area) {
                     final content = toContent(pos)!;
                     // Points sit at slot centers (React's
@@ -209,11 +211,11 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
                     final plot = SizedBox(
                       width: layout.contentWidth,
                       height: chartH,
-                      child: CustomPaint(key: const Key('chart-plot'), painter: _LinePlotPainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos), showDots: widget.showDots)),
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _LinePlotPainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos), showDots: widget.showDots, colors: widget.colors)),
                     );
                     return Row(
                       children: [
-                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH))),
+                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH, colors: widget.colors))),
                         Expanded(child: layout.needsScroll ? SingleChildScrollView(controller: scrollController, scrollDirection: Axis.horizontal, child: plot) : plot),
                       ],
                     );
@@ -232,12 +234,13 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
 }
 
 class PieChartWidget extends StatefulWidget {
-  const PieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette, this.onTap});
+  const PieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette, this.colors = const ChartColors(), this.onTap});
   final List<String> labels;
   final List<double> values;
   final String variant;
   final String appearance;
   final List<Color> palette;
+  final ChartColors colors;
   // React's onClick: the tapped slice index.
   final ValueChanged<int>? onTap;
   @override
@@ -263,13 +266,13 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(border: Border.all(color: widget.colors.border), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           SizedBox(
             height: 180,
             width: double.infinity,
-            child: _HoverArea(
+            child: _HoverArea(colors: widget.colors, 
               onHover: (pos, area) {
                 final i = pieHit(pos, area);
                 if (i == null) return null;
@@ -294,10 +297,11 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
 }
 
 class RadarChartWidget extends StatefulWidget {
-  const RadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.area = false, this.onTap});
+  const RadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.area = false, this.colors = const ChartColors(), this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
+  final ChartColors colors;
   // React's radar variant: line (the default, outline only) or
   // area (filled). Lang's RadarChart exposes no variant, so the
   // renderer always gets the line default.
@@ -313,7 +317,7 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
   Widget build(BuildContext context) {
     // An empty series list (e.g. a Query returning nothing) renders
     // the bordered empty box instead of crashing the whole render.
-    if (widget.series.isEmpty) return _chartBox(height: 240, chart: const SizedBox.shrink());
+    if (widget.series.isEmpty) return _chartBox(colors: widget.colors, height: 240, chart: const SizedBox.shrink());
     final all = [for (final s in widget.series) _seriesValues(s)];
     var maxV = 0.0;
     for (final list in all) {
@@ -325,12 +329,12 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
       height: 240,
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(border: Border.all(color: widget.colors.border), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           Expanded(
             child: SizedBox.expand(
-              child: _HoverArea(
+              child: _HoverArea(colors: widget.colors, 
                 onHover: (pos, area) {
                   final axis = _radarAxisAt(pos, area, widget.categories.length);
                   if (axis < 0) return null;
@@ -345,7 +349,7 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
                   final axis = _radarAxisAt(pos, area, widget.categories.length);
                   if (axis >= 0) widget.onTap?.call(axis);
                 },
-                builder: (context, _, __) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden, area: widget.area)),
+                builder: (context, _, __) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden, area: widget.area, colors: widget.colors)),
               ),
             ),
           ),
@@ -357,10 +361,11 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
 }
 
 class RadialChartWidget extends StatefulWidget {
-  const RadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.onTap});
+  const RadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.colors = const ChartColors(), this.onTap});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
+  final ChartColors colors;
   // React's onClick: the tapped ring index.
   final ValueChanged<int>? onTap;
   @override
@@ -384,13 +389,13 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(border: Border.all(color: widget.colors.border), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           SizedBox(
             height: 180,
             width: double.infinity,
-            child: _HoverArea(
+            child: _HoverArea(colors: widget.colors, 
               onHover: (pos, area) {
                 final hit = ringHit(pos, area);
                 if (hit == null) return null;
@@ -404,7 +409,7 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
                 final hit = ringHit(pos, area);
                 if (hit != null) widget.onTap?.call(hit);
               },
-              builder: (context, hoverPos, area) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : ringHit(hoverPos, area)))),
+              builder: (context, hoverPos, area) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : ringHit(hoverPos, area)), colors: widget.colors)),
             ),
           ),
           _StackedLegend(labels: widget.labels, values: widget.values, palette: widget.palette, hidden: hidden, onToggle: toggleLegend, onHover: (i) => setState(() => _legendHovered = i)),
@@ -415,10 +420,11 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
 }
 
 class SingleStackedBarWidget extends StatefulWidget {
-  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.onTap});
+  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.colors = const ChartColors(), this.onTap});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
+  final ChartColors colors;
   // React's onClick: the tapped segment index.
   final ValueChanged<int>? onTap;
   @override
@@ -442,7 +448,7 @@ class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
         children: [
           SizedBox(
             height: 20,
-            child: _HoverArea(
+            child: _HoverArea(colors: widget.colors, 
               onHover: (pos, area) {
                 final seg = _stackedSegmentAtX(pos.dx, area.width, padded, total);
                 if (seg < 0) return null;
@@ -460,7 +466,7 @@ class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
               },
               builder: (context, hoverPos, area) {
                 final trackHovered = hoverPos == null ? null : _stackedSegmentAtX(hoverPos.dx, area.width, padded, total);
-                return CustomPaint(painter: _StackedBarPainter(values: padded, palette: widget.palette, total: total, hoveredSegment: _legendHovered ?? trackHovered));
+                return CustomPaint(painter: _StackedBarPainter(values: padded, palette: widget.palette, total: total, hoveredSegment: _legendHovered ?? trackHovered, colors: widget.colors));
               },
             ),
           ),
@@ -486,9 +492,10 @@ class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
 }
 
 class ScatterChartWidget extends StatefulWidget {
-  const ScatterChartWidget({required this.series, this.palette = _defaultPalette, this.onTap});
+  const ScatterChartWidget({required this.series, this.palette = _defaultPalette, this.colors = const ChartColors(), this.onTap});
   final List<ElementNode> series;
   final List<Color> palette;
+  final ChartColors colors;
   // React's onClick: the tapped point, as (series index, point
   // index within that series).
   final void Function(int seriesIndex, int pointIndex)? onTap;
@@ -507,12 +514,12 @@ class _ScatterChartWidgetState extends State<ScatterChartWidget> with _LegendTog
       height: 240,
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(border: Border.all(color: widget.colors.border), borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           Expanded(
             child: SizedBox.expand(
-              child: _HoverArea(
+              child: _HoverArea(colors: widget.colors, 
                 onHover: (pos, area) {
                   final plot = scatterPlotFor(layout, area);
                   final hit = _scatterDotAt(pos, plot, layout.dots);
@@ -534,7 +541,7 @@ class _ScatterChartWidgetState extends State<ScatterChartWidget> with _LegendTog
                   final pointIndex = [for (var i = 0; i < hit; i++) if (layout.dots[i].seriesIndex == d.seriesIndex) i].length;
                   widget.onTap?.call(d.seriesIndex, pointIndex);
                 },
-                builder: (context, _, __) => CustomPaint(painter: _ScatterPainter(layout: layout, palette: widget.palette)),
+                builder: (context, _, __) => CustomPaint(painter: _ScatterPainter(layout: layout, palette: widget.palette, colors: widget.colors)),
               ),
             ),
           ),

@@ -9,18 +9,19 @@ part of openui_charts;
 // visibility toggle.
 
 class _StackedBarPainter extends CustomPainter {
-  _StackedBarPainter({required this.values, required this.palette, required this.total, this.hoveredSegment});
+  _StackedBarPainter({required this.values, required this.palette, required this.total, this.hoveredSegment, this.colors = const ChartColors()});
   final List<double> values;
   final List<Color> palette;
   final double total;
   final int? hoveredSegment;
+  final ChartColors colors;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
     const pad = 4.0, gap = 2.0;
     final track = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(6));
-    canvas.drawRRect(track, Paint()..color = Colors.grey.shade200);
+    canvas.drawRRect(track, Paint()..color = colors.grid);
     if (total <= 0 || values.isEmpty) return;
     final innerW = size.width - pad * 2 - gap * (values.length - 1);
     var x = pad;

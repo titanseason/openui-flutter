@@ -118,20 +118,20 @@ double yForValue(double v, YDomain domain, double plotH) {
 /// Y axis line, horizontal gridlines, and right-aligned tick
 /// labels. Gridlines span the plot only, starting at the axis.
 /// (Scatter keeps this combined painter: it never scrolls.)
-void _paintAxisTicks(Canvas canvas, YDomain domain, double axisW, double plotW, double plotH) {
+void _paintAxisTicks(Canvas canvas, YDomain domain, double axisW, double plotW, double plotH, {ChartColors colors = const ChartColors()}) {
   final gridPaint = Paint()
-    ..color = Colors.grey.shade200
+    ..color = colors.grid
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
   final axisPaint = Paint()
-    ..color = Colors.grey.shade300
+    ..color = colors.border
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
   canvas.drawLine(Offset(axisW, 0), Offset(axisW, plotH), axisPaint);
   for (final t in domain.ticks) {
     final y = yForValue(t, domain, plotH);
     canvas.drawLine(Offset(axisW, y), Offset(axisW + plotW, y), gridPaint);
-    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(axisW - 4 - tp.width, y - tp.height / 2));
   }
 }
@@ -139,31 +139,31 @@ void _paintAxisTicks(Canvas canvas, YDomain domain, double axisW, double plotW, 
 /// Bottom value axis (horizontal bars, scatter X): vertical
 /// gridlines plus labels in the strip below the plot.
 /// [barX] is the plot's left edge, [barW] its width.
-void _paintValueTicksBottom(Canvas canvas, YDomain domain, double barX, double barW, double plotH) {
+void _paintValueTicksBottom(Canvas canvas, YDomain domain, double barX, double barW, double plotH, {ChartColors colors = const ChartColors()}) {
   final gridPaint = Paint()
-    ..color = Colors.grey.shade200
+    ..color = colors.grid
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
   double xOf(double v) => barX + barW * (v - domain.min) / (domain.max - domain.min);
   for (final t in domain.ticks) {
     final x = xOf(t);
     canvas.drawLine(Offset(x, 0), Offset(x, plotH), gridPaint);
-    _paintWrappedLabel(canvas, formatAxisTick(t), x, plotH, 60, 1);
+    _paintWrappedLabel(canvas, formatAxisTick(t), x, plotH, 60, 1, colors: colors);
   }
 }
 
 /// Y axis line plus right-aligned tick labels, without gridlines:
 /// the fixed column beside a scrolling plot (the gridlines scroll
 /// with the plot, so the plot painter draws them).
-void _paintYAxis(Canvas canvas, YDomain domain, double axisW, double plotH) {
+void _paintYAxis(Canvas canvas, YDomain domain, double axisW, double plotH, {ChartColors colors = const ChartColors()}) {
   final axisPaint = Paint()
-    ..color = Colors.grey.shade300
+    ..color = colors.border
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
   canvas.drawLine(Offset(axisW, 0), Offset(axisW, plotH), axisPaint);
   for (final t in domain.ticks) {
     final y = yForValue(t, domain, plotH);
-    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(axisW - 4 - tp.width, y - tp.height / 2));
   }
 }

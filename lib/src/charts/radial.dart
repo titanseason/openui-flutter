@@ -3,10 +3,11 @@ part of openui_charts;
 // ---------------- Radial (gauge rings) ----------------
 
 class _RadialPainter extends CustomPainter {
-  _RadialPainter({required this.values, required this.palette, required this.maxV, this.hidden = const {}, this.hovered});
+  _RadialPainter({required this.values, required this.palette, required this.maxV, this.hidden = const {}, this.hovered, this.colors = const ChartColors()});
   final List<double> values;
   final List<Color> palette;
   final double maxV;
+  final ChartColors colors;
   final Set<int> hidden;
   // Legend or ring hover: the hovered ring stays full, the rest
   // dim, like React's stacked-legend linking.
@@ -23,7 +24,7 @@ class _RadialPainter extends CustomPainter {
       // radii instead of shifting inward.
       if (hidden.contains(i)) continue;
       canvas.drawArc(Rect.fromCircle(center: center, radius: r), 0, math.pi * 2, false, Paint()
-        ..color = Colors.grey.shade200
+        ..color = colors.grid
         ..style = PaintingStyle.stroke
         ..strokeWidth = 10);
       final v = i < values.length ? values[i] : 0;

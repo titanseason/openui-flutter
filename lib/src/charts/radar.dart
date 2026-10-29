@@ -3,11 +3,12 @@ part of openui_charts;
 // ---------------- Radar ----------------
 
 class _RadarPainter extends CustomPainter {
-  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV, this.hidden = const {}, this.area = false});
+  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV, this.hidden = const {}, this.area = false, this.colors = const ChartColors()});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
   final double maxV;
+  final ChartColors colors;
   final Set<int> hidden;
   // React's radar variant: line (the default) draws only the
   // outline, area fills it.
@@ -25,7 +26,7 @@ class _RadarPainter extends CustomPainter {
     }
 
     final gridPaint = Paint()
-      ..color = Colors.grey.shade300
+      ..color = colors.border
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     if (n >= 3) {
@@ -48,7 +49,7 @@ class _RadarPainter extends CustomPainter {
       canvas.drawLine(center, vertex(i, radius), gridPaint);
     }
     for (var i = 0; i < n; i++) {
-      _paintCenteredText(canvas, categories[i], vertex(i, radius + 14), fontSize: 11);
+      _paintCenteredText(canvas, categories[i], vertex(i, radius + 14), fontSize: 11, colors: colors);
     }
     // Values scale relative to the largest entry, so the biggest
     // value always reaches the outer ring; all-zero data sits at

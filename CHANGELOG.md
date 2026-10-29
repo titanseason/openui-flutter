@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Semantic theme board: `OpenUIColorScheme` gains `textMuted`,
+  `border`, `grid`, `success`, `warning`, `danger`, and `info`
+  (light defaults reproduce the previously hardcoded greys and
+  Callout colours exactly, so existing goldens are unchanged;
+  dark values are lighter chrome for dark surfaces). Charts
+  take their axis text, gridlines, tracks, box borders, and
+  tooltip borders from the theme via a new `ChartColors`
+  bundle bridged by the renderer; Callout variants take their
+  colours from the same scheme. Hover highlight overlays and
+  the tooltip card fill stay as before (translucent grey and
+  a light card). New dark bar golden pins the dark chrome.
+
 - Chart layout props (React parity): Bar/Line/Area charts
   accept `density` (compact 48 / default 72 / spacious 96px
   slots, scroll mode only), `condensed` (fit mode: every

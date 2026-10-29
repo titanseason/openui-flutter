@@ -190,8 +190,11 @@ int _stackedSegmentAtX(
 /// The tooltip card itself: white card, bold title, one row per
 /// series (swatch + label + value).
 class _ChartTip extends StatelessWidget {
-  const _ChartTip({required this.tip});
+  const _ChartTip({required this.tip, this.colors = const ChartColors()});
   final TipData tip;
+  // Only the border follows the theme: the card itself stays a
+  // light card (its text is uncoloured, so it inherits dark text).
+  final ChartColors colors;
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
@@ -200,7 +203,7 @@ class _ChartTip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(6),
           boxShadow: [
             BoxShadow(
@@ -250,7 +253,8 @@ class _ChartTip extends StatelessWidget {
 /// (column highlight, active dots). The legend sits outside this
 /// area, so legend taps never compete with the pan gesture.
 class _HoverArea extends StatefulWidget {
-  const _HoverArea({required this.onHover, required this.builder, this.onTap});
+  const _HoverArea({required this.onHover, required this.builder, this.onTap, this.colors = const ChartColors()});
+  final ChartColors colors;
   final TipData? Function(Offset pos, Size area) onHover;
   // React's onClick, in Flutter tap shape: a tap (mouse click or
   // stationary touch tap) fires it, a drag does not — the tap and
@@ -337,7 +341,7 @@ class _HoverAreaState extends State<_HoverArea> {
                   widget.builder(context, _hoverPos, area),
                   if (_tip != null && left != null && top != null)
                     Positioned(
-                        left: left, top: top, child: _ChartTip(tip: _tip!)),
+                        left: left, top: top, child: _ChartTip(tip: _tip!, colors: widget.colors)),
                 ],
               ),
             ),

@@ -1,8 +1,9 @@
 library openui_charts;
 
 /// Charts drawn with [CustomPainter] and plain widgets — no chart
-/// package. Every widget takes the theme palette explicitly so
-/// [OpenUIThemeData.chartPalette] threads through all of them.
+/// package. Every widget takes the theme palette and [ChartColors]
+/// explicitly so [OpenUIThemeData.chartPalette] and the theme's
+/// chrome colours thread through all of them.
 ///
 /// Kept identical to the old fl_chart rendering where it matters:
 /// the legend shape (a 10x10 swatch plus a label), the legend text

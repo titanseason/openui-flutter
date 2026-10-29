@@ -6,12 +6,13 @@ part of openui_charts;
 /// right-aligned tick labels. The gridlines live in the plot
 /// painter (they scroll with the content).
 class _YAxisPainter extends CustomPainter {
-  _YAxisPainter({required this.domain, required this.plotH});
+  _YAxisPainter({required this.domain, required this.plotH, this.colors = const ChartColors()});
   final YDomain domain;
   final double plotH;
+  final ChartColors colors;
   @override
   void paint(Canvas canvas, Size size) {
-    _paintYAxis(canvas, domain, size.width, plotH);
+    _paintYAxis(canvas, domain, size.width, plotH, colors: colors);
   }
 
   @override
@@ -19,7 +20,7 @@ class _YAxisPainter extends CustomPainter {
 }
 
 class _BarPlotPainter extends CustomPainter {
-  _BarPlotPainter({required this.categories, required this.all, required this.palette, required this.stacked, required this.layout, this.hidden = const {}, this.hoverPos});
+  _BarPlotPainter({required this.categories, required this.all, required this.palette, required this.stacked, required this.layout, this.hidden = const {}, this.hoverPos, this.colors = const ChartColors()});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
@@ -27,6 +28,7 @@ class _BarPlotPainter extends CustomPainter {
   final CartesianLayout layout;
   final Set<int> hidden;
   final Offset? hoverPos;
+  final ChartColors colors;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -38,7 +40,7 @@ class _BarPlotPainter extends CustomPainter {
     final baseline = y(0);
     // Horizontal gridlines across the content width.
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = colors.grid
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final t in domain.ticks) {
@@ -109,7 +111,7 @@ class _BarPlotPainter extends CustomPainter {
         }
       }
       if (ci % layout.labelInterval == 0) {
-        _paintCategoryLabel(canvas, layout, categories[ci], x0 + slot / 2, plotH);
+        _paintCategoryLabel(canvas, layout, categories[ci], x0 + slot / 2, plotH, colors: colors);
       }
     }
   }
@@ -119,7 +121,7 @@ class _BarPlotPainter extends CustomPainter {
 }
 
 class _HBarPlotPainter extends CustomPainter {
-  _HBarPlotPainter({required this.categories, required this.all, required this.palette, required this.stacked, required this.layout, this.hidden = const {}, this.hoverPos});
+  _HBarPlotPainter({required this.categories, required this.all, required this.palette, required this.stacked, required this.layout, this.hidden = const {}, this.hoverPos, this.colors = const ChartColors()});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
@@ -127,6 +129,7 @@ class _HBarPlotPainter extends CustomPainter {
   final HBarLayout layout;
   final Set<int> hidden;
   final Offset? hoverPos;
+  final ChartColors colors;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -136,7 +139,7 @@ class _HBarPlotPainter extends CustomPainter {
     final baseline = x(0);
     // Vertical gridlines span the scrolled content height.
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = colors.grid
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final t in domain.ticks) {
@@ -151,7 +154,7 @@ class _HBarPlotPainter extends CustomPainter {
       if (hp != null && _categoryAtY(hp.dy, layout.contentH, n) == ci) {
         canvas.drawRect(Rect.fromLTWH(0, y0, size.width, layout.rowH), Paint()..color = Colors.grey.withValues(alpha: 0.1));
       }
-      final tp = TextPainter(text: TextSpan(text: categories[ci], style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: layout.labelArea);
+      final tp = TextPainter(text: TextSpan(text: categories[ci], style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: layout.labelArea);
       tp.paint(canvas, Offset(layout.barX - 8 - tp.width, y0 + (layout.rowH - tp.height) / 2));
       if (stacked) {
         final thick = math.min(16.0, layout.rowH);
@@ -213,14 +216,15 @@ class _HBarPlotPainter extends CustomPainter {
 /// The fixed bottom value-axis strip for horizontal bars: tick
 /// labels only (the gridlines scroll with the rows).
 class _HBarAxisPainter extends CustomPainter {
-  _HBarAxisPainter({required this.layout});
+  _HBarAxisPainter({required this.layout, this.colors = const ChartColors()});
   final HBarLayout layout;
+  final ChartColors colors;
   @override
   void paint(Canvas canvas, Size size) {
     final domain = layout.domain;
     double x(double v) => layout.barX + layout.barW * (v - domain.min) / (domain.max - domain.min);
     for (final t in domain.ticks) {
-      _paintWrappedLabel(canvas, formatAxisTick(t), x(t), 0, 60, 1);
+      _paintWrappedLabel(canvas, formatAxisTick(t), x(t), 0, 60, 1, colors: colors);
     }
   }
 

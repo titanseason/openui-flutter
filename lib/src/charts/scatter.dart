@@ -58,16 +58,17 @@ ScatterPlot scatterPlotFor(ScatterLayout layout, Size area) {
 }
 
 class _ScatterPainter extends CustomPainter {
-  _ScatterPainter({required this.layout, required this.palette});
+  _ScatterPainter({required this.layout, required this.palette, this.colors = const ChartColors()});
   final ScatterLayout layout;
   final List<Color> palette;
+  final ChartColors colors;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
     final plot = scatterPlotFor(layout, size);
-    _paintAxisTicks(canvas, plot.yDomain, plot.left, plot.plotW, plot.plotH);
-    _paintValueTicksBottom(canvas, plot.xDomain, plot.left, plot.plotW, plot.plotH);
+    _paintAxisTicks(canvas, plot.yDomain, plot.left, plot.plotW, plot.plotH, colors: colors);
+    _paintValueTicksBottom(canvas, plot.xDomain, plot.left, plot.plotW, plot.plotH, colors: colors);
     final spanX = plot.xDomain.max - plot.xDomain.min;
     final spanY = plot.yDomain.max - plot.yDomain.min;
     if (spanX <= 0 || spanY <= 0) return;

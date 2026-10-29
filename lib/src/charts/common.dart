@@ -10,6 +10,23 @@ List<double> _seriesValues(ElementNode series) {
 
 const _axisStyle = TextStyle(fontSize: 10, color: Colors.grey);
 
+/// The colours a chart paints with, bridged from
+/// [OpenUIColorScheme] by the renderer (axisText from textMuted,
+/// grid from grid, border from border). Defaults reproduce the
+/// previously hardcoded greys, so a widget built directly — no
+/// renderer, no theme — looks exactly as before. [_axisStyle]
+/// stays the measuring style (metrics don't depend on colour);
+/// painters use [_axisLabelStyle] for the actual labels.
+class ChartColors {
+  const ChartColors({this.axisText = const Color(0xFF9E9E9E), this.grid = const Color(0xFFEEEEEE), this.border = const Color(0xFFE0E0E0)});
+  final Color axisText;
+  final Color grid;
+  final Color border;
+}
+
+/// The axis label style in a chart's colours.
+TextStyle _axisLabelStyle(ChartColors colors) => TextStyle(fontSize: 10, color: colors.axisText);
+
 /// Legend used by the cartesian/radar/scatter widgets: a swatch
 /// Container per series (the colour test in controller_theme_test
 /// pins this exact shape) plus the series label. With [onToggle]
@@ -182,12 +199,12 @@ mixin _LegendToggle<T extends StatefulWidget> on State<T> {
   }
 }
 
-Widget _chartBox({required double height, required Widget chart, Widget? legend}) {
+Widget _chartBox({required double height, required Widget chart, Widget? legend, ChartColors colors = const ChartColors()}) {
   return Container(
     height: height,
     margin: const EdgeInsets.symmetric(vertical: 8),
     padding: const EdgeInsets.all(8),
-    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+    decoration: BoxDecoration(border: Border.all(color: colors.border), borderRadius: BorderRadius.circular(8)),
     child: Column(
       children: [
         // SizedBox.expand: a bare CustomPaint sizes to zero under the
@@ -200,8 +217,8 @@ Widget _chartBox({required double height, required Widget chart, Widget? legend}
   );
 }
 
-void _paintCenteredText(Canvas canvas, String text, Offset center, {double fontSize = 10, Color color = Colors.grey}) {
-  final tp = TextPainter(text: TextSpan(text: text, style: TextStyle(fontSize: fontSize, color: color)), textDirection: TextDirection.ltr)..layout();
+void _paintCenteredText(Canvas canvas, String text, Offset center, {double fontSize = 10, ChartColors colors = const ChartColors()}) {
+  final tp = TextPainter(text: TextSpan(text: text, style: TextStyle(fontSize: fontSize, color: colors.axisText)), textDirection: TextDirection.ltr)..layout();
   tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
 }
 
@@ -224,8 +241,8 @@ void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false
 /// A bottom-axis label, centered on [centerX] and top-aligned
 /// 4px below the plot (React's X_AXIS_TOP_GAP), wrapped to at
 /// most [maxLines] lines with an ellipsis.
-void _paintWrappedLabel(Canvas canvas, String text, double centerX, double areaTop, double maxWidth, int maxLines) {
-  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: maxWidth);
+void _paintWrappedLabel(Canvas canvas, String text, double centerX, double areaTop, double maxWidth, int maxLines, {ChartColors colors = const ChartColors()}) {
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: maxWidth);
   tp.paint(canvas, Offset(centerX - tp.width / 2, areaTop + 4));
 }
 
@@ -233,10 +250,10 @@ void _paintWrappedLabel(Canvas canvas, String text, double centerX, double areaT
 /// -45° (React's ANGLED_LABEL_ROTATION), truncated so it stays
 /// inside the chart — the reach includes the axis column to the
 /// left of the plot.
-void _paintAngledLabel(Canvas canvas, String text, double centerX, double areaTop, double axisW, double maxWidth) {
+void _paintAngledLabel(Canvas canvas, String text, double centerX, double areaTop, double axisW, double maxWidth, {ChartColors colors = const ChartColors()}) {
   const sin45 = 0.7071067811865476;
   final reach = (centerX + axisW) / sin45;
-  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: math.max(0.0, math.min(maxWidth, reach)));
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: math.max(0.0, math.min(maxWidth, reach)));
   canvas.save();
   canvas.translate(centerX, areaTop + 4);
   canvas.rotate(-math.pi / 4);
@@ -247,12 +264,12 @@ void _paintAngledLabel(Canvas canvas, String text, double centerX, double areaTo
 /// A condensed horizontal label: its box is clamped to the plot
 /// width, so the first and last boxes are cut at the ends, never
 /// shifted into their neighbours (React's CondensedXAxis).
-void _paintCondensedLabel(Canvas canvas, String text, double centerX, double areaTop, double labelWidth, int maxLines, double contentWidth) {
+void _paintCondensedLabel(Canvas canvas, String text, double centerX, double areaTop, double labelWidth, int maxLines, double contentWidth, {ChartColors colors = const ChartColors()}) {
   final left = math.max(0.0, centerX - labelWidth / 2);
   final right = math.min(contentWidth, centerX + labelWidth / 2);
   final boxW = right - left;
   if (boxW <= 0) return;
-  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: boxW);
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisLabelStyle(colors)), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: boxW);
   tp.paint(canvas, Offset((left + right) / 2 - tp.width / 2, areaTop + 4));
 }
 
@@ -260,13 +277,13 @@ void _paintCondensedLabel(Canvas canvas, String text, double centerX, double are
 /// the layout: angled labels rotate, condensed horizontal labels
 /// clamp to the plot, scroll labels wrap at the slot width.
 /// Thinning (labelInterval) is the caller's job.
-void _paintCategoryLabel(Canvas canvas, CartesianLayout layout, String text, double centerX, double plotH) {
+void _paintCategoryLabel(Canvas canvas, CartesianLayout layout, String text, double centerX, double plotH, {ChartColors colors = const ChartColors()}) {
   if (layout.labelAngle != 0) {
-    _paintAngledLabel(canvas, text, centerX, plotH, layout.axisW, layout.labelWidth);
+    _paintAngledLabel(canvas, text, centerX, plotH, layout.axisW, layout.labelWidth, colors: colors);
   } else if (layout.condensed) {
-    _paintCondensedLabel(canvas, text, centerX, plotH, layout.labelWidth, layout.lineCap, layout.contentWidth);
+    _paintCondensedLabel(canvas, text, centerX, plotH, layout.labelWidth, layout.lineCap, layout.contentWidth, colors: colors);
   } else {
-    _paintWrappedLabel(canvas, text, centerX, plotH, layout.slotWidth, layout.lineCap);
+    _paintWrappedLabel(canvas, text, centerX, plotH, layout.slotWidth, layout.lineCap, colors: colors);
   }
 }
 

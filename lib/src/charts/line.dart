@@ -3,7 +3,7 @@ part of openui_charts;
 // ---------------- Line / area ----------------
 
 class _LinePlotPainter extends CustomPainter {
-  _LinePlotPainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, required this.layout, this.hidden = const {}, this.hoverPos, this.showDots = false});
+  _LinePlotPainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, required this.layout, this.hidden = const {}, this.hoverPos, this.showDots = false, this.colors = const ChartColors()});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
@@ -13,6 +13,7 @@ class _LinePlotPainter extends CustomPainter {
   final CartesianLayout layout;
   final Set<int> hidden;
   final Offset? hoverPos;
+  final ChartColors colors;
   // React's showDots (default false, dotRadius 3): static dots
   // are opt-in; the hovered active dot is separate and always on.
   final bool showDots;
@@ -28,7 +29,7 @@ class _LinePlotPainter extends CustomPainter {
     double py(double v) => yForValue(v, domain, plotH);
     // Horizontal gridlines across the content width.
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = colors.grid
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final t in domain.ticks) {
@@ -100,7 +101,7 @@ class _LinePlotPainter extends CustomPainter {
     }
     for (var ci = 0; ci < n; ci++) {
       if (ci % layout.labelInterval != 0) continue;
-      _paintCategoryLabel(canvas, layout, categories[ci], ci * layout.slotWidth + layout.slotWidth / 2, plotH);
+      _paintCategoryLabel(canvas, layout, categories[ci], ci * layout.slotWidth + layout.slotWidth / 2, plotH, colors: colors);
     }
   }
 
