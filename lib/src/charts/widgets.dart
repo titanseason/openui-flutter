@@ -20,32 +20,104 @@ class BarChartWidget extends StatefulWidget {
   State<BarChartWidget> createState() => _BarChartWidgetState();
 }
 
-class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarChartWidget> {
+class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarChartWidget>, _ScrollControls<BarChartWidget> {
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in widget.series) _seriesValues(s)];
+    TipData? tooltipFor(int ci) {
+      if (ci < 0) return null;
+      final rows = <TipRow>[];
+      for (var si = 0; si < widget.series.length; si++) {
+        if (hidden.contains(si)) continue;
+        rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
+      }
+      return (title: widget.categories[ci], rows: rows);
+    }
+
+    if (widget.horizontal) return _buildHorizontal(all, tooltipFor);
     return _chartBox(
       height: widget.height,
-      chart: _HoverArea(
-        onHover: (pos, area) {
-          final int ci;
-          if (widget.horizontal) {
-            // Rows fill the plot; the bottom 22px are the value axis.
-            ci = _categoryAtY(pos.dy, area.height - 22, widget.categories.length);
-          } else {
-            final mm = widget.stacked ? stackedMinMax(all, widget.categories.length) : minMaxOf(all);
-            final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: area);
-            ci = _categoryAtX(pos.dx, plot.axisW, plot.plotW, widget.categories.length);
-          }
-          if (ci < 0) return null;
-          final rows = <TipRow>[];
-          for (var si = 0; si < widget.series.length; si++) {
-            if (hidden.contains(si)) continue;
-            rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
-          }
-          return (title: widget.categories[ci], rows: rows);
+      chart: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: widget.stacked, viewport: viewport);
+          final chartH = layout.plotH + layout.labelH;
+          // Hover positions arrive in row coordinates (axis + plot
+          // viewport); the plot painter works in content
+          // coordinates, so the axis width comes off and the
+          // scroll offset goes on.
+          Offset? toContent(Offset? pos) => pos == null ? null : Offset(pos.dx - layout.axisW + (scrollController.hasClients ? scrollController.offset : 0), pos.dy);
+          return Column(
+            children: [
+              Expanded(
+                child: _HoverArea(
+                  onHover: (pos, area) {
+                    final content = toContent(pos)!;
+                    return tooltipFor(_categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length));
+                  },
+                  builder: (context, hoverPos, area) {
+                    final plot = SizedBox(
+                      width: layout.contentWidth,
+                      height: chartH,
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _BarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos))),
+                    );
+                    return Row(
+                      children: [
+                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH))),
+                        Expanded(child: layout.needsScroll ? SingleChildScrollView(controller: scrollController, scrollDirection: Axis.horizontal, child: plot) : plot),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              if (layout.needsScroll)
+                _scrollButtons(canBack: canScrollBack, canForward: canScrollForward, onBack: () => scrollSnap(false, layout.slotWidth, widget.categories.length), onForward: () => scrollSnap(true, layout.slotWidth, widget.categories.length), direction: Axis.horizontal),
+            ],
+          );
         },
-        builder: (context, hoverPos, _) => CustomPaint(painter: _BarPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, horizontal: widget.horizontal, hidden: hidden, hoverPos: hoverPos)),
+      ),
+      legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
+    );
+  }
+
+  Widget _buildHorizontal(List<List<double>> all, TipData? Function(int ci) tooltipFor) {
+    return _chartBox(
+      height: widget.height,
+      chart: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+          final layout = hbarLayout(categories: widget.categories, all: all, stacked: widget.stacked, viewport: viewport);
+          Offset? toContent(Offset? pos) => pos == null ? null : Offset(pos.dx, pos.dy + (scrollController.hasClients ? scrollController.offset : 0));
+          return Column(
+            children: [
+              Expanded(
+                child: _HoverArea(
+                  onHover: (pos, area) {
+                    final content = toContent(pos)!;
+                    return tooltipFor(_categoryAtY(content.dy, layout.contentH, widget.categories.length));
+                  },
+                  builder: (context, hoverPos, area) {
+                    // The painter needs the content-space hover; the
+                    // plot widget is rebuilt here so it follows.
+                    final contentHover = toContent(hoverPos);
+                    final paint = SizedBox(
+                      width: viewport.width,
+                      height: layout.contentH,
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _HBarPlotPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, layout: layout, hidden: hidden, hoverPos: contentHover)),
+                    );
+                    if (!layout.needsScroll) return paint;
+                    return SingleChildScrollView(controller: scrollController, child: paint);
+                  },
+                ),
+              ),
+              // Fixed bottom value axis (labels only; the gridlines
+              // scroll with the rows).
+              SizedBox(width: double.infinity, height: layout.stripH, child: CustomPaint(painter: _HBarAxisPainter(layout: layout))),
+              if (layout.needsScroll)
+                _scrollButtons(canBack: canScrollBack, canForward: canScrollForward, onBack: () => scrollSnap(false, layout.rowH, widget.categories.length), onForward: () => scrollSnap(true, layout.rowH, widget.categories.length), direction: Axis.vertical),
+            ],
+          );
+        },
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );
@@ -66,26 +138,60 @@ class LineChartWidget extends StatefulWidget {
   State<LineChartWidget> createState() => _LineChartWidgetState();
 }
 
-class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<LineChartWidget> {
+class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<LineChartWidget>, _ScrollControls<LineChartWidget> {
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in widget.series) _seriesValues(s)];
     return _chartBox(
       height: widget.height,
-      chart: _HoverArea(
-        onHover: (pos, area) {
-          final mm = minMaxOf(all);
-          final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: area);
-          final ci = _lineCategoryAtX(pos.dx, plot.axisW, plot.plotW, widget.categories.length);
-          if (ci < 0) return null;
-          final rows = <TipRow>[];
-          for (var si = 0; si < widget.series.length; si++) {
-            if (hidden.contains(si)) continue;
-            rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
-          }
-          return (title: widget.categories[ci], rows: rows);
+      chart: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: false, viewport: viewport);
+          final chartH = layout.plotH + layout.labelH;
+          // Hover positions arrive in row coordinates (axis + plot
+          // viewport); the plot painter works in content
+          // coordinates, so the axis width comes off and the
+          // scroll offset goes on.
+          Offset? toContent(Offset? pos) => pos == null ? null : Offset(pos.dx - layout.axisW + (scrollController.hasClients ? scrollController.offset : 0), pos.dy);
+          return Column(
+            children: [
+              Expanded(
+                child: _HoverArea(
+                  onHover: (pos, area) {
+                    final content = toContent(pos)!;
+                    // Points sit at slot centers (React's
+                    // scalePoint), so the hovered point is the
+                    // hovered slot.
+                    final ci = _categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length);
+                    if (ci < 0) return null;
+                    final rows = <TipRow>[];
+                    for (var si = 0; si < widget.series.length; si++) {
+                      if (hidden.contains(si)) continue;
+                      rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
+                    }
+                    return (title: widget.categories[ci], rows: rows);
+                  },
+                  builder: (context, hoverPos, area) {
+                    final plot = SizedBox(
+                      width: layout.contentWidth,
+                      height: chartH,
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _LinePlotPainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos))),
+                    );
+                    return Row(
+                      children: [
+                        SizedBox(width: layout.axisW, height: chartH, child: CustomPaint(painter: _YAxisPainter(domain: layout.domain, plotH: layout.plotH))),
+                        Expanded(child: layout.needsScroll ? SingleChildScrollView(controller: scrollController, scrollDirection: Axis.horizontal, child: plot) : plot),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              if (layout.needsScroll)
+                _scrollButtons(canBack: canScrollBack, canForward: canScrollForward, onBack: () => scrollSnap(false, layout.slotWidth, widget.categories.length), onForward: () => scrollSnap(true, layout.slotWidth, widget.categories.length), direction: Axis.horizontal),
+            ],
+          );
         },
-        builder: (context, hoverPos, _) => CustomPaint(painter: _LinePainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, hidden: hidden, hoverPos: hoverPos)),
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );

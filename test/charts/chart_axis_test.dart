@@ -73,11 +73,31 @@ void main() {
     expect(yForValue(12.5, domain, 100), 50);
   });
 
-  test('cartesianPlot reserves the axis and label strip', () {
-    final plot = cartesianPlot(dataMin: 0, dataMax: 24, size: const Size(200, 200));
-    expect(plot.domain.max, 25);
-    expect(plot.plotH, 178);
-    expect(plot.axisW, greaterThan(0));
-    expect(plot.plotW, 200 - plot.axisW);
+  test('cartesianLayout fits short labels without scrolling', () {
+    final layout = cartesianLayout(categories: const ['A', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(200, 200));
+    expect(layout.domain.max, 25);
+    expect(layout.labelH, 30);
+    expect(layout.plotH, 170);
+    expect(layout.needsScroll, isFalse);
+    expect(layout.contentWidth + layout.axisW, 200);
+  });
+
+  test('cartesianLayout widens slots and grows the label band for a long label', () {
+    final layout = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200));
+    expect(layout.slotWidth, greaterThan(72));
+    expect(layout.labelH, greaterThan(30));
+    expect(layout.needsScroll, isFalse);
+  });
+
+  test('cartesianLayout scrolls at the default slot width for many categories', () {
+    final layout = cartesianLayout(categories: const ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'], all: const [
+      [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+    ], stacked: false, viewport: const Size(400, 200));
+    expect(layout.needsScroll, isTrue);
+    expect(layout.slotWidth, 72);
   });
 }

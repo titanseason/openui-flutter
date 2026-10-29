@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Scrolling cartesian charts and multi-line X labels (React
+  parity, Phase 3c): when categories no longer fit at React's
+  72px default slot width, the plot scrolls horizontally (rows
+  vertically for horizontal bars) behind snap-to-category
+  scroll buttons below the plot, while the Y axis (or the
+  bottom value strip) stays fixed and the grid scrolls with
+  the content. X labels wrap to at most 3 lines (at most half
+  the chart height) with slots widening to at most 3x before
+  scrolling kicks in, and narrow containers drop to a single
+  line, all per React's x-axis layout rules. Line points now
+  sit at slot centers (React's scalePoint, was plot edges),
+  so the hovered point is the hovered slot. The bar golden
+  was regenerated (same bars, label band 22px -> 30px).
 - Charts moved to their own folder (`lib/src/charts/`, one file
   per chart type plus a shared `common.dart`, wired together as
   parts of `charts.dart`): no behavior change, all tests and

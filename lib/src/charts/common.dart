@@ -221,8 +221,83 @@ void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false
   canvas.drawRRect(corners, paint);
 }
 
-void _paintCategoryLabel(Canvas canvas, String text, double centerX, double areaTop, double maxWidth) {
-  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: maxWidth);
-  tp.paint(canvas, Offset(centerX - tp.width / 2, areaTop + (22 - tp.height) / 2));
+/// A bottom-axis label, centered on [centerX] and top-aligned
+/// 4px below the plot (React's X_AXIS_TOP_GAP), wrapped to at
+/// most [maxLines] lines with an ellipsis.
+void _paintWrappedLabel(Canvas canvas, String text, double centerX, double areaTop, double maxWidth, int maxLines) {
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: maxWidth);
+  tp.paint(canvas, Offset(centerX - tp.width / 2, areaTop + 4));
+}
+
+/// Scroll controls for the scroll-mode chart widgets: the
+/// controller, button enable state, and a post-frame refresh so
+/// the buttons are correct once the scroll view attaches (and
+/// after data changes). States using this define no lifecycle
+/// methods of their own.
+mixin _ScrollControls<T extends StatefulWidget> on State<T> {
+  final ScrollController scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    scrollController.addListener(_refreshButtons);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant T oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void _refreshButtons() {
+    if (mounted) setState(() {});
+  }
+
+  bool get canScrollBack => scrollController.hasClients && scrollController.offset > 0;
+  bool get canScrollForward => scrollController.hasClients && scrollController.offset < scrollController.position.maxScrollExtent - 1;
+
+  /// One snap step (a category slot, or a row) in [forward]
+  /// direction, like React's snap scroll buttons.
+  void scrollSnap(bool forward, double step, int count) {
+    if (!scrollController.hasClients || count <= 0) return;
+    final pos = scrollController.offset;
+    var idx = 0;
+    for (var i = 0; i < count; i++) {
+      if (pos >= i * step) {
+        idx = i;
+      } else {
+        break;
+      }
+    }
+    final target = forward ? math.min(count - 1, idx + 1) : math.max(0, idx - 1);
+    final offset = (target * step).clamp(0.0, scrollController.position.maxScrollExtent);
+    scrollController.animateTo(offset, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+}
+
+/// React's scroll buttons: a centered row of small chevrons below
+/// the plot, disabled at the ends. Only rendered when scrolling.
+Widget _scrollButtons({required bool canBack, required bool canForward, required VoidCallback onBack, required VoidCallback onForward, required Axis direction}) {
+  return SizedBox(
+    height: 36,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(icon: Icon(direction == Axis.horizontal ? Icons.chevron_left : Icons.keyboard_arrow_up, size: 18), onPressed: canBack ? onBack : null),
+        IconButton(icon: Icon(direction == Axis.horizontal ? Icons.chevron_right : Icons.keyboard_arrow_down, size: 18), onPressed: canForward ? onForward : null),
+      ],
+    ),
+  );
 }
 

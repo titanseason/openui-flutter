@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
 
-/// The single paint area of the rendered chart.
+/// The paint area of the rendered chart: the keyed plot for
+/// scrolling cartesian charts (axis and strip painters are
+/// separate CustomPaints), the single CustomPaint otherwise.
 ({Offset topLeft, Size size}) paintArea(WidgetTester tester) {
-  final finder = find.byType(CustomPaint);
+  final keyed = find.byKey(const Key('chart-plot'));
+  final finder = keyed.evaluate().isNotEmpty ? keyed : find.byType(CustomPaint);
   expect(finder, findsOneWidget);
   return (topLeft: tester.getTopLeft(finder), size: tester.getSize(finder));
 }
@@ -277,5 +280,20 @@ void main() {
     await tester.pump();
     // Only B is visible now, so it is 100% of the visible total.
     expect(find.text('100.0%'), findsOneWidget);
+  });
+
+  testWidgets('many categories show scroll buttons that snap one slot', (tester) async {
+    await pumpChart(tester, 'root = BarChart(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"], [Series("S", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])])');
+    final back = find.widgetWithIcon(IconButton, Icons.chevron_left);
+    final forward = find.widgetWithIcon(IconButton, Icons.chevron_right);
+    expect(back, findsOneWidget);
+    expect(forward, findsOneWidget);
+    // At the left end: back disabled, forward enabled.
+    expect(tester.widget<IconButton>(back).onPressed, isNull);
+    expect(tester.widget<IconButton>(forward).onPressed, isNotNull);
+    await tester.tap(forward);
+    await tester.pumpAndSettle();
+    // One snap step in: back is enabled now.
+    expect(tester.widget<IconButton>(back).onPressed, isNotNull);
   });
 }

@@ -49,7 +49,7 @@ ScatterLayout computeScatterLayout(List<ElementNode> series) {
 typedef ScatterPlot = ({YDomain xDomain, YDomain yDomain, double left, double plotW, double plotH});
 
 ScatterPlot scatterPlotFor(ScatterLayout layout, Size area) {
-  final plotH = math.max(0.0, area.height - 22);
+  final plotH = math.max(0.0, area.height - _singleLineBand());
   final yDomain = niceDomain(layout.minY, layout.maxY, plotH, throughZero: false);
   final left = axisWidthForTicks(yDomain.ticks);
   final plotW = math.max(0.0, area.width - left);

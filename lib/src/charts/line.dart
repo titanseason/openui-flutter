@@ -2,34 +2,45 @@ part of openui_charts;
 
 // ---------------- Line / area ----------------
 
-class _LinePainter extends CustomPainter {
-  _LinePainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, this.hidden = const {}, this.hoverPos});
+class _LinePlotPainter extends CustomPainter {
+  _LinePlotPainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, required this.layout, this.hidden = const {}, this.hoverPos});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
   final bool area;
   final bool curved;
   final bool step;
+  final CartesianLayout layout;
   final Set<int> hidden;
   final Offset? hoverPos;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
-    final mm = minMaxOf(all);
-    final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: size);
-    final domain = plot.domain;
+    final domain = layout.domain;
+    final plotH = layout.plotH;
     final n = categories.length;
     final denom = math.max(1, n - 1);
-    double px(int ci) => plot.axisW + plot.plotW * ci / denom;
-    double py(double v) => yForValue(v, domain, plot.plotH);
-    _paintAxisTicks(canvas, domain, plot.axisW, plot.plotW, plot.plotH);
+    double px(int ci) => layout.slotWidth * ci / denom;
+    double py(double v) => yForValue(v, domain, plotH);
+    // Horizontal gridlines across the content width.
+    final gridPaint = Paint()
+      ..color = Colors.grey.shade200
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (final t in domain.ticks) {
+      final gy = py(t);
+      canvas.drawLine(Offset(0, gy), Offset(size.width, gy), gridPaint);
+    }
     final baseline = py(0);
     for (var si = 0; si < all.length; si++) {
       if (hidden.contains(si)) continue;
       final vals = all[si];
       if (vals.isEmpty) continue;
-      final pts = [for (var ci = 0; ci < vals.length; ci++) Offset(px(ci), py(vals[ci]))];
+      // Points span the whole category in scroll mode: the first
+      // point sits at the first slot's center, the last at the
+      // last slot's center.
+      final pts = [for (var ci = 0; ci < vals.length; ci++) Offset(px(ci) + layout.slotWidth / 2, py(vals[ci]))];
       final path = Path()..moveTo(pts.first.dx, pts.first.dy);
       if (curved && pts.length > 2) {
         // Catmull-Rom to Bezier: a smooth curve through the points,
@@ -71,8 +82,11 @@ class _LinePainter extends CustomPainter {
       // React's activeDots (default on): the hovered point gets a
       // white ring so it reads as selected. Crosshair lines are
       // opt-in in React, so no vertical line here.
-      if (hoverPos != null) {
-        final ci = _lineCategoryAtX(hoverPos!.dx, plot.axisW, plot.plotW, n);
+      final hp = hoverPos;
+      if (hp != null) {
+        // Points sit at slot centers, so the hovered point is the
+        // hovered slot (React's scalePoint).
+        final ci = _categoryAtX(hp.dx, 0, layout.contentWidth, n);
         if (ci >= 0 && ci < pts.length) {
           canvas.drawCircle(pts[ci], 6, Paint()..color = Colors.white);
           canvas.drawCircle(pts[ci], 4, Paint()..color = color);
@@ -80,7 +94,7 @@ class _LinePainter extends CustomPainter {
       }
     }
     for (var ci = 0; ci < n; ci++) {
-      _paintCategoryLabel(canvas, categories[ci], px(ci), plot.plotH, plot.plotW / denom);
+      _paintWrappedLabel(canvas, categories[ci], ci * layout.slotWidth + layout.slotWidth / 2, plotH, layout.slotWidth, layout.lineCap);
     }
   }
 

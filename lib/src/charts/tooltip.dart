@@ -21,26 +21,20 @@ String _fmtNum(double v) {
 
 /// Vertical bars / line points by x slot: the slot whose interval
 /// contains [dx]. The plot starts at [left] (after the Y axis) and
-/// spans [width]; the caller computes both with [cartesianPlot]
-/// so the hit test matches the painted grid exactly.
+/// spans [width]; the caller computes both with [cartesianLayout]
+/// so the hit test matches the painted grid exactly. Line points
+/// sit at slot centers (React's scalePoint), so the hovered point
+/// is the hovered slot too.
 int _categoryAtX(double dx, double left, double width, int n) {
   if (n <= 0 || width <= 0 || dx < left || dx > left + width) return -1;
   return ((dx - left) / width * n).floor().clamp(0, n - 1);
 }
 
-/// Horizontal bars by y slot: rows fill [plotH] (the bottom 22px
-/// belong to the value axis, not to a row).
+/// Horizontal bars by y slot: rows fill [height] (the bottom value
+/// axis strip is not a row).
 int _categoryAtY(double dy, double height, int n) {
   if (n <= 0 || height <= 0 || dy < 0 || dy > height) return -1;
   return (dy / height * n).floor().clamp(0, n - 1);
-}
-
-/// Line / area points by nearest x: points sit at
-/// left + width*ci/(n-1).
-int _lineCategoryAtX(double dx, double left, double width, int n) {
-  if (n <= 0 || width <= 0 || dx < left || dx > left + width) return -1;
-  if (n == 1) return 0;
-  return (((dx - left) / width * (n - 1)).round()).clamp(0, n - 1);
 }
 
 /// Pie / donut slice by angle, mirroring [_PiePainter] geometry:
