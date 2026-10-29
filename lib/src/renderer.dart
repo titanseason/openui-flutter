@@ -696,7 +696,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       case 'BarChart':
         return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'PieChart':
         final pie = _sliceData(node);
         return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
@@ -1201,7 +1201,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ],
         );
       case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
       case 'RadarChart':
         return RadarChartWidget(categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette);
       case 'HorizontalBarChart':

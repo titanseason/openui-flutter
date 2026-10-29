@@ -8,7 +8,7 @@ part of openui_charts;
 // stacked bar, whose React counterpart has no legend toggle.
 
 class BarChartWidget extends StatefulWidget {
-  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false});
+  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false, this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
@@ -16,6 +16,8 @@ class BarChartWidget extends StatefulWidget {
   final bool showLegend;
   final bool horizontal;
   final bool stacked;
+  // React's onClick: the tapped category index.
+  final ValueChanged<int>? onTap;
   @override
   State<BarChartWidget> createState() => _BarChartWidgetState();
 }
@@ -29,7 +31,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
       final rows = <TipRow>[];
       for (var si = 0; si < widget.series.length; si++) {
         if (hidden.contains(si)) continue;
-        rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
+        rows.add((label: widget.series[si].stringOf('category'), value: _fmtTooltipNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
       }
       return (title: widget.categories[ci], rows: rows);
     }
@@ -54,6 +56,11 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
                   onHover: (pos, area) {
                     final content = toContent(pos)!;
                     return tooltipFor(_categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length));
+                  },
+                  onTap: (pos, area) {
+                    final content = toContent(pos)!;
+                    final ci = _categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length);
+                    if (ci >= 0) widget.onTap?.call(ci);
                   },
                   builder: (context, hoverPos, area) {
                     final plot = SizedBox(
@@ -96,6 +103,11 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
                     final content = toContent(pos)!;
                     return tooltipFor(_categoryAtY(content.dy, layout.contentH, widget.categories.length));
                   },
+                  onTap: (pos, area) {
+                    final content = toContent(pos)!;
+                    final ci = _categoryAtY(content.dy, layout.contentH, widget.categories.length);
+                    if (ci >= 0) widget.onTap?.call(ci);
+                  },
                   builder: (context, hoverPos, area) {
                     // The painter needs the content-space hover; the
                     // plot widget is rebuilt here so it follows.
@@ -125,15 +137,20 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
 }
 
 class LineChartWidget extends StatefulWidget {
-  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = false, this.step = false});
+  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = true, this.step = false, this.showDots = false, this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
   final double height;
   final bool showLegend;
   final bool area;
+  // React's variant default is natural (curved), not linear.
   final bool curved;
   final bool step;
+  // React's showDots default is false.
+  final bool showDots;
+  // React's onClick: the tapped category index.
+  final ValueChanged<int>? onTap;
   @override
   State<LineChartWidget> createState() => _LineChartWidgetState();
 }
@@ -168,15 +185,20 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
                     final rows = <TipRow>[];
                     for (var si = 0; si < widget.series.length; si++) {
                       if (hidden.contains(si)) continue;
-                      rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
+                      rows.add((label: widget.series[si].stringOf('category'), value: _fmtTooltipNum(ci < all[si].length ? all[si][ci] : 0), color: _colorAt(widget.palette, si)));
                     }
                     return (title: widget.categories[ci], rows: rows);
+                  },
+                  onTap: (pos, area) {
+                    final content = toContent(pos)!;
+                    final ci = _categoryAtX(content.dx, 0, layout.contentWidth, widget.categories.length);
+                    if (ci >= 0) widget.onTap?.call(ci);
                   },
                   builder: (context, hoverPos, area) {
                     final plot = SizedBox(
                       width: layout.contentWidth,
                       height: chartH,
-                      child: CustomPaint(key: const Key('chart-plot'), painter: _LinePlotPainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos))),
+                      child: CustomPaint(key: const Key('chart-plot'), painter: _LinePlotPainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, layout: layout, hidden: hidden, hoverPos: toContent(hoverPos), showDots: widget.showDots)),
                     );
                     return Row(
                       children: [
@@ -199,12 +221,14 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
 }
 
 class PieChartWidget extends StatefulWidget {
-  const PieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette});
+  const PieChartWidget({required this.labels, required this.values, this.variant = 'pie', this.appearance = 'circular', this.palette = _defaultPalette, this.onTap});
   final List<String> labels;
   final List<double> values;
   final String variant;
   final String appearance;
   final List<Color> palette;
+  // React's onClick: the tapped slice index.
+  final ValueChanged<int>? onTap;
   @override
   State<PieChartWidget> createState() => _PieChartWidgetState();
 }
@@ -241,8 +265,12 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
                 final v = i < widget.values.length ? widget.values[i] : 0.0;
                 return (
                   title: widget.labels[i],
-                  rows: [(label: widget.labels[i], value: _fmtNum(v), color: _colorAt(widget.palette, i))],
+                  rows: [(label: widget.labels[i], value: _fmtTooltipNum(v), color: _colorAt(widget.palette, i))],
                 );
+              },
+              onTap: (pos, area) {
+                final i = pieHit(pos, area);
+                if (i != null) widget.onTap?.call(i);
               },
               builder: (context, hoverPos, area) => CustomPaint(painter: _PiePainter(labels: widget.labels, values: widget.values, variant: widget.variant, appearance: widget.appearance, palette: widget.palette, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : pieHit(hoverPos, area)))),
             ),
@@ -255,10 +283,16 @@ class _PieChartWidgetState extends State<PieChartWidget> with _LegendToggle<PieC
 }
 
 class RadarChartWidget extends StatefulWidget {
-  const RadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette});
+  const RadarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.area = false, this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
+  // React's radar variant: line (the default, outline only) or
+  // area (filled). Lang's RadarChart exposes no variant, so the
+  // renderer always gets the line default.
+  final bool area;
+  // React's onClick: the tapped axis index.
+  final ValueChanged<int>? onTap;
   @override
   State<RadarChartWidget> createState() => _RadarChartWidgetState();
 }
@@ -292,11 +326,15 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
                   final rows = <TipRow>[];
                   for (var si = 0; si < widget.series.length; si++) {
                     if (hidden.contains(si)) continue;
-                    rows.add((label: widget.series[si].stringOf('category'), value: _fmtNum(axis < all[si].length ? all[si][axis] : 0), color: _colorAt(widget.palette, si)));
+                    rows.add((label: widget.series[si].stringOf('category'), value: _fmtTooltipNum(axis < all[si].length ? all[si][axis] : 0), color: _colorAt(widget.palette, si)));
                   }
                   return (title: widget.categories[axis], rows: rows);
                 },
-                builder: (context, _, __) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden)),
+                onTap: (pos, area) {
+                  final axis = _radarAxisAt(pos, area, widget.categories.length);
+                  if (axis >= 0) widget.onTap?.call(axis);
+                },
+                builder: (context, _, __) => CustomPaint(painter: _RadarPainter(categories: widget.categories, all: all, palette: widget.palette, maxV: maxV, hidden: hidden, area: widget.area)),
               ),
             ),
           ),
@@ -308,10 +346,12 @@ class _RadarChartWidgetState extends State<RadarChartWidget> with _LegendToggle<
 }
 
 class RadialChartWidget extends StatefulWidget {
-  const RadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+  const RadialChartWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.onTap});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
+  // React's onClick: the tapped ring index.
+  final ValueChanged<int>? onTap;
   @override
   State<RadialChartWidget> createState() => _RadialChartWidgetState();
 }
@@ -346,8 +386,12 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
                 final v = hit < widget.values.length ? widget.values[hit] : 0.0;
                 return (
                   title: widget.labels[hit],
-                  rows: [(label: widget.labels[hit], value: _fmtNum(v), color: _colorAt(widget.palette, hit))],
+                  rows: [(label: widget.labels[hit], value: _fmtTooltipNum(v), color: _colorAt(widget.palette, hit))],
                 );
+              },
+              onTap: (pos, area) {
+                final hit = ringHit(pos, area);
+                if (hit != null) widget.onTap?.call(hit);
               },
               builder: (context, hoverPos, area) => CustomPaint(painter: _RadialPainter(values: widget.values, palette: widget.palette, maxV: maxV, hidden: hidden, hovered: _legendHovered ?? (hoverPos == null ? null : ringHit(hoverPos, area)))),
             ),
@@ -360,10 +404,12 @@ class _RadialChartWidgetState extends State<RadialChartWidget> with _LegendToggl
 }
 
 class SingleStackedBarWidget extends StatefulWidget {
-  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette});
+  const SingleStackedBarWidget({required this.labels, required this.values, this.palette = _defaultPalette, this.onTap});
   final List<String> labels;
   final List<double> values;
   final List<Color> palette;
+  // React's onClick: the tapped segment index.
+  final ValueChanged<int>? onTap;
   @override
   State<SingleStackedBarWidget> createState() => _SingleStackedBarWidgetState();
 }
@@ -394,8 +440,12 @@ class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
                 final color = _colorAt(widget.palette, seg);
                 return (
                   title: widget.labels[seg],
-                  rows: [(label: widget.labels[seg], value: _fmtNum(v), color: color), (label: 'Percentage', value: '${pct.toStringAsFixed(1)}%', color: color)],
+                  rows: [(label: widget.labels[seg], value: _fmtTooltipNum(v), color: color), (label: 'Percentage', value: '${pct.toStringAsFixed(1)}%', color: color)],
                 );
+              },
+              onTap: (pos, area) {
+                final seg = _stackedSegmentAtX(pos.dx, area.width, padded, total);
+                if (seg >= 0) widget.onTap?.call(seg);
               },
               builder: (context, hoverPos, area) {
                 final trackHovered = hoverPos == null ? null : _stackedSegmentAtX(hoverPos.dx, area.width, padded, total);
@@ -425,9 +475,12 @@ class _SingleStackedBarWidgetState extends State<SingleStackedBarWidget> {
 }
 
 class ScatterChartWidget extends StatefulWidget {
-  const ScatterChartWidget({required this.series, this.palette = _defaultPalette});
+  const ScatterChartWidget({required this.series, this.palette = _defaultPalette, this.onTap});
   final List<ElementNode> series;
   final List<Color> palette;
+  // React's onClick: the tapped point, as (series index, point
+  // index within that series).
+  final void Function(int seriesIndex, int pointIndex)? onTap;
   @override
   State<ScatterChartWidget> createState() => _ScatterChartWidgetState();
 }
@@ -457,8 +510,18 @@ class _ScatterChartWidgetState extends State<ScatterChartWidget> with _LegendTog
                   final color = _colorAt(widget.palette, d.seriesIndex);
                   return (
                     title: widget.series[d.seriesIndex].stringOf('name'),
-                    rows: [(label: 'x', value: _fmtNum(d.x), color: color), (label: 'y', value: _fmtNum(d.y), color: color)],
+                    rows: [(label: 'x', value: _fmtGrouped(d.x), color: color), (label: 'y', value: _fmtGrouped(d.y), color: color)],
                   );
+                },
+                onTap: (pos, area) {
+                  final plot = scatterPlotFor(layout, area);
+                  final hit = _scatterDotAt(pos, plot, layout.dots);
+                  if (hit < 0) return;
+                  final d = layout.dots[hit];
+                  // Dots keep series order, so the point index is
+                  // the count of earlier dots from the same series.
+                  final pointIndex = [for (var i = 0; i < hit; i++) if (layout.dots[i].seriesIndex == d.seriesIndex) i].length;
+                  widget.onTap?.call(d.seriesIndex, pointIndex);
                 },
                 builder: (context, _, __) => CustomPaint(painter: _ScatterPainter(layout: layout, palette: widget.palette)),
               ),

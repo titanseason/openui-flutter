@@ -59,13 +59,8 @@ class _PiePainter extends CustomPainter {
           canvas.drawPath(path, paint);
         }
       }
-      // Section title, white on the slice; skipped for slivers
-      // where it could never be readable.
-      if (sweep >= 0.25) {
-        final mid = angle + sweep / 2;
-        final r = donut && outerR > 42 ? (outerR + 40) / 2 : outerR * 0.65;
-        _paintCenteredText(canvas, labels[i], center + Offset(math.cos(mid) * r, math.sin(mid) * r), fontSize: 11, color: Colors.white);
-      }
+      // React draws no text on the slices: labels live in the
+      // legend (and the tooltip), never on the pie itself.
       angle += sweep;
     }
   }

@@ -3,12 +3,15 @@ part of openui_charts;
 // ---------------- Radar ----------------
 
 class _RadarPainter extends CustomPainter {
-  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV, this.hidden = const {}});
+  _RadarPainter({required this.categories, required this.all, required this.palette, required this.maxV, this.hidden = const {}, this.area = false});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
   final double maxV;
   final Set<int> hidden;
+  // React's radar variant: line (the default) draws only the
+  // outline, area fills it.
+  final bool area;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -26,7 +29,8 @@ class _RadarPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     if (n >= 3) {
-      for (final f in [0.25, 0.5, 0.75, 1.0]) {
+      // React's gridLevels = 5: five concentric polygons.
+      for (final f in [0.2, 0.4, 0.6, 0.8, 1.0]) {
         final path = Path();
         for (var i = 0; i < n; i++) {
           final p = vertex(i, radius * f);
@@ -78,7 +82,7 @@ class _RadarPainter extends CustomPainter {
           }
         }
         path.close();
-        canvas.drawPath(path, Paint()..color = color.withValues(alpha: 0.25));
+        if (area) canvas.drawPath(path, Paint()..color = color.withValues(alpha: 0.25));
         canvas.drawPath(path, Paint()
           ..color = color
           ..style = PaintingStyle.stroke

@@ -207,13 +207,13 @@ void _paintCenteredText(Canvas canvas, String text, Offset center, {double fontS
 
 /// A bottom-axis category label, centered on [centerX] and centered
 /// vertically in a 22px-tall label area starting at [areaTop].
-/// A bar rect with the far end rounded, like the old fl_chart
-/// rods: the top for positive vertical bars, the bottom for
-/// negative ones ([flip]); the right end for positive horizontal
-/// bars, the left end for negative ones. [radius] caps at half
-/// the bar thickness.
+/// A bar rect with the far end rounded (React's barRadius = 4):
+/// the top for positive vertical bars, the bottom for negative
+/// ones ([flip]); the right end for positive horizontal bars,
+/// the left end for negative ones. The radius caps at half the
+/// bar thickness.
 void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false, bool flip = false}) {
-  const radius = 6.0;
+  const radius = 4.0;
   final r = horizontal ? math.min(radius, rect.height / 2) : math.min(radius, rect.width / 2);
   final corners = horizontal
       ? (flip ? RRect.fromRectAndCorners(rect, topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)) : RRect.fromRectAndCorners(rect, topRight: Radius.circular(r), bottomRight: Radius.circular(r)))

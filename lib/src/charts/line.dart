@@ -3,7 +3,7 @@ part of openui_charts;
 // ---------------- Line / area ----------------
 
 class _LinePlotPainter extends CustomPainter {
-  _LinePlotPainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, required this.layout, this.hidden = const {}, this.hoverPos});
+  _LinePlotPainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, required this.layout, this.hidden = const {}, this.hoverPos, this.showDots = false});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
@@ -13,6 +13,9 @@ class _LinePlotPainter extends CustomPainter {
   final CartesianLayout layout;
   final Set<int> hidden;
   final Offset? hoverPos;
+  // React's showDots (default false, dotRadius 3): static dots
+  // are opt-in; the hovered active dot is separate and always on.
+  final bool showDots;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -76,8 +79,10 @@ class _LinePlotPainter extends CustomPainter {
         ..color = color
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2);
-      for (final p in pts) {
-        canvas.drawCircle(p, 4, Paint()..color = color);
+      if (showDots) {
+        for (final p in pts) {
+          canvas.drawCircle(p, 3, Paint()..color = color);
+        }
       }
       // React's activeDots (default on): the hovered point gets a
       // white ring so it reads as selected. Crosshair lines are

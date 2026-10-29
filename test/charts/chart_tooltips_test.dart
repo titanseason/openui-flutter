@@ -282,6 +282,79 @@ void main() {
     expect(find.text('100.0%'), findsOneWidget);
   });
 
+  testWidgets('tooltip values group thousands and abbreviate at 100k', (tester) async {
+    await pumpChart(tester, 'root = BarChart(["A"], [Series("S", [1234])])');
+    var area = paintArea(tester);
+    var gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height / 2));
+    expect(find.text('1,234'), findsOneWidget);
+    await gesture.removePointer();
+    await pumpChart(tester, 'root = BarChart(["A"], [Series("S", [123456])])');
+    area = paintArea(tester);
+    gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height / 2));
+    expect(find.text('123.4K'), findsOneWidget);
+    await gesture.removePointer();
+    await pumpChart(tester, 'root = BarChart(["A"], [Series("S", [-2500])])');
+    area = paintArea(tester);
+    gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height / 2));
+    expect(find.text('-2,500'), findsOneWidget);
+    await gesture.removePointer();
+  });
+
+  testWidgets('scatter tooltip groups coordinates without abbreviating', (tester) async {
+    // Nice domains end exactly on 1000/100 here, so the max point
+    // sits at the plot's top-right corner (a widened domain like
+    // 1234 -> 1300 would not).
+    await pumpChart(tester, 'root = ScatterChart([ScatterSeries("S", [Point(0, 0), Point(1000, 100)])])');
+    final area = paintArea(tester);
+    final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width - 5, 5));
+    expect(find.text('1,000'), findsOneWidget);
+    await gesture.removePointer();
+  });
+
+  testWidgets('tapping a bar category fires onTap with its index', (tester) async {
+    int? tapped;
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: BarChartWidget(
+            categories: const ['A', 'B'],
+            series: const [ElementNode('Series', {'category': 'S', 'values': [10, 20]}, 's1')],
+            onTap: (i) => tapped = i,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final area = paintArea(tester);
+    await tester.tapAt(area.topLeft + Offset(area.size.width * 0.75, area.size.height * 0.5));
+    await tester.pump();
+    expect(tapped, 1);
+  });
+
+  testWidgets('tapping a pie slice fires onTap with its index', (tester) async {
+    int? tapped;
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: PieChartWidget(
+            labels: const ['A', 'B'],
+            values: const [1, 1],
+            onTap: (i) => tapped = i,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final area = paintArea(tester);
+    final center = area.topLeft + Offset(area.size.width / 2, area.size.height / 2);
+    // Top half is slice B (circular starts at 3 o'clock).
+    await tester.tapAt(center + const Offset(0, -43));
+    await tester.pump();
+    expect(tapped, 1);
+  });
+
   testWidgets('many categories show scroll buttons that snap one slot', (tester) async {
     await pumpChart(tester, 'root = BarChart(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"], [Series("S", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])])');
     final back = find.widgetWithIcon(IconButton, Icons.chevron_left);

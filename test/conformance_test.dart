@@ -292,6 +292,56 @@ s = Series("气温", [22, 24, 21])
     );
   });
 
+  testWidgets('golden: line chart', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = LineChart(["周一", "周二", "周三"], [s])
+s = Series("气温", [22, 24, 21])
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/chart_line.png'),
+    );
+  });
+
+  testWidgets('golden: radar chart', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = RadarChart(["A", "B", "C"], [s])
+s = Series("R", [10, 20, 30])
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/chart_radar.png'),
+    );
+  });
+
   testWidgets('golden: card', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

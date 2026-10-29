@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Chart calibration (React parity, Phase 4): line/area variant
+  now defaults to natural (was linear when Lang omitted
+  variant), both in the renderer and in LineChartWidget's own
+  default; static dots are off by default (React showDots =
+  false, dotRadius 3 when enabled) with the hovered active dot
+  unchanged; bar corner radius 6 -> 4 (React barRadius); radar
+  grid goes from 4 to 5 levels (React gridLevels) and the
+  default radar variant is line (outline only, area fill is
+  now opt-in via an `area` flag — Lang's RadarChart exposes no
+  variant); pie slices no longer carry white on-slice titles
+  (React has none, labels live in the legend and tooltip);
+  tooltip numbers follow React's formatter (thousands
+  separators below 100000, K/M/B/T abbreviation floored to 1
+  decimal at and above it; scatter coordinates group without
+  abbreviating). All chart widgets gain an `onTap` callback
+  (React's onClick, direct-widget users only — Lang cannot
+  express callbacks): category index for bar/line/radar,
+  slice/ring/segment index for pie/radial/stacked, and
+  (series, point) for scatter. Tap detection uses raw pointer
+  events, not a tap recognizer, because the tap recognizer
+  starves touch-drag tooltips; a drag still never fires a tap.
+  New line and radar goldens pin the curve default, the
+  dot-less line, the 5 radar rings and the unfilled radar;
+  the bar golden was regenerated for radius 4.
 - Scrolling cartesian charts and multi-line X labels (React
   parity, Phase 3c): when categories no longer fit at React's
   72px default slot width, the plot scrolls horizontally (rows
