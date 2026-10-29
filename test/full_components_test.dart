@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 void _collect(ElementNode node, Set<String> out) {
   out.add(node.component);

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 // Batch B: card-block props aligned with @openuidev/react-ui 0.18.1
 // Zod schemas (docs/react-1.0-diff/react-source-props.md §2). Blocks

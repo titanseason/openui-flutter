@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 /// Four example screens, one per scenario in the Task 9 brief. Each screen
 /// is a public widget (not just code inside main()) so the example's own

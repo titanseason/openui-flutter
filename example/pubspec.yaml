@@ -1,5 +1,5 @@
-name: openui_flutter_example
-description: Demo app for openui_flutter.
+name: openui_lang_example
+description: Demo app for openui_lang.
 publish_to: none
 version: 0.1.0
 environment:
@@ -8,7 +8,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  openui_flutter:
+  openui_lang:
     path: ../
 dev_dependencies:
   flutter_test:

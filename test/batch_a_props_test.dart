@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 // Batch A props alignment (React 0.18.1 schemas, see
 // docs/react-1.0-diff/react-source-props.md): declaration order,

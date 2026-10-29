@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 void main() {
   testWidgets('MarkDownRenderer uses flutter_markdown_plus for full Markdown', (tester) async {

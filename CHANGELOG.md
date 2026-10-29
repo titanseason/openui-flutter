@@ -2,6 +2,10 @@
 
 ## 0.18.0
 
+- Package renamed to `openui_lang` (`pubspec` name, barrel
+  `lib/openui_lang.dart`, all imports, example app, READMEs):
+  `openui_flutter` is already taken on pub.dev (0.1.4). The
+  GitHub repository and local directory keep the old name.
 - First published release. Version tracks React's 0.18 line
   (the component set matches `@openuidev/react-ui` 0.18.1);
   the patch number is this package's own counter.

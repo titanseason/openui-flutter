@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter_example/screens.dart';
+import 'package:openui_lang_example/screens.dart';
 
 void main() {
   testWidgets('chat rich answer screen pumps without crashing', (tester) async {

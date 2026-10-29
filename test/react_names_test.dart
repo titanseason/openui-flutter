@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 // Names aligned directly with @openuidev/react-ui 0.18.1 (see
 // docs/react-1.0-diff/): no short-name variants are kept. The 11

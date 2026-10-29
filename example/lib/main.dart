@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:openui_flutter_example/screens.dart';
+import 'package:openui_lang_example/screens.dart';
 
 void main() => runApp(const DemoApp());
 

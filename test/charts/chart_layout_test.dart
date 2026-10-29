@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 const _cats = '["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]';
 const _vals = '[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]';

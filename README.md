@@ -1,4 +1,4 @@
-# openui_flutter
+# openui_lang
 
 [English](./README.md) | [中文](./README.zh-CN.md)
 
@@ -10,13 +10,13 @@ self-drawn; the only third-party dependency is `flutter_markdown_plus`
 for Markdown.
 
 > Status: not published on pub.dev yet. The package name is
-> `openui_flutter`, the version is 1.0.0, and the repository/homepage
+> `openui_lang`, the version is 1.0.0, and the repository/homepage
 > URLs in `pubspec.yaml` are still `.invalid` placeholders. Until the
 > first publish, use a path dependency on a local checkout:
 >
 > ```yaml
 > dependencies:
->   openui_flutter:
+>   openui_lang:
 >     path: ../openui-flutter
 > ```
 
@@ -25,7 +25,7 @@ for Markdown.
 Response mode — one complete program:
 
 ```dart
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 OpenUIRenderer(
   library: openUIStandardLibrary(),

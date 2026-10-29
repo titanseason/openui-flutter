@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 // Renderer-side incrementality: the incremental parser returns the
 // same ElementNode objects for unchanged statements, and _buildNode

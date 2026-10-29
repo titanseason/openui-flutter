@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openui_flutter/openui_flutter.dart';
+import 'package:openui_lang/openui_lang.dart';
 
 // EditableTable in its React shape: name/columns objects/data rows,
 // edited rows submitted on "Save Changes" keyed by name.
