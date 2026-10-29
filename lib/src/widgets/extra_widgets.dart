@@ -454,7 +454,7 @@ class DatePickerField extends StatelessWidget {
 
 /// Range-mode date picker: the value is a {from, to} map of
 /// yyyy-MM-dd strings, mirroring React's DateRange {from, to} shape.
-/// Displays "from → to", either side alone, or 未选择 when empty.
+/// Displays "from → to", either side alone, or "Not selected" when empty.
 class DateRangeField extends StatelessWidget {
   const DateRangeField({required this.stateKey, required this.value, required this.onChanged, this.enabled = true});
   final String? stateKey;
