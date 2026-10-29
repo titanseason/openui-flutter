@@ -202,29 +202,38 @@ List<ComponentDef> _baseComponents() => [
         PropDef('columns', _l, defaultValue: const []),
         PropDef('data', _l, defaultValue: const []),
       ]),
-      const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: grouped/stacked.', [
+      const ComponentDef('BarChart', 'Bar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: grouped/stacked. density: compact/default/spacious (scroll mode only). condensed: fit mode, no scrolling. tickVariant: singleLine/multiLine/angled (angled is condensed-only).', [
         PropDef('labels', _l, required: true),
         PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
+        PropDef('density', _s),
+        PropDef('condensed', _b),
+        PropDef('tickVariant', _s),
       ]),
-      const ComponentDef('LineChart', 'Line chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step.', [
+      const ComponentDef('LineChart', 'Line chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step. density: compact/default/spacious (scroll mode only). condensed: fit mode, no scrolling. tickVariant: singleLine/multiLine/angled (angled is condensed-only).', [
         PropDef('labels', _l, required: true),
         PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
+        PropDef('density', _s),
+        PropDef('condensed', _b),
+        PropDef('tickVariant', _s),
       ]),
-      const ComponentDef('AreaChart', 'Area chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step.', [
+      const ComponentDef('AreaChart', 'Area chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema). variant: linear/natural/step. density: compact/default/spacious (scroll mode only). condensed: fit mode, no scrolling. tickVariant: singleLine/multiLine/angled (angled is condensed-only).', [
         PropDef('labels', _l, required: true),
         PropDef('series', _any, required: true),
         PropDef('variant', _s),
         PropDef('xLabel', _s),
         PropDef('yLabel', _s),
         PropDef('height', _n),
+        PropDef('density', _s),
+        PropDef('condensed', _b),
+        PropDef('tickVariant', _s),
       ]),
       const ComponentDef('RadarChart', 'Radar chart: labels plus Series nodes or plain {category, values} objects (React SeriesSchema).', [
         PropDef('labels', _l, required: true),

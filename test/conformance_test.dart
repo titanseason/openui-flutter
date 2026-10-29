@@ -367,6 +367,31 @@ s = Series("Sales", [30, 50, 20])
     );
   });
 
+  testWidgets('golden: condensed angled chart', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = BarChart(["A very long category label here", "Another long category name"], [s], "grouped", null, null, 220, "default", true, "angled")
+s = Series("Sales", [22, 24])
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/chart_condensed_angled.png'),
+    );
+  });
+
   testWidgets('golden: card', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

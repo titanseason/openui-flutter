@@ -8,7 +8,7 @@ part of openui_charts;
 // stacked bar, whose React counterpart has no legend toggle.
 
 class BarChartWidget extends StatefulWidget {
-  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false, this.onTap});
+  const BarChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.horizontal = false, this.stacked = false, this.density = 'default', this.condensed = false, this.tickVariant, this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
@@ -16,6 +16,13 @@ class BarChartWidget extends StatefulWidget {
   final bool showLegend;
   final bool horizontal;
   final bool stacked;
+  // React's density (scroll mode only), condensed (fit mode),
+  // tickVariant (singleLine/multiLine/angled; angled is
+  // condensed-only). Inert for horizontal bars, as in React's
+  // horizontal path, which never reaches the cartesian layout.
+  final String density;
+  final bool condensed;
+  final String? tickVariant;
   // React's onClick: the tapped category index.
   final ValueChanged<int>? onTap;
   @override
@@ -42,7 +49,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
       chart: LayoutBuilder(
         builder: (context, constraints) {
           final viewport = Size(constraints.maxWidth, constraints.maxHeight);
-          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: widget.stacked, viewport: viewport);
+          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: widget.stacked, viewport: viewport, density: widget.density, condensed: widget.condensed, tickVariant: widget.tickVariant);
           final chartH = layout.plotH + layout.labelH;
           // Hover positions arrive in row coordinates (axis + plot
           // viewport); the plot painter works in content
@@ -137,12 +144,16 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
 }
 
 class LineChartWidget extends StatefulWidget {
-  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = true, this.step = false, this.showDots = false, this.onTap});
+  const LineChartWidget({required this.categories, required this.series, this.palette = _defaultPalette, this.height = 220, this.showLegend = true, this.area = false, this.curved = true, this.step = false, this.showDots = false, this.density = 'default', this.condensed = false, this.tickVariant, this.onTap});
   final List<String> categories;
   final List<ElementNode> series;
   final List<Color> palette;
   final double height;
   final bool showLegend;
+  // React's density / condensed / tickVariant, as on BarChartWidget.
+  final String density;
+  final bool condensed;
+  final String? tickVariant;
   final bool area;
   // React's variant default is natural (curved), not linear.
   final bool curved;
@@ -164,7 +175,7 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
       chart: LayoutBuilder(
         builder: (context, constraints) {
           final viewport = Size(constraints.maxWidth, constraints.maxHeight);
-          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: false, viewport: viewport);
+          final layout = cartesianLayout(categories: widget.categories, all: all, stacked: false, viewport: viewport, density: widget.density, condensed: widget.condensed, tickVariant: widget.tickVariant);
           final chartH = layout.plotH + layout.labelH;
           // Hover positions arrive in row coordinates (axis + plot
           // viewport); the plot painter works in content

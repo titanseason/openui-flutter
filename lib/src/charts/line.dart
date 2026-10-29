@@ -99,7 +99,8 @@ class _LinePlotPainter extends CustomPainter {
       }
     }
     for (var ci = 0; ci < n; ci++) {
-      _paintWrappedLabel(canvas, categories[ci], ci * layout.slotWidth + layout.slotWidth / 2, plotH, layout.slotWidth, layout.lineCap);
+      if (ci % layout.labelInterval != 0) continue;
+      _paintCategoryLabel(canvas, layout, categories[ci], ci * layout.slotWidth + layout.slotWidth / 2, plotH);
     }
   }
 

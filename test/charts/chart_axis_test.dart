@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openui_flutter/openui_flutter.dart';
@@ -99,5 +101,69 @@ void main() {
     ], stacked: false, viewport: const Size(400, 200));
     expect(layout.needsScroll, isTrue);
     expect(layout.slotWidth, 72);
+  });
+
+  test('cartesianLayout density moves the scroll slot width', () {
+    const cats = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    const values = [
+      [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+    ];
+    final compact = cartesianLayout(categories: cats, all: values, stacked: false, viewport: const Size(400, 200), density: 'compact');
+    expect(compact.needsScroll, isTrue);
+    expect(compact.slotWidth, 48);
+    final spacious = cartesianLayout(categories: cats, all: values, stacked: false, viewport: const Size(400, 200), density: 'spacious');
+    expect(spacious.needsScroll, isTrue);
+    expect(spacious.slotWidth, 96);
+    final unknown = cartesianLayout(categories: cats, all: values, stacked: false, viewport: const Size(400, 200), density: 'huge');
+    expect(unknown.slotWidth, 72);
+  });
+
+  test('cartesianLayout condensed fits every category without scrolling', () {
+    final layout = cartesianLayout(categories: const ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'], all: const [
+      [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0]
+    ], stacked: false, viewport: const Size(400, 200), condensed: true);
+    expect(layout.needsScroll, isFalse);
+    expect(layout.condensed, isTrue);
+    expect(layout.contentWidth + layout.axisW, 400);
+    expect(layout.slotWidth, (400 - layout.axisW) / 12);
+  });
+
+  test('cartesianLayout singleLine keeps a one-line band for a long label', () {
+    final layout = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200), tickVariant: 'singleLine');
+    expect(layout.labelH, 30);
+    expect(layout.lineCap, 1);
+  });
+
+  test('cartesianLayout angled falls back to singleLine in scroll mode', () {
+    final layout = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200), tickVariant: 'angled');
+    expect(layout.labelAngle, 0);
+    expect(layout.labelH, 30);
+  });
+
+  test('cartesianLayout condensed angled rotates long labels', () {
+    final layout = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200), condensed: true, tickVariant: 'angled');
+    expect(layout.needsScroll, isFalse);
+    expect(layout.labelAngle, -math.pi / 4);
+    expect(layout.labelH, greaterThan(30));
+    expect(layout.labelH, lessThanOrEqualTo(100));
+  });
+
+  test('cartesianLayout condensed defaults to singleLine and multiLine wraps', () {
+    final single = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200), condensed: true);
+    expect(single.labelAngle, 0);
+    expect(single.labelH, 30);
+    final multi = cartesianLayout(categories: const ['A very long category label here', 'B'], all: const [
+      [22.0, 24.0]
+    ], stacked: false, viewport: const Size(400, 200), condensed: true, tickVariant: 'multiLine');
+    expect(multi.needsScroll, isFalse);
+    expect(multi.labelH, greaterThan(30));
   });
 }

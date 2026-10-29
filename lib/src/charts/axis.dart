@@ -199,30 +199,134 @@ int _labelLines(String label, double width, int maxLines) {
   return tp.computeLineMetrics().length;
 }
 
-/// Full scroll geometry for a vertical cartesian chart, in content
-/// coordinates (the plot painter) plus the fixed axis width.
-typedef CartesianLayout = ({YDomain domain, double axisW, double slotWidth, double contentWidth, double labelH, double plotH, int lineCap, bool needsScroll});
+/// React's density slot widths, scroll mode only: compact 48,
+/// default 72, spacious 96. Anything else falls back to default.
+double _densitySlot(String density) {
+  switch (density) {
+    case 'compact':
+      return 48.0;
+    case 'spacious':
+      return 96.0;
+    default:
+      return 72.0;
+  }
+}
 
-CartesianLayout cartesianLayout({required List<String> categories, required List<List<double>> all, required bool stacked, required Size viewport}) {
+/// Resolves the requested X label variant the way React's
+/// useChartDimensions does: condensed defaults to singleLine,
+/// scroll defaults to multiLine; angled only survives in
+/// condensed mode, and narrow containers (< 300px) force
+/// singleLine in scroll mode.
+String _resolveTickVariant({required bool condensed, String? tickVariant, required double viewportWidth}) {
+  if (condensed) return tickVariant ?? 'singleLine';
+  if (viewportWidth < 300) return 'singleLine';
+  if (tickVariant == 'angled') return 'singleLine';
+  return tickVariant ?? 'multiLine';
+}
+
+/// Full geometry for a vertical cartesian chart, in content
+/// coordinates (the plot painter) plus the fixed axis width.
+/// [labelAngle] is 0 for horizontal labels, -pi/4 for condensed
+/// angled labels; [labelInterval] thins condensed labels (1 =
+/// every label); [labelWidth] is the box a condensed label wraps
+/// or truncates to (in scroll mode it is just the slot width).
+typedef CartesianLayout = ({YDomain domain, double axisW, double slotWidth, double contentWidth, double labelH, double plotH, int lineCap, bool needsScroll, bool condensed, double labelAngle, int labelInterval, double labelWidth});
+
+CartesianLayout cartesianLayout({required List<String> categories, required List<List<double>> all, required bool stacked, required Size viewport, String density = 'default', bool condensed = false, String? tickVariant}) {
+  final variant = _resolveTickVariant(condensed: condensed, tickVariant: tickVariant, viewportWidth: viewport.width);
+  if (condensed) {
+    return _condensedLayoutPass(categories: categories, all: all, stacked: stacked, viewport: viewport, variant: variant);
+  }
   // The buttons take a row below the plot, so a scrolling chart
   // gets a second pass with the reduced height. A smaller height
   // can only widen slots (fewer label lines fit), never un-scroll,
   // so the second pass stays consistent.
-  var layout = _cartesianLayoutPass(categories: categories, all: all, stacked: stacked, viewport: viewport, buttonsH: 0);
+  var layout = _cartesianLayoutPass(categories: categories, all: all, stacked: stacked, viewport: viewport, buttonsH: 0, base: _densitySlot(density), variant: variant);
   if (layout.needsScroll) {
-    layout = _cartesianLayoutPass(categories: categories, all: all, stacked: stacked, viewport: viewport, buttonsH: 36);
+    layout = _cartesianLayoutPass(categories: categories, all: all, stacked: stacked, viewport: viewport, buttonsH: 36, base: _densitySlot(density), variant: variant);
   }
   return layout;
 }
 
-CartesianLayout _cartesianLayoutPass({required List<String> categories, required List<List<double>> all, required bool stacked, required Size viewport, required double buttonsH}) {
+/// Fit (condensed) geometry: every category shares the container
+/// width, nothing scrolls, and labels are thinned, wrapped or
+/// rotated per React's condensed layout rules.
+CartesianLayout _condensedLayoutPass({required List<String> categories, required List<List<double>> all, required bool stacked, required Size viewport, required String variant}) {
+  final n = categories.length;
+  final chartH = viewport.height;
+  final mm = stacked ? stackedMinMax(all, n) : minMaxOf(all);
+  final lineHeight = _labelLineHeight();
+  final singleLineH = _singleLineBand();
+  final cap = math.max(singleLineH, (chartH * 0.5).floorToDouble());
+  final multiLineCap = math.max(1, math.min(3, ((cap - 13) / lineHeight).floor()));
+  var domain = niceDomain(mm.min, mm.max, math.max(0.0, chartH - singleLineH));
+  var axisW = axisWidthForTicks(domain.ticks);
+  var slotWidth = 0.0;
+  var labelH = singleLineH;
+  var lineCap = 1;
+  var labelAngle = 0.0;
+  var labelInterval = 1;
+  var labelWidth = 0.0;
+  // Two fixed-point iterations, as in the scroll pass: the axis
+  // width depends on the plot height, the plot height on the
+  // label band, and the band on the slot width.
+  for (var iter = 0; iter < 2; iter++) {
+    axisW = axisWidthForTicks(domain.ticks);
+    final availableW = math.max(0.0, viewport.width - axisW);
+    slotWidth = n == 0 ? 0.0 : availableW / n;
+    var widest = 0.0;
+    for (final c in categories) {
+      final tp = TextPainter(text: TextSpan(text: c, style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+      widest = math.max(widest, tp.width);
+    }
+    // Angled only when labels actually don't fit horizontally;
+    // otherwise an angled request falls back to singleLine, as in
+    // React's layout function.
+    const sin45 = 0.7071067811865476;
+    if (variant == 'angled' && slotWidth > 0 && widest > slotWidth - 8) {
+      labelInterval = math.max(1, (lineHeight / sin45 / slotWidth).ceil());
+      labelH = math.min(cap, math.max(singleLineH, ((widest + lineHeight) * sin45).ceilToDouble() + 4));
+      labelWidth = math.max(0.0, (labelH - 4) / sin45 - lineHeight);
+      labelAngle = -math.pi / 4;
+      lineCap = 1;
+    } else {
+      // Thinning: when a category is narrower than 40px + gap,
+      // only every n-th label is drawn so each keeps room for a
+      // few characters.
+      final minWidth = math.min(widest, 40) + 8;
+      labelInterval = n == 0 ? 1 : math.min(n, math.max(1, (minWidth / slotWidth).ceil()));
+      labelWidth = math.max(0.0, slotWidth * labelInterval - 8);
+      labelAngle = 0.0;
+      if (variant == 'multiLine') {
+        lineCap = multiLineCap;
+        var linesUsed = 1;
+        for (var i = 0; i < n; i++) {
+          if (i % labelInterval != 0) continue;
+          linesUsed = math.max(linesUsed, _labelLines(categories[i], labelWidth, lineCap));
+        }
+        labelH = math.min(math.max(linesUsed * lineHeight + 13, 30), cap);
+      } else {
+        lineCap = 1;
+        labelH = singleLineH;
+      }
+    }
+    domain = niceDomain(mm.min, mm.max, math.max(0.0, chartH - labelH));
+  }
+  axisW = axisWidthForTicks(domain.ticks);
+  final availableW = math.max(0.0, viewport.width - axisW);
+  return (domain: domain, axisW: axisW, slotWidth: slotWidth, contentWidth: availableW, labelH: labelH, plotH: math.max(0.0, chartH - labelH), lineCap: lineCap, needsScroll: false, condensed: true, labelAngle: labelAngle, labelInterval: labelInterval, labelWidth: labelWidth);
+}
+
+CartesianLayout _cartesianLayoutPass({required List<String> categories, required List<List<double>> all, required bool stacked, required Size viewport, required double buttonsH, required double base, required String variant}) {
   final n = categories.length;
   final chartH = math.max(0.0, viewport.height - buttonsH);
   final mm = stacked ? stackedMinMax(all, n) : minMaxOf(all);
   final lineHeight = _labelLineHeight();
   final singleLineH = _singleLineBand();
   final cap = math.max(singleLineH, (chartH * 0.5).floorToDouble());
-  final lineCap = math.max(1, math.min(3, ((cap - 13) / lineHeight).floor()));
+  // SingleLine labels never wrap, so the band stays one line and
+  // slots widen to the full one-line width instead.
+  final lineCap = variant == 'multiLine' ? math.max(1, math.min(3, ((cap - 13) / lineHeight).floor())) : 1;
   // Two fixed-point iterations: the axis width depends on the
   // plot height (tick count), the plot height on the label band,
   // the band on the slot width, and the slot width on the axis
@@ -232,14 +336,13 @@ CartesianLayout _cartesianLayoutPass({required List<String> categories, required
   // always agree.
   var domain = niceDomain(mm.min, mm.max, math.max(0.0, chartH - singleLineH));
   var axisW = axisWidthForTicks(domain.ticks);
-  var slotWidth = 72.0;
+  var slotWidth = base;
   var contentWidth = 0.0;
   var labelH = singleLineH;
   var needsScroll = false;
   for (var iter = 0; iter < 2; iter++) {
     axisW = axisWidthForTicks(domain.ticks);
     final availableW = math.max(0.0, viewport.width - axisW);
-    const base = 72.0;
     slotWidth = base;
     if (n > 0 && availableW > base) {
       final ceiling = math.max(base, math.min(3 * base, availableW / 2));
@@ -271,7 +374,7 @@ CartesianLayout _cartesianLayoutPass({required List<String> categories, required
     domain = niceDomain(mm.min, mm.max, math.max(0.0, chartH - labelH));
   }
   axisW = axisWidthForTicks(domain.ticks);
-  return (domain: domain, axisW: axisW, slotWidth: slotWidth, contentWidth: contentWidth, labelH: labelH, plotH: math.max(0.0, chartH - labelH), lineCap: lineCap, needsScroll: needsScroll);
+  return (domain: domain, axisW: axisW, slotWidth: slotWidth, contentWidth: contentWidth, labelH: labelH, plotH: math.max(0.0, chartH - labelH), lineCap: lineCap, needsScroll: needsScroll, condensed: false, labelAngle: 0.0, labelInterval: 1, labelWidth: slotWidth);
 }
 
 /// Scroll geometry for a horizontal bar chart: rows scroll

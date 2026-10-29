@@ -108,7 +108,9 @@ class _BarPlotPainter extends CustomPainter {
           }
         }
       }
-      _paintWrappedLabel(canvas, categories[ci], x0 + slot / 2, plotH, slot, layout.lineCap);
+      if (ci % layout.labelInterval == 0) {
+        _paintCategoryLabel(canvas, layout, categories[ci], x0 + slot / 2, plotH);
+      }
     }
   }
 

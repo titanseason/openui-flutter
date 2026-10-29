@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Chart layout props (React parity): Bar/Line/Area charts
+  accept `density` (compact 48 / default 72 / spacious 96px
+  slots, scroll mode only), `condensed` (fit mode: every
+  category shares the container width, no scrolling, labels
+  thinned when narrower than 40px + gap and truncated with
+  an ellipsis), and `tickVariant` (singleLine / multiLine /
+  angled; angled rotates labels -45 degrees and is
+  condensed-only — in scroll mode it falls back to
+  singleLine, and narrow containers under 300px force
+  singleLine). Lang passes them positionally after `height`
+  (BarChart's def order is labels, series, variant, xLabel,
+  yLabel, height, density, condensed, tickVariant).
+  Horizontal bars are untouched: React's horizontal path
+  never reaches the cartesian layout, so these props are
+  inert there too.
 - Chart calibration (React parity, Phase 4): line/area variant
   now defaults to natural (was linear when Lang omitted
   variant), both in the renderer and in LineChartWidget's own

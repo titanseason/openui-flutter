@@ -229,6 +229,47 @@ void _paintWrappedLabel(Canvas canvas, String text, double centerX, double areaT
   tp.paint(canvas, Offset(centerX - tp.width / 2, areaTop + 4));
 }
 
+/// A condensed angled label: end-anchored at the tick, rotated
+/// -45° (React's ANGLED_LABEL_ROTATION), truncated so it stays
+/// inside the chart — the reach includes the axis column to the
+/// left of the plot.
+void _paintAngledLabel(Canvas canvas, String text, double centerX, double areaTop, double axisW, double maxWidth) {
+  const sin45 = 0.7071067811865476;
+  final reach = (centerX + axisW) / sin45;
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: math.max(0.0, math.min(maxWidth, reach)));
+  canvas.save();
+  canvas.translate(centerX, areaTop + 4);
+  canvas.rotate(-math.pi / 4);
+  tp.paint(canvas, Offset(-tp.width, 0));
+  canvas.restore();
+}
+
+/// A condensed horizontal label: its box is clamped to the plot
+/// width, so the first and last boxes are cut at the ends, never
+/// shifted into their neighbours (React's CondensedXAxis).
+void _paintCondensedLabel(Canvas canvas, String text, double centerX, double areaTop, double labelWidth, int maxLines, double contentWidth) {
+  final left = math.max(0.0, centerX - labelWidth / 2);
+  final right = math.min(contentWidth, centerX + labelWidth / 2);
+  final boxW = right - left;
+  if (boxW <= 0) return;
+  final tp = TextPainter(text: TextSpan(text: text, style: _axisStyle), textDirection: TextDirection.ltr, maxLines: maxLines, ellipsis: '…')..layout(maxWidth: boxW);
+  tp.paint(canvas, Offset((left + right) / 2 - tp.width / 2, areaTop + 4));
+}
+
+/// One category label for a vertical cartesian chart, following
+/// the layout: angled labels rotate, condensed horizontal labels
+/// clamp to the plot, scroll labels wrap at the slot width.
+/// Thinning (labelInterval) is the caller's job.
+void _paintCategoryLabel(Canvas canvas, CartesianLayout layout, String text, double centerX, double plotH) {
+  if (layout.labelAngle != 0) {
+    _paintAngledLabel(canvas, text, centerX, plotH, layout.axisW, layout.labelWidth);
+  } else if (layout.condensed) {
+    _paintCondensedLabel(canvas, text, centerX, plotH, layout.labelWidth, layout.lineCap, layout.contentWidth);
+  } else {
+    _paintWrappedLabel(canvas, text, centerX, plotH, layout.slotWidth, layout.lineCap);
+  }
+}
+
 /// Scroll controls for the scroll-mode chart widgets: the
 /// controller, button enable state, and a post-frame refresh so
 /// the buttons are correct once the scroll view attaches (and

@@ -694,9 +694,9 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ),
         );
       case 'BarChart':
-        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
       case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
       case 'PieChart':
         final pie = _sliceData(node);
         return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette);
@@ -1201,7 +1201,7 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
           ],
         );
       case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null);
+        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
       case 'RadarChart':
         return RadarChartWidget(categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette);
       case 'HorizontalBarChart':
@@ -2266,7 +2266,7 @@ enum _ChartKind { bar, line, area, hbar }
 const _palette = [Colors.blue, Colors.green, Colors.orange, Colors.purple, Colors.teal, Colors.red];
 
 class _ChartWidget extends StatelessWidget {
-  const _ChartWidget({required this.kind, required this.categories, required this.series, this.palette = _palette, this.stacked = false, this.curve, this.xLabel, this.yLabel, this.height});
+  const _ChartWidget({required this.kind, required this.categories, required this.series, this.palette = _palette, this.stacked = false, this.curve, this.xLabel, this.yLabel, this.height, this.density = 'default', this.condensed = false, this.tickVariant});
   final _ChartKind kind;
   final List<String> categories;
   final List<ElementNode> series;
@@ -2276,18 +2276,21 @@ class _ChartWidget extends StatelessWidget {
   final String? xLabel;
   final String? yLabel;
   final double? height;
+  final String density;
+  final bool condensed;
+  final String? tickVariant;
   @override
   Widget build(BuildContext context) {
     final Widget chart;
     switch (kind) {
       case _ChartKind.bar:
-        chart = BarChartWidget(categories: categories, series: series, palette: palette, stacked: stacked, height: height ?? 220);
+        chart = BarChartWidget(categories: categories, series: series, palette: palette, stacked: stacked, height: height ?? 220, density: density, condensed: condensed, tickVariant: tickVariant);
       case _ChartKind.hbar:
         chart = BarChartWidget(categories: categories, series: series, palette: palette, horizontal: true, stacked: stacked, height: height ?? 220);
       case _ChartKind.line:
-        chart = LineChartWidget(categories: categories, series: series, palette: palette, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
+        chart = LineChartWidget(categories: categories, series: series, palette: palette, curved: curve == 'natural', step: curve == 'step', height: height ?? 220, density: density, condensed: condensed, tickVariant: tickVariant);
       case _ChartKind.area:
-        chart = LineChartWidget(categories: categories, series: series, palette: palette, area: true, curved: curve == 'natural', step: curve == 'step', height: height ?? 220);
+        chart = LineChartWidget(categories: categories, series: series, palette: palette, area: true, curved: curve == 'natural', step: curve == 'step', height: height ?? 220, density: density, condensed: condensed, tickVariant: tickVariant);
     }
     return _LabeledChart(xLabel: xLabel, yLabel: yLabel, child: chart);
   }

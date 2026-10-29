@@ -28,7 +28,7 @@ void main() {
     expect(propNames('MarkDownRenderer'), ['textMarkdown', 'variant']);
     expect(propNames('Image'), ['alt', 'src']);
     expect(propNames('Col'), ['label', 'data', 'type']);
-    expect(propNames('BarChart'), ['labels', 'series', 'variant', 'xLabel', 'yLabel', 'height']);
+    expect(propNames('BarChart'), ['labels', 'series', 'variant', 'xLabel', 'yLabel', 'height', 'density', 'condensed', 'tickVariant']);
     expect(propNames('Series'), ['category', 'values']);
     expect(propNames('PieChart'), ['labels', 'values', 'variant', 'appearance']);
     expect(propNames('Slice'), ['category', 'value']);
