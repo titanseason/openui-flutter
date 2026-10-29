@@ -220,7 +220,7 @@ class _HBarAxisPainter extends CustomPainter {
     final domain = layout.domain;
     double x(double v) => layout.barX + layout.barW * (v - domain.min) / (domain.max - domain.min);
     for (final t in domain.ticks) {
-      _paintWrappedLabel(canvas, _fmtNum(t), x(t), 0, 60, 1);
+      _paintWrappedLabel(canvas, formatAxisTick(t), x(t), 0, 60, 1);
     }
   }
 

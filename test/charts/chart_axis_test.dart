@@ -68,6 +68,22 @@ void main() {
     );
   });
 
+  test('formatAxisTick abbreviates like React numberTickFormatter', () {
+    expect(formatAxisTick(0), '0');
+    expect(formatAxisTick(999), '999');
+    expect(formatAxisTick(1000), '1.0K');
+    expect(formatAxisTick(1500), '1.5K');
+    expect(formatAxisTick(10000), '10K');
+    expect(formatAxisTick(12000), '12K');
+    expect(formatAxisTick(2500000), '2.5M');
+    expect(formatAxisTick(1000000000), '1.0B');
+    expect(formatAxisTick(1000000000000), '1.0T');
+    expect(formatAxisTick(15000000000000), '15T');
+    expect(formatAxisTick(-2500), '-2.5K');
+    expect(formatAxisTick(0.6), '0.60');
+    expect(formatAxisTick(2.5), '2.50');
+  });
+
   test('yForValue maps the domain onto the plot', () {
     const domain = (min: 0.0, max: 25.0, ticks: <double>[0, 5, 10, 15, 20, 25]);
     expect(yForValue(0, domain, 100), 100);

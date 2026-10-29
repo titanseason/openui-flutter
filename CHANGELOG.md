@@ -17,6 +17,14 @@
   Horizontal bars are untouched: React's horizontal path
   never reaches the cartesian layout, so these props are
   inert there too.
+- Chart axis ticks (React parity): all axis tick labels —
+  vertical Y axes, scatter numeric axes, and the horizontal
+  bar value strip — now use React's numberTickFormatter
+  (K/M/B/T abbreviation at 1e3/1e6/1e9/1e12, 1 decimal below
+  10 units, none at 10 and above, 2 decimals for
+  non-integers below 1000), including the axis width
+  measurement. Tooltips keep their own formatter. Existing
+  goldens are unaffected (their ticks are small integers).
 - Chart calibration (React parity, Phase 4): line/area variant
   now defaults to natural (was linear when Lang omitted
   variant), both in the renderer and in LineChartWidget's own

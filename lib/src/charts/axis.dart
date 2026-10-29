@@ -73,13 +73,35 @@ YDomain niceDomain(double dataMin, double dataMax, double plotSize, {bool throug
   return (min: lo, max: hi);
 }
 
+/// Axis tick labels, React's numberTickFormatter: K/M/B/T
+/// abbreviation at 1e3/1e6/1e9/1e12 (1 decimal below 10 units,
+/// none at 10 and above), plain integers below 1000, and 2
+/// decimals for non-integers below 1000. This is the axis
+/// formatter only — tooltips keep their own formatter
+/// (_fmtTooltipNum), which groups below 100000 instead.
+String formatAxisTick(double value) {
+  final abs = value.abs();
+  String scaled(double divisor, String suffix) {
+    final v = value / divisor;
+    final decimals = abs >= divisor * 10 ? 0 : 1;
+    return '${v.toStringAsFixed(decimals)}$suffix';
+  }
+
+  if (abs >= 1e12) return scaled(1e12, 'T');
+  if (abs >= 1e9) return scaled(1e9, 'B');
+  if (abs >= 1e6) return scaled(1e6, 'M');
+  if (abs >= 1e3) return scaled(1e3, 'K');
+  if (value % 1 != 0) return value.toStringAsFixed(2);
+  return value.toStringAsFixed(0);
+}
+
 /// Left width reserved for Y tick labels: the widest label plus a
 /// gap, measured with the same style the painter uses.
 double axisWidthForTicks(List<double> ticks) {
   if (ticks.isEmpty) return 0;
   var w = 0.0;
   for (final t in ticks) {
-    final tp = TextPainter(text: TextSpan(text: _fmtNum(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
     w = math.max(w, tp.width);
   }
   return w + 8;
@@ -109,7 +131,7 @@ void _paintAxisTicks(Canvas canvas, YDomain domain, double axisW, double plotW, 
   for (final t in domain.ticks) {
     final y = yForValue(t, domain, plotH);
     canvas.drawLine(Offset(axisW, y), Offset(axisW + plotW, y), gridPaint);
-    final tp = TextPainter(text: TextSpan(text: _fmtNum(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(axisW - 4 - tp.width, y - tp.height / 2));
   }
 }
@@ -126,7 +148,7 @@ void _paintValueTicksBottom(Canvas canvas, YDomain domain, double barX, double b
   for (final t in domain.ticks) {
     final x = xOf(t);
     canvas.drawLine(Offset(x, 0), Offset(x, plotH), gridPaint);
-    _paintWrappedLabel(canvas, _fmtNum(t), x, plotH, 60, 1);
+    _paintWrappedLabel(canvas, formatAxisTick(t), x, plotH, 60, 1);
   }
 }
 
@@ -141,7 +163,7 @@ void _paintYAxis(Canvas canvas, YDomain domain, double axisW, double plotH) {
   canvas.drawLine(Offset(axisW, 0), Offset(axisW, plotH), axisPaint);
   for (final t in domain.ticks) {
     final y = yForValue(t, domain, plotH);
-    final tp = TextPainter(text: TextSpan(text: _fmtNum(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(text: TextSpan(text: formatAxisTick(t), style: _axisStyle), textDirection: TextDirection.ltr)..layout();
     tp.paint(canvas, Offset(axisW - 4 - tp.width, y - tp.height / 2));
   }
 }
