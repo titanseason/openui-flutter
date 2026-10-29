@@ -342,6 +342,31 @@ s = Series("R", [10, 20, 30])
     );
   });
 
+  testWidgets('golden: horizontal bar chart', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: OpenUIRenderer(
+              library: openUIStandardLibrary(),
+              response: '''
+root = HorizontalBarChart(["North", "East", "South"], [s])
+s = Series("Sales", [30, 50, 20])
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(Scaffold),
+      matchesGoldenFile('goldens/chart_hbar.png'),
+    );
+  });
+
   testWidgets('golden: card', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
