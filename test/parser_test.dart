@@ -171,21 +171,14 @@ rows = [{"priority": "高"}, {"priority": "低"}]
     expect(lib.prompt(), contains('@Percent(part: number, total?: number) -> string'));
   });
 
-  test('library prompts list the split libraries', () {
-    // Split libraries: general 82, chat 84, union 86.
+  test('library prompt lists the single library', () {
+    // One library: 82 names, no chat-only components.
     expect(library.components.length, 82);
     expect(library.prompt(), contains('Tabs('));
     expect(library.prompt(), contains('TabItem('));
     expect(library.prompt(), contains('Accordion('));
-    expect(library.prompt(), isNot(contains('SectionBlock(')));
-    final chat = openUIChatLibrary();
-    expect(chat.components.length, 84);
-    expect(chat.prompt(), contains('SectionBlock('));
-    expect(chat.prompt(), contains('FollowUpBlock('));
-    expect(chat.prompt(), isNot(contains('Stack(')));
-    expect(library.prompt(), contains('Tabs('));
-    expect(library.prompt(), contains('TabItem('));
-    expect(library.prompt(), contains('Accordion('));
     expect(library.prompt(), contains('SnippetCardBlock('));
+    expect(library.prompt(), isNot(contains('SectionBlock(')));
+    expect(library.prompt(), isNot(contains('FollowUpBlock(')));
   });
 }

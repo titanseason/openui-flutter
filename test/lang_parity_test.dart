@@ -5,52 +5,6 @@ import 'package:openui_flutter/openui_flutter.dart';
 void main() {
   final library = openUIStandardLibrary();
 
-  test('stored message restores form state and last program wins', () {
-    const stored = '''
-Here is the forecast.
-]]>openui:content
-Some prose after the content marker.
-```openui
-root = Stack([TextContent("first")])
-```
-```openui
-root = Stack([TextContent("second"), TextContent(\$city)])
-```
-]]>openui:context
-{"formState": {"city": "Tokyo"}}
-''';
-    final storedMessage = parseStoredMessage(stored, library);
-    expect(storedMessage.prose, contains('forecast'));
-    expect(storedMessage.formState['city'], 'Tokyo');
-    final children = storedMessage.result.root!.nodesOf('children');
-    expect(children[0].stringOf('text'), 'second');
-    expect(children[1].stringOf('text'), 'Tokyo');
-  });
-
-  test('stored message with pretty-printed context JSON restores form state', () {
-    const stored = '''
-Prose.
-]]>openui:context
-{
-  "formState": {
-    "city": "Osaka"
-  }
-}
-''';
-    final storedMessage = parseStoredMessage(stored, library);
-    expect(storedMessage.formState['city'], 'Osaka');
-  });
-
-  test('stored message without a fenced program falls back to Lang lines', () {
-    const stored = '''
-Prose.
-]]>openui:content
-root = TextContent("plain")
-''';
-    final storedMessage = parseStoredMessage(stored, library);
-    expect(storedMessage.result.root!.stringOf('text'), 'plain');
-  });
-
   testWidgets('failed Query shows error view and @Run retries it', (tester) async {
     var calls = 0;
     var toolErrors = 0;

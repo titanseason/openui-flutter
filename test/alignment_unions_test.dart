@@ -106,20 +106,6 @@ void main() {
     expect(r.root!.nodesOf('children')[1].nodesOf('buttons').length, 1);
   });
 
-  test('chat library content is not newly restricted', () {
-    final chat = openUIChatLibrary();
-    final r = parseOpenUI(
-      'root = Card([sec])\nsec = SectionBlock([SectionItem("s", "Group", [TextContent("in")])])',
-      chat,
-    );
-    expect(r.errors, isEmpty, reason: r.errors.toString());
-    final tabs = parseOpenUI(
-      'root = Tabs([TabItem("t", "Tab", [SectionBlock([SectionItem("s", "Group", [TextContent("in")])])])])',
-      chat,
-    );
-    expect(tabs.errors, isEmpty, reason: tabs.errors.toString());
-  });
-
   testWidgets('Stack/Card without gap use 12; named gaps follow the scale', (tester) async {
     Future<void> pump(String body) async {
       await tester.pumpWidget(

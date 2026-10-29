@@ -17,27 +17,21 @@ void _collect(ElementNode node, Set<String> out) {
 void main() {
   final library = openUIStandardLibrary();
 
-  test('libraries now have all 86 component names between them', () {
-    // Split libraries: general 82 (no chat-only 4), chat 84 (no Stack
-    // or Modal); the union is the full 86 GenUI names.
+  test('library has all 82 component names', () {
+    // One library: 82 names, root Stack, no chat-only components.
     final general = openUIStandardLibrary();
-    final chat = openUIChatLibrary();
     expect(general.root, 'Stack');
-    expect(chat.root, 'Card');
     expect(general.components.length, 82);
-    expect(chat.components.length, 84);
     for (final name in ['FollowUpBlock', 'FollowUpItem', 'SectionBlock', 'SectionItem']) {
-      expect(general.byName[name], isNull, reason: '$name must not be in the general library');
-      expect(chat.byName[name], isNotNull, reason: '$name must be in the chat library');
+      expect(general.byName[name], isNull, reason: '$name was removed with the chat module');
     }
     for (final name in ['Stack', 'Modal']) {
       expect(general.byName[name], isNotNull, reason: '$name must be in the general library');
-      expect(chat.byName[name], isNull, reason: '$name must not be in the chat library');
     }
-    final names = {...general.components.map((c) => c.name), ...chat.components.map((c) => c.name)}.toList();
-    expect(names.length, 86);
+    final names = general.components.map((c) => c.name).toList();
+    expect(names.length, 82);
     for (final name in [
-      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem',
+      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal',
       'Text', 'BoldText', 'TextCallout', 'ImageBlock', 'ImageGallery', 'ImageText', 'ImageTextLarge', 'IconText', 'CodeBlock', 'InlineHeader', 'Icon',
       'EditableTable', 'AreaChart', 'RadarChart', 'HorizontalBarChart', 'RadialChart', 'SingleStackedBarChart', 'ScatterChart', 'ScatterSeries', 'Point', 'TagBlock', 'Tag', 'EntityList', 'MetricIndicatorInline', 'MetricIndicatorWithStrikethrough',
       'FormControl', 'Label', 'TextArea', 'DatePicker', 'Slider', 'CheckBoxGroup', 'CheckBoxItem', 'RadioGroup', 'RadioItem', 'SwitchGroup', 'SwitchItem', 'OptionCards', 'OptionCard',
@@ -104,18 +98,8 @@ void main() {
     expect(r.root, isNotNull);
     final found = <String>{};
     _collect(r.root!, found);
-    // Chat-only components live in the chat library, under a Card root.
-    final chatProgram = '''
-root = Card([sec, fol])
-sec = SectionBlock([SectionItem("sec", "分组", [TextContent("内")])])
-fol = FollowUpBlock([FollowUpItem("追问")])
-''';
-    final chatResult = parseOpenUI(chatProgram, openUIChatLibrary());
-    expect(chatResult.errors, isEmpty, reason: chatResult.errors.toString());
-    expect(chatResult.root, isNotNull);
-    _collect(chatResult.root!, found);
     for (final name in [
-      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal', 'SectionBlock', 'SectionItem', 'FollowUpBlock', 'FollowUpItem',
+      'Accordion', 'AccordionItem', 'Steps', 'StepsItem', 'Carousel', 'Separator', 'Modal',
       'Text', 'BoldText', 'TextCallout', 'ImageBlock', 'ImageGallery', 'ImageText', 'ImageTextLarge', 'IconText', 'CodeBlock', 'InlineHeader', 'Icon',
       'EditableTable', 'AreaChart', 'RadarChart', 'HorizontalBarChart', 'RadialChart', 'SingleStackedBarChart', 'ScatterChart', 'ScatterSeries', 'Point', 'TagBlock', 'Tag', 'EntityList', 'MetricIndicatorInline', 'MetricIndicatorWithStrikethrough',
       'FormControl', 'Label', 'TextArea', 'DatePicker', 'Slider', 'CheckBoxGroup', 'RadioGroup', 'SwitchGroup', 'OptionCards',

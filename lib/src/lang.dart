@@ -16,8 +16,6 @@
 // map) carries widget builders. See the Task 3 report for the
 // trade-off discussion.
 
-import 'dart:convert';
-
 import 'registry.dart';
 
 enum PropType { string, number, boolean, list, node, nodeList, any, action, actionList }
@@ -1595,7 +1593,8 @@ class _Evaluator {
     for (final entry in (listUnions[e.name] ?? {}).entries) {
       filterNodes(entry.key, entry.value);
     }
-    if (!library.byName.containsKey('FollowUpBlock')) {
+    // Content unions (React unions.ts): with a single library
+    // they apply to every program.
       // General-library content unions (React unions.ts).
       const contentChildUnion = {
         'TextContent',
@@ -1669,7 +1668,6 @@ class _Evaluator {
           props['children'] = keptSlides;
         }
       }
-    }
     if (dropped) return null;
     return ElementNode(e.name, props, '');
   }
@@ -2207,92 +2205,3 @@ class IncrementalOpenUIParser {
   bool _setsEqual(Set<String> a, Set<String> b) => a.length == b.length && a.containsAll(b);
 }
 
-/// A stored assistant message, split into its parts: the prose, the
-/// last fenced OpenUI Lang program (last-program-wins), and the form
-/// state restored from the `]]>openui:context` JSON block.
-class StoredMessage {
-  const StoredMessage({required this.prose, required this.result, required this.formState});
-  final String prose;
-  final ParseResult result;
-  final Map<String, Object?> formState;
-}
-
-/// Parse a stored message. Sections are delimited by markers and
-/// fenced blocks:
-///
-/// ```text
-/// Prose text.
-/// ]]>openui:content
-/// More prose.
-/// ```openui
-/// root = Stack([TextContent("first")])
-/// ```
-/// ```openui
-/// root = Stack([TextContent("second")])
-/// ```
-/// ]]>openui:context
-/// {"formState": {"city": "Tokyo"}}
-/// ```
-///
-/// Text outside fences is prose (both before and after a
-/// `]]>openui:content` marker); the last fenced program wins; the
-/// context JSON's `formState` map is returned separately and also
-/// merged into the parse state, so `$variables` in the program
-/// resolve to the restored values. With no fenced program, the
-/// remaining Lang lines are parsed directly (markers and context
-/// stripped, as [parseOpenUI] already does). Malformed context JSON
-/// is ignored: it is host data, not a Lang error.
-StoredMessage parseStoredMessage(String text, OpenUILibrary library, {Map<String, Object?> state = const {}, Map<String, Object?> queryData = const {}}) {
-  final proseLines = <String>[];
-  final programs = <String>[];
-  final contextLines = <String>[];
-  var section = 'prose';
-  var inFence = false;
-  final fenceLines = <String>[];
-  for (final raw in text.split('\n')) {
-    final line = raw.trim();
-    if (inFence) {
-      if (line.startsWith('```')) {
-        inFence = false;
-        programs.add(fenceLines.join('\n'));
-        fenceLines.clear();
-      } else {
-        fenceLines.add(raw);
-      }
-      continue;
-    }
-    if (line.startsWith('```')) {
-      inFence = true;
-      continue;
-    }
-    if (line.startsWith(']]>openui:')) {
-      section = line.startsWith(']]>openui:context') ? 'context' : 'prose';
-      continue;
-    }
-    if (section == 'context') {
-      contextLines.add(raw);
-    } else {
-      proseLines.add(raw);
-    }
-  }
-  if (inFence && fenceLines.isNotEmpty) programs.add(fenceLines.join('\n'));
-  final formState = <String, Object?>{};
-  final contextText = contextLines.join('\n').trim();
-  if (contextText.isNotEmpty) {
-    try {
-      final decoded = jsonDecode(contextText);
-      if (decoded is Map && decoded['formState'] is Map) {
-        for (final entry in (decoded['formState'] as Map).entries) {
-          formState['${entry.key}'] = entry.value;
-        }
-      }
-    } catch (_) {
-      // Malformed context JSON: host data, not a Lang error.
-    }
-  }
-  final mergedState = {...state, ...formState};
-  final result = programs.isNotEmpty
-      ? parseOpenUI(programs.last, library, state: mergedState, queryData: queryData)
-      : parseOpenUI(proseLines.join('\n'), library, state: mergedState, queryData: queryData);
-  return StoredMessage(prose: proseLines.join('\n').trim(), result: result, formState: formState);
-}

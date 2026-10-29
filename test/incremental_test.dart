@@ -7,7 +7,6 @@ import 'package:openui_flutter/openui_flutter.dart';
 // re-evaluating changed statements (see stats tests).
 void main() {
   final library = openUIStandardLibrary();
-  final chatLibrary = openUIChatLibrary();
 
   String serialize(Object? v) {
     if (v == null) return 'null';
@@ -195,14 +194,14 @@ root = 42
     expectIncrementalEqualsFull(rootNonNode, lineCuts(rootNonNode));
   });
 
-  test('chat library programs match', () {
+  test('nested standard programs match', () {
     const text = '''
-root = Card([sec, fol])
-sec = SectionBlock([SectionItem("s", "标题", [TextContent("内")])])
-fol = FollowUpBlock([FollowUpItem("追问")])
+root = Stack([card])
+card = Card([tabs])
+tabs = Tabs([TabItem("t", "标签", [TextContent("内")])])
 ''';
-    expectIncrementalEqualsFull(text, lineCuts(text), lib: chatLibrary);
-    expectIncrementalEqualsFull(text, charCuts(text), lib: chatLibrary);
+    expectIncrementalEqualsFull(text, lineCuts(text), lib: library);
+    expectIncrementalEqualsFull(text, charCuts(text), lib: library);
   });
 
   test('StreamingParser finish matches a full parse', () {

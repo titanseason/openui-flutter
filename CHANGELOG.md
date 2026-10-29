@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Breaking: the chat module is removed.** Deleted:
+  `openUIChatLibrary()` and the chat `Card` variant, the
+  chat-only components (`FollowUpBlock`, `FollowUpItem`,
+  `SectionBlock`, `SectionItem`), the `AgentInterface` shell
+  and its slots/storage/tool-call types, `StoredMessage` and
+  `parseStoredMessage`, and the Card sources strip with its
+  inline `[n]` citation backing in `TextContent`. The single
+  remaining library is `openUIStandardLibrary()` (82 names,
+  root `Stack`). The standalone `Citation`/`Sources` widgets
+  stay: they are generic UI, usable by any host directly.
 - Semantic theme board: `OpenUIColorScheme` gains `textMuted`,
   `border`, `grid`, `success`, `warning`, `danger`, and `info`
   (light defaults reproduce the previously hardcoded greys and
