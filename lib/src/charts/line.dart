@@ -3,11 +3,10 @@ part of openui_charts;
 // ---------------- Line / area ----------------
 
 class _LinePainter extends CustomPainter {
-  _LinePainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.area, required this.curved, required this.step, this.hidden = const {}, this.hoverPos});
+  _LinePainter({required this.categories, required this.all, required this.palette, required this.area, required this.curved, required this.step, this.hidden = const {}, this.hoverPos});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
-  final double maxY;
   final bool area;
   final bool curved;
   final bool step;
@@ -17,11 +16,15 @@ class _LinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 0 || size.height <= 0) return;
-    final plotH = size.height - 22;
+    final mm = minMaxOf(all);
+    final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: size);
+    final domain = plot.domain;
     final n = categories.length;
     final denom = math.max(1, n - 1);
-    double px(int ci) => size.width * ci / denom;
-    double py(double v) => plotH * (1 - v / maxY);
+    double px(int ci) => plot.axisW + plot.plotW * ci / denom;
+    double py(double v) => yForValue(v, domain, plot.plotH);
+    _paintAxisTicks(canvas, domain, plot.axisW, plot.plotW, plot.plotH);
+    final baseline = py(0);
     for (var si = 0; si < all.length; si++) {
       if (hidden.contains(si)) continue;
       final vals = all[si];
@@ -50,9 +53,11 @@ class _LinePainter extends CustomPainter {
       }
       final color = _colorAt(palette, si);
       if (area) {
+        // Fill down to the zero baseline, not the plot bottom, so
+        // negative areas hang below the axis like React's.
         final fill = Path.from(path)
-          ..lineTo(pts.last.dx, plotH)
-          ..lineTo(pts.first.dx, plotH)
+          ..lineTo(pts.last.dx, baseline)
+          ..lineTo(pts.first.dx, baseline)
           ..close();
         canvas.drawPath(fill, Paint()..color = color.withValues(alpha: 0.2));
       }
@@ -67,7 +72,7 @@ class _LinePainter extends CustomPainter {
       // white ring so it reads as selected. Crosshair lines are
       // opt-in in React, so no vertical line here.
       if (hoverPos != null) {
-        final ci = _lineCategoryAtX(hoverPos!.dx, size.width, n);
+        final ci = _lineCategoryAtX(hoverPos!.dx, plot.axisW, plot.plotW, n);
         if (ci >= 0 && ci < pts.length) {
           canvas.drawCircle(pts[ci], 6, Paint()..color = Colors.white);
           canvas.drawCircle(pts[ci], 4, Paint()..color = color);
@@ -75,11 +80,10 @@ class _LinePainter extends CustomPainter {
       }
     }
     for (var ci = 0; ci < n; ci++) {
-      _paintCategoryLabel(canvas, categories[ci], px(ci), plotH, size.width / denom);
+      _paintCategoryLabel(canvas, categories[ci], px(ci), plot.plotH, plot.plotW / denom);
     }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
-

@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 
 import '../lang.dart';
 
+part 'axis.dart';
 part 'bar.dart';
 part 'common.dart';
 part 'line.dart';

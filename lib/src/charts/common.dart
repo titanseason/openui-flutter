@@ -8,16 +8,6 @@ List<double> _seriesValues(ElementNode series) {
   return ((series.props['values'] as List?) ?? const []).map((e) => (e as num?)?.toDouble() ?? 0).toList();
 }
 
-double _maxValue(List<List<double>> all) {
-  var m = 1.0;
-  for (final list in all) {
-    for (final v in list) {
-      m = math.max(m, v);
-    }
-  }
-  return m;
-}
-
 const _axisStyle = TextStyle(fontSize: 10, color: Colors.grey);
 
 /// Legend row used by every chart widget in this file: a swatch
@@ -98,14 +88,17 @@ void _paintCenteredText(Canvas canvas, String text, Offset center, {double fontS
 
 /// A bottom-axis category label, centered on [centerX] and centered
 /// vertically in a 22px-tall label area starting at [areaTop].
-/// A bar rect with the top (vertical) end rounded, like the old
-/// fl_chart rods. [radius] caps at half the bar thickness.
-void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false}) {
+/// A bar rect with the far end rounded, like the old fl_chart
+/// rods: the top for positive vertical bars, the bottom for
+/// negative ones ([flip]); the right end for positive horizontal
+/// bars, the left end for negative ones. [radius] caps at half
+/// the bar thickness.
+void _drawBarTop(Canvas canvas, Rect rect, Paint paint, {bool horizontal = false, bool flip = false}) {
   const radius = 6.0;
   final r = horizontal ? math.min(radius, rect.height / 2) : math.min(radius, rect.width / 2);
   final corners = horizontal
-      ? RRect.fromRectAndCorners(rect, topRight: Radius.circular(r), bottomRight: Radius.circular(r))
-      : RRect.fromRectAndCorners(rect, topLeft: Radius.circular(r), topRight: Radius.circular(r));
+      ? (flip ? RRect.fromRectAndCorners(rect, topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)) : RRect.fromRectAndCorners(rect, topRight: Radius.circular(r), bottomRight: Radius.circular(r)))
+      : (flip ? RRect.fromRectAndCorners(rect, bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)) : RRect.fromRectAndCorners(rect, topLeft: Radius.circular(r), topRight: Radius.circular(r)));
   canvas.drawRRect(corners, paint);
 }
 

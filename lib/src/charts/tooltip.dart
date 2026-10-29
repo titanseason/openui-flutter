@@ -20,23 +20,27 @@ String _fmtNum(double v) {
 /// pin them without pumping anything. All return -1 on a miss.
 
 /// Vertical bars / line points by x slot: the slot whose interval
-/// contains [dx].
-int _categoryAtX(double dx, double width, int n) {
-  if (n <= 0 || width <= 0 || dx < 0 || dx > width) return -1;
-  return (dx / width * n).floor().clamp(0, n - 1);
+/// contains [dx]. The plot starts at [left] (after the Y axis) and
+/// spans [width]; the caller computes both with [cartesianPlot]
+/// so the hit test matches the painted grid exactly.
+int _categoryAtX(double dx, double left, double width, int n) {
+  if (n <= 0 || width <= 0 || dx < left || dx > left + width) return -1;
+  return ((dx - left) / width * n).floor().clamp(0, n - 1);
 }
 
-/// Horizontal bars by y slot.
+/// Horizontal bars by y slot: rows fill [plotH] (the bottom 22px
+/// belong to the value axis, not to a row).
 int _categoryAtY(double dy, double height, int n) {
   if (n <= 0 || height <= 0 || dy < 0 || dy > height) return -1;
   return (dy / height * n).floor().clamp(0, n - 1);
 }
 
-/// Line / area points by nearest x: points sit at width*ci/(n-1).
-int _lineCategoryAtX(double dx, double width, int n) {
-  if (n <= 0 || width <= 0 || dx < 0 || dx > width) return -1;
+/// Line / area points by nearest x: points sit at
+/// left + width*ci/(n-1).
+int _lineCategoryAtX(double dx, double left, double width, int n) {
+  if (n <= 0 || width <= 0 || dx < left || dx > left + width) return -1;
   if (n == 1) return 0;
-  return ((dx / width * (n - 1)).round()).clamp(0, n - 1);
+  return (((dx - left) / width * (n - 1)).round()).clamp(0, n - 1);
 }
 
 /// Pie / donut slice by angle, mirroring [_PiePainter] geometry:
@@ -110,17 +114,19 @@ int _radarAxisAt(Offset pos, Size size, int n) {
 }
 
 /// Scatter dot by nearest center within its bubble plus a touch
-/// margin; returns the index into [layout.dots].
-int _scatterDotAt(Offset pos, Size size, ScatterLayout layout) {
-  if (layout.dots.isEmpty || size.width <= 0 || size.height <= 0) return -1;
-  final spanX = layout.maxX - layout.minX;
-  final spanY = layout.maxY - layout.minY;
+/// margin; returns the index into [dots]. The mapping mirrors the
+/// painter exactly (same [ScatterPlot] from [scatterPlotFor]).
+int _scatterDotAt(Offset pos, ScatterPlot plot, List<ScatterDot> dots) {
+  if (dots.isEmpty) return -1;
+  final spanX = plot.xDomain.max - plot.xDomain.min;
+  final spanY = plot.yDomain.max - plot.yDomain.min;
+  if (spanX <= 0 || spanY <= 0) return -1;
   var best = -1;
   var bestDist = double.infinity;
-  for (var i = 0; i < layout.dots.length; i++) {
-    final d = layout.dots[i];
-    final px = (d.x - layout.minX) / spanX * size.width;
-    final py = size.height - (d.y - layout.minY) / spanY * size.height;
+  for (var i = 0; i < dots.length; i++) {
+    final d = dots[i];
+    final px = plot.left + plot.plotW * (d.x - plot.xDomain.min) / spanX;
+    final py = plot.plotH - (d.y - plot.yDomain.min) / spanY * plot.plotH;
     final dist = (pos - Offset(px, py)).distance;
     if (dist <= d.radius + 8 && dist < bestDist) {
       best = i;

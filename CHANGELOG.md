@@ -7,6 +7,18 @@
   parts of `charts.dart`): no behavior change, all tests and
   goldens pass unchanged. The chart test moved to
   `test/charts/` alongside.
+- Chart axes and negative values (React parity, Phase 2):
+  vertical charts (bar, line, area) and the scatter chart now
+  draw a value axis with horizontal gridlines and d3-style nice
+  ticks (~1 per 40px, floored at 2); horizontal bars get the
+  mirrored bottom value axis with vertical gridlines. Domains
+  always run through zero (bar/line) and negatives render below
+  (or left of) the baseline, with stacked bars using React's
+  sign offset (positives up, negatives down) and rounded far
+  ends. Area fills stop at the zero baseline. Scales still come
+  from all series, hidden or not. The bar golden was regenerated
+  (same bars, now with axis, grid, and a nice max of 25 instead
+  of 24).
 - Chart tooltips and legend toggles (React parity, Phase 1):
   hovering a chart shows a tooltip card (title + one row per
   series) and touch drag moves it; touch end hides it and a

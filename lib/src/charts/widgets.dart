@@ -24,24 +24,19 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in widget.series) _seriesValues(s)];
-    var stackedMax = 1.0;
-    if (widget.stacked) {
-      for (var ci = 0; ci < widget.categories.length; ci++) {
-        var sum = 0.0;
-        for (var si = 0; si < widget.series.length; si++) {
-          sum += ci < all[si].length ? all[si][ci] : 0;
-        }
-        if (sum > stackedMax) stackedMax = sum;
-      }
-    }
-    // The scale stays computed over all series, hidden or not, so
-    // toggling a legend entry never rescales the chart.
-    final maxY = widget.stacked ? stackedMax : _maxValue(all);
     return _chartBox(
       height: widget.height,
       chart: _HoverArea(
         onHover: (pos, area) {
-          final ci = widget.horizontal ? _categoryAtY(pos.dy, area.height, widget.categories.length) : _categoryAtX(pos.dx, area.width, widget.categories.length);
+          final int ci;
+          if (widget.horizontal) {
+            // Rows fill the plot; the bottom 22px are the value axis.
+            ci = _categoryAtY(pos.dy, area.height - 22, widget.categories.length);
+          } else {
+            final mm = widget.stacked ? stackedMinMax(all, widget.categories.length) : minMaxOf(all);
+            final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: area);
+            ci = _categoryAtX(pos.dx, plot.axisW, plot.plotW, widget.categories.length);
+          }
           if (ci < 0) return null;
           final rows = <TipRow>[];
           for (var si = 0; si < widget.series.length; si++) {
@@ -50,7 +45,7 @@ class _BarChartWidgetState extends State<BarChartWidget> with _LegendToggle<BarC
           }
           return (title: widget.categories[ci], rows: rows);
         },
-        builder: (context, hoverPos) => CustomPaint(painter: _BarPainter(categories: widget.categories, all: all, palette: widget.palette, maxY: maxY, stacked: widget.stacked, horizontal: widget.horizontal, hidden: hidden, hoverPos: hoverPos)),
+        builder: (context, hoverPos) => CustomPaint(painter: _BarPainter(categories: widget.categories, all: all, palette: widget.palette, stacked: widget.stacked, horizontal: widget.horizontal, hidden: hidden, hoverPos: hoverPos)),
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );
@@ -75,12 +70,13 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
   @override
   Widget build(BuildContext context) {
     final all = [for (final s in widget.series) _seriesValues(s)];
-    final maxY = _maxValue(all);
     return _chartBox(
       height: widget.height,
       chart: _HoverArea(
         onHover: (pos, area) {
-          final ci = _lineCategoryAtX(pos.dx, area.width, widget.categories.length);
+          final mm = minMaxOf(all);
+          final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: area);
+          final ci = _lineCategoryAtX(pos.dx, plot.axisW, plot.plotW, widget.categories.length);
           if (ci < 0) return null;
           final rows = <TipRow>[];
           for (var si = 0; si < widget.series.length; si++) {
@@ -89,7 +85,7 @@ class _LineChartWidgetState extends State<LineChartWidget> with _LegendToggle<Li
           }
           return (title: widget.categories[ci], rows: rows);
         },
-        builder: (context, hoverPos) => CustomPaint(painter: _LinePainter(categories: widget.categories, all: all, palette: widget.palette, maxY: maxY, area: widget.area, curved: widget.curved, step: widget.step, hidden: hidden, hoverPos: hoverPos)),
+        builder: (context, hoverPos) => CustomPaint(painter: _LinePainter(categories: widget.categories, all: all, palette: widget.palette, area: widget.area, curved: widget.curved, step: widget.step, hidden: hidden, hoverPos: hoverPos)),
       ),
       legend: widget.showLegend ? ChartLegend(labels: [for (final s in widget.series) s.stringOf('category')], palette: widget.palette, hidden: hidden, onToggle: toggleLegend) : null,
     );
@@ -329,7 +325,8 @@ class _ScatterChartWidgetState extends State<ScatterChartWidget> with _LegendTog
             child: SizedBox.expand(
               child: _HoverArea(
                 onHover: (pos, area) {
-                  final hit = _scatterDotAt(pos, area, layout);
+                  final plot = scatterPlotFor(layout, area);
+                  final hit = _scatterDotAt(pos, plot, layout.dots);
                   if (hit < 0) return null;
                   final d = layout.dots[hit];
                   final color = _colorAt(widget.palette, d.seriesIndex);

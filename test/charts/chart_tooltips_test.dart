@@ -161,12 +161,55 @@ void main() {
   });
 
   testWidgets('scatter tooltip shows the hovered point', (tester) async {
-    await pumpChart(tester, 'root = ScatterChart([ScatterSeries("S", [Point(1, 2), Point(2, 3), Point(3, 4)])])');
+    await pumpChart(tester, 'root = ScatterChart([ScatterSeries("S", [Point(1, 2), Point(3, 4)])])');
     final area = paintArea(tester);
-    final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width / 2, area.size.height / 2));
+    // The (3, 4) dot maps to the plot's top-right corner, which no
+    // axis inset moves: the right edge stays the right edge and
+    // the top stays the top.
+    final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width - 5, 5));
     expect(tipTitle(tester), 'S');
-    expect(find.text('2'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+    await gesture.removePointer();
+  });
+
+  testWidgets('negative values show in tooltips and do not crash', (tester) async {
+    await pumpChart(tester, 'root = BarChart(["A", "B"], [Series("S", [-10, 20])])');
+    var area = paintArea(tester);
+    var gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width * 0.25, area.size.height * 0.5));
+    expect(tipTitle(tester), 'A');
+    expect(find.text('-10'), findsOneWidget);
+    await gesture.removePointer();
+    await pumpChart(tester, 'root = LineChart(["A", "B"], [Series("L", [-5, 15])])');
+    area = paintArea(tester);
+    gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width * 0.25, area.size.height * 0.5));
+    expect(tipTitle(tester), 'A');
+    expect(find.text('-5'), findsOneWidget);
+    await gesture.removePointer();
+  });
+
+  testWidgets('stacked bars with mixed signs show both segments', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: const Scaffold(
+          body: BarChartWidget(
+            categories: ['A'],
+            series: [
+              ElementNode('Series', {'category': 'P', 'values': [10]}, 's1'),
+              ElementNode('Series', {'category': 'N', 'values': [-4]}, 's2'),
+            ],
+            stacked: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final area = paintArea(tester);
+    final gesture = await hoverAt(tester, area.topLeft + Offset(area.size.width * 0.5, area.size.height * 0.5));
+    expect(tipTitle(tester), 'A');
+    expect(find.text('10'), findsOneWidget);
+    expect(find.text('-4'), findsOneWidget);
     await gesture.removePointer();
   });
 

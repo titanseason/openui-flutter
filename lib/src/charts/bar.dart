@@ -3,11 +3,10 @@ part of openui_charts;
 // ---------------- Bar / horizontal bar ----------------
 
 class _BarPainter extends CustomPainter {
-  _BarPainter({required this.categories, required this.all, required this.palette, required this.maxY, required this.stacked, required this.horizontal, this.hidden = const {}, this.hoverPos});
+  _BarPainter({required this.categories, required this.all, required this.palette, required this.stacked, required this.horizontal, this.hidden = const {}, this.hoverPos});
   final List<String> categories;
   final List<List<double>> all;
   final List<Color> palette;
-  final double maxY;
   final bool stacked;
   final bool horizontal;
   final Set<int> hidden;
@@ -24,55 +23,76 @@ class _BarPainter extends CustomPainter {
   }
 
   void _paintVertical(Canvas canvas, Size size) {
-    final plotH = size.height - 22;
+    final mm = stacked ? stackedMinMax(all, categories.length) : minMaxOf(all);
+    final plot = cartesianPlot(dataMin: mm.min, dataMax: mm.max, size: size);
+    final domain = plot.domain;
+    double y(double v) => yForValue(v, domain, plot.plotH);
+    final baseline = y(0);
+    _paintAxisTicks(canvas, domain, plot.axisW, plot.plotW, plot.plotH);
     final n = categories.length;
-    final slot = size.width / n;
+    final slot = plot.plotW / n;
     final m = all.length;
     for (var ci = 0; ci < n; ci++) {
-      final x0 = ci * slot;
+      final x0 = plot.axisW + ci * slot;
       // React's hovered-column highlight: a translucent rect over
       // the whole slot, under the bars.
-      if (hoverPos != null && _categoryAtX(hoverPos!.dx, size.width, n) == ci) {
-        canvas.drawRect(Rect.fromLTWH(x0, 0, slot, plotH), Paint()..color = Colors.grey.withValues(alpha: 0.1));
+      if (hoverPos != null && _categoryAtX(hoverPos!.dx, plot.axisW, plot.plotW, n) == ci) {
+        canvas.drawRect(Rect.fromLTWH(x0, 0, slot, plot.plotH), Paint()..color = Colors.grey.withValues(alpha: 0.1));
       }
       if (stacked) {
         final rodW = math.min(16.0, slot);
         final cx = x0 + (slot - rodW) / 2;
-        var running = 0.0;
-        // Only the topmost segment gets the rounded top.
+        var runUp = 0.0;
+        var runDown = 0.0;
+        // Only the far ends get rounded corners: the topmost
+        // positive segment on top, the bottommost negative one at
+        // the bottom.
         var topSi = -1;
+        var botSi = -1;
         for (var si = 0; si < m; si++) {
-          if (!hidden.contains(si) && ci < all[si].length && all[si][ci] > 0) topSi = si;
+          if (hidden.contains(si) || ci >= all[si].length) continue;
+          if (all[si][ci] > 0) topSi = si;
+          if (all[si][ci] < 0) botSi = si;
         }
         for (var si = 0; si < m; si++) {
           if (hidden.contains(si)) continue;
-          final v = ci < all[si].length ? all[si][ci] : 0;
+          final v = ci < all[si].length ? all[si][ci] : 0.0;
+          if (v == 0) continue;
+          final paint = Paint()..color = _colorAt(palette, si);
           if (v > 0) {
-            final top = plotH * (1 - (running + v) / maxY);
-            final bottom = plotH * (1 - running / maxY);
-            final rect = Rect.fromLTWH(cx, top, rodW, bottom - top);
-            final paint = Paint()..color = _colorAt(palette, si);
+            final rect = Rect.fromLTWH(cx, y(runUp + v), rodW, y(runUp) - y(runUp + v));
             if (si == topSi) {
               _drawBarTop(canvas, rect, paint);
             } else {
               canvas.drawRect(rect, paint);
             }
+            runUp += v;
+          } else {
+            final rect = Rect.fromLTWH(cx, y(runDown), rodW, y(runDown + v) - y(runDown));
+            if (si == botSi) {
+              _drawBarTop(canvas, rect, paint, flip: true);
+            } else {
+              canvas.drawRect(rect, paint);
+            }
+            runDown += v;
           }
-          running += v;
         }
       } else {
         final rodW = m == 0 ? 0.0 : math.min(16.0, slot / m);
         final startX = x0 + (slot - rodW * m) / 2;
         for (var si = 0; si < m; si++) {
           if (hidden.contains(si)) continue;
-          final v = ci < all[si].length ? all[si][ci] : 0;
+          final v = ci < all[si].length ? all[si][ci] : 0.0;
+          if (v == 0) continue;
+          final paint = Paint()..color = _colorAt(palette, si);
           if (v > 0) {
-            final h = plotH * v / maxY;
-            _drawBarTop(canvas, Rect.fromLTWH(startX + si * rodW, plotH - h, rodW, h), Paint()..color = _colorAt(palette, si));
+            _drawBarTop(canvas, Rect.fromLTWH(startX + si * rodW, y(v), rodW, baseline - y(v)), paint);
+          } else {
+            _drawBarTop(canvas, Rect.fromLTWH(startX + si * rodW, baseline, rodW, y(v) - baseline), paint, flip: true);
           }
         }
       }
-      _paintCategoryLabel(canvas, categories[ci], x0 + slot / 2, plotH, slot);
+      _paintCategoryLabel(canvas, categories[ci], x0 + slot / 2, plot.plotH, slot);
     }
   }
 
@@ -89,11 +109,17 @@ class _BarPainter extends CustomPainter {
     final barX = labelArea + 8;
     final barW = size.width - barX;
     if (barW <= 0) return;
-    final slot = size.height / n;
+    final plotH = size.height - 22;
+    final mm = stacked ? stackedMinMax(all, n) : minMaxOf(all);
+    final domain = niceDomain(mm.min, mm.max, barW, pixelsPerTick: 60);
+    double x(double v) => barX + barW * (v - domain.min) / (domain.max - domain.min);
+    final baseline = x(0);
+    _paintValueTicksBottom(canvas, domain, barX, barW, plotH);
+    final slot = plotH / n;
     final m = all.length;
     for (var ci = 0; ci < n; ci++) {
       final y0 = ci * slot;
-      if (hoverPos != null && _categoryAtY(hoverPos!.dy, size.height, n) == ci) {
+      if (hoverPos != null && _categoryAtY(hoverPos!.dy, plotH, n) == ci) {
         canvas.drawRect(Rect.fromLTWH(0, y0, size.width, slot), Paint()..color = Colors.grey.withValues(alpha: 0.1));
       }
       final tp = TextPainter(text: TextSpan(text: categories[ci], style: _axisStyle), textDirection: TextDirection.ltr, ellipsis: '…')..layout(maxWidth: labelArea);
@@ -101,34 +127,50 @@ class _BarPainter extends CustomPainter {
       if (stacked) {
         final thick = math.min(16.0, slot);
         final cy = y0 + (slot - thick) / 2;
-        var running = 0.0;
-        // Only the rightmost segment gets the rounded end.
+        var runRight = 0.0;
+        var runLeft = 0.0;
         var endSi = -1;
+        var startSi = -1;
         for (var si = 0; si < m; si++) {
-          if (!hidden.contains(si) && ci < all[si].length && all[si][ci] > 0) endSi = si;
+          if (hidden.contains(si) || ci >= all[si].length) continue;
+          if (all[si][ci] > 0) endSi = si;
+          if (all[si][ci] < 0) startSi = si;
         }
         for (var si = 0; si < m; si++) {
           if (hidden.contains(si)) continue;
-          final v = ci < all[si].length ? all[si][ci] : 0;
+          final v = ci < all[si].length ? all[si][ci] : 0.0;
+          if (v == 0) continue;
+          final paint = Paint()..color = _colorAt(palette, si);
           if (v > 0) {
-            final rect = Rect.fromLTWH(barX + barW * running / maxY, cy, barW * v / maxY, thick);
-            final paint = Paint()..color = _colorAt(palette, si);
+            final rect = Rect.fromLTWH(x(runRight), cy, x(runRight + v) - x(runRight), thick);
             if (si == endSi) {
               _drawBarTop(canvas, rect, paint, horizontal: true);
             } else {
               canvas.drawRect(rect, paint);
             }
+            runRight += v;
+          } else {
+            final rect = Rect.fromLTWH(x(runLeft + v), cy, x(runLeft) - x(runLeft + v), thick);
+            if (si == startSi) {
+              _drawBarTop(canvas, rect, paint, horizontal: true, flip: true);
+            } else {
+              canvas.drawRect(rect, paint);
+            }
+            runLeft += v;
           }
-          running += v;
         }
       } else {
         final thick = m == 0 ? 0.0 : math.min(16.0, slot / m);
         final startY = y0 + (slot - thick * m) / 2;
         for (var si = 0; si < m; si++) {
           if (hidden.contains(si)) continue;
-          final v = ci < all[si].length ? all[si][ci] : 0;
+          final v = ci < all[si].length ? all[si][ci] : 0.0;
+          if (v == 0) continue;
+          final paint = Paint()..color = _colorAt(palette, si);
           if (v > 0) {
-            _drawBarTop(canvas, Rect.fromLTWH(barX, startY + si * thick, barW * v / maxY, thick), Paint()..color = _colorAt(palette, si), horizontal: true);
+            _drawBarTop(canvas, Rect.fromLTWH(baseline, startY + si * thick, x(v) - baseline, thick), paint, horizontal: true);
+          } else {
+            _drawBarTop(canvas, Rect.fromLTWH(x(v), startY + si * thick, baseline - x(v), thick), paint, horizontal: true, flip: true);
           }
         }
       }
@@ -138,4 +180,3 @@ class _BarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
-
