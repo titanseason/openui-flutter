@@ -1,11 +1,8 @@
 name: openui_lang
 description: Flutter port of OpenUI Lang 1.0 with a renderer for the 82-component general GenUI library. Markdown rendering uses flutter_markdown_plus; charts are self-drawn.
 version: 0.18.0
-# TODO: replace these placeholder URLs with the real repository before
-# publishing to pub.dev. They are deliberately under .invalid (a
-# reserved, never-resolving TLD), not a real address.
-repository: https://example.invalid/openui-flutter
-homepage: https://example.invalid/openui-flutter
+repository: https://github.com/titanseason/openui-flutter
+homepage: https://github.com/titanseason/openui-flutter
 environment:
   sdk: ^3.6.2
   flutter: '>=3.27.4'
