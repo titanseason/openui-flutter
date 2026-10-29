@@ -15,3 +15,6 @@ example/build/
 .vscode/
 # OS
 .DS_Store
+
+# Local-only parity evidence and plans; not published
+docs/
