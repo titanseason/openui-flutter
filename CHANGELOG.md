@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Docs: README rewritten in English (default) with a Chinese
+  mirror (`README.zh-CN.md`); the old README described the
+  removed chat module and 86 components. The pubspec
+  description now says 82 components as well.
+- All code comments are English (verified by scan; the one
+  remaining Chinese comment was translated, the rest of the
+  Chinese text in the tree is runtime UI strings and test data).
 - Directory layout: `lib/src` is now grouped by layer —
   `core/` (Lang, library, registry), `runtime/` (controller,
   renderer, theme), `widgets/` (primitives, extra widgets),

@@ -1,344 +1,224 @@
 # openui_flutter
 
-Flutter 移植 OpenUI Lang（1.0 子集）+ 渲染器。包除 Flutter SDK 外只依赖一项第三方：Markdown 渲染用的 flutter_markdown_plus；图表全部自绘（CustomPainter），CodeBlock 为纯文本，无高亮依赖。依赖与最低版本见下方“依赖”一节。
+[English](./README.md) | [中文](./README.zh-CN.md)
 
-## 定位
+A pure-Dart Flutter renderer for OpenUI Lang 1.0 and the 82-component
+general GenUI library, aligned with `@openuidev/react-ui` 0.18.1. It
+parses Lang programs (including streamed, partial input) into an
+element tree and renders it with Flutter widgets. Charts are fully
+self-drawn; the only third-party dependency is `flutter_markdown_plus`
+for Markdown.
 
-- 不是官方 SDK 的搬运：官方目前只有 React / Vue / Svelte / Angular /
-  React Native 等运行时，没有 Flutter/Dart 版。
-- 本包现已实现全部 86 个 GenUI 组件（以 @openuidev/react-ui 0.18.1
-  的名字去重清单为准：布局 13、内容 16、数据 21、表单 19、操作 3、
-  对话引导 4、组合卡片 10），以及解析 OpenUI Lang 所必需的核心语义。
-  最初的 25 个 MVP 组件是这 86 个的子集。组件名与
-  @openuidev/react-ui 0.18.1 直接对齐（含 MarkDownRenderer 及
-  5 组 *CardBlock/*CardItem）。
-- 生成侧（系统提示）由库定义导出：`OpenUILibrary.prompt()` 会按组件名、
-  props 顺序、描述生成给模型的说明，模型只能用库里的组件。
+> Status: not published on pub.dev yet. The package name is
+> `openui_flutter`, the version is 1.0.0, and the repository/homepage
+> URLs in `pubspec.yaml` are still `.invalid` placeholders. Until the
+> first publish, use a path dependency on a local checkout:
+>
+> ```yaml
+> dependencies:
+>   openui_flutter:
+>     path: ../openui-flutter
+> ```
 
-## 架构
+## Quick start
 
-```
-OpenUI Lang 文本（流式）
-  -> StreamingParser（按行切分，未完成行经 autocloser 后先渲染）
-  -> Parser（语句、表达式、前向引用、$变量、动作、Query/Mutation 请求、错误码）
-  -> ElementNode 树（IR，与 Flutter 无关）
-  -> OpenUIRenderer（Flutter Widget，按库定义把节点映射成 Widget；
-     Query/Mutation 经 toolProvider 执行）
-```
-
-核心解析器在 `lib/src/lang.dart`。注意：解析/求值逻辑本身没有用
-Flutter API，但 `lang.dart` 为了在库上挂接自定义构建器而 import 了
-`registry.dart`（Flutter widgets），所以它目前不能被纯 Dart 包直接
-import——这是 Task 3 留下的耦合，见下方“已知取舍”。渲染器在
-`lib/src/renderer.dart`，组件定义在 `lib/src/library.dart`。
-
-## 组件清单（86 个 GenUI）
-
-布局 13：Stack, Card, Tabs, TabItem, Accordion, AccordionItem, Steps,
-StepsItem, Carousel, Separator, Modal, SectionBlock, SectionItem。
-
-内容 16：CardHeader, TextContent, Text, BoldText, MarkDownRenderer,
-Callout, TextCallout, Image, ImageBlock, ImageGallery, ImageText,
-ImageTextLarge, IconText, CodeBlock, InlineHeader, Icon。
-
-数据 21：Table, Col, EditableTable, BarChart, LineChart, AreaChart,
-RadarChart, HorizontalBarChart, Series, PieChart, RadialChart,
-SingleStackedBarChart, Slice, ScatterChart, ScatterSeries, Point,
-TagBlock, Tag, EntityList, MetricIndicatorInline,
-MetricIndicatorWithStrikethrough。
-
-表单 19：Form, FormControl, Label, Input, TextArea, Select, SelectItem,
-DatePicker, Slider, CheckBoxGroup, CheckBoxItem, RadioGroup, RadioItem,
-SwitchGroup, SwitchItem, Chips, ChipItem, OptionCards, OptionCard。
-
-操作 3：Button, Buttons, IconButton。
-
-对话引导 4：FollowUpBlock, FollowUpItem, ListBlock, ListItem。
-
-组合卡片 10：SnippetCardBlock/SnippetCardItem, OverviewCardBlock/OverviewCardItem,
-ContextCardBlock/ContextCardItem, CompositeCardBlock/CompositeCardItem,
-VisualCardBlock/VisualCardItem。
-
-注意：props 仍是 MVP 精简版，不是官方 Zod 的 1:1 复刻；组合卡片
-用 Block/Item 命名（见 library.dart 头注）；Modal 渲染为真正的
-AlertDialog（同一位置出现新的 Modal 语句时会重新打开，关闭后不再
-重开）；渲染器现在会包一层 Material，保证
-ListTile/Chip/TextField 等在没有 Scaffold 的宿主里也能用。
-
-Markdown 说明：`MarkDownRenderer` 用 flutter_markdown_plus
-（`MarkdownBody`，版本见 pubspec，当前解析为 1.0.12），支持全量
-Markdown：标题、列表、表格、链接、引用、代码围栏、行内代码、
-粗体/斜体等。`CodeBlock` 是纯文本等宽渲染，没有引入高亮依赖
-（syntax_highlight 曾接过又因传递依赖过重被回退，见“已知取舍”）。
-
-## 依赖
-
-- flutter_markdown_plus 1.0.12（Markdown 渲染；带入 markdown/args）。
-- 最低版本：Flutter >= 3.27.4、Dart SDK ^3.6.2（此前由 fl_chart 1.3.0
-  的要求抬到这一档；fl_chart 已移除，但下限暂保持不动，另行
-  核对代码所用 API 与 flutter_markdown_plus 的约束后再降）。
-
-## 用法
+Response mode — one complete program:
 
 ```dart
 import 'package:openui_flutter/openui_flutter.dart';
 
-final library = openUIStandardLibrary(root: 'Stack');
-
 OpenUIRenderer(
-  library: library,
+  library: openUIStandardLibrary(),
   response: '''
-root = Stack([header, chart, cta])
-header = CardHeader("Q1 收入", "全部业务线")
-chart = BarChart(["1月", "2月", "3月"], [rev])
-rev = Series("收入", [120, 145, 180])
-cta = Button("查看明细", @ToAssistant("查看明细"))
+root = Stack([title, chart])
+title = CardHeader("Q1 Revenue", "All business lines")
+chart = BarChart(["Jan", "Feb", "Mar"], [rev])
+rev = Series("Revenue", [120, 145, 180])
 ''',
-  isStreaming: false,
-  onAction: (event) {
-    // event.type: toAssistant / openUrl / set / reset / run / custom
-    // event.params: 动作参数
-  },
 )
 ```
 
-流式用法：`isStreaming: true`，每收到一个 chunk 就把累计文本传给
-`response`；未定义的前向引用会先渲染骨架屏，流结束前不报 `no-root`。
-更精细的流式控制用 `StreamingParser.push(chunk)`：已完成的行正常解析，
-未完成行经 `autoCloseOpenUI` 补全后先渲染（未闭合字符串、列表、调用
-都能先出界面）；半行写出的 Query 不会触发工具调用，等该行换行后才
-注册为请求。解析是增量的（`IncrementalOpenUIParser`）：每 push 只解析
-新增的行、只重算依赖变化的语句，不再全文重解析；独立模式的渲染器
-在多次 build 之间也复用同一个增量解析器。表单状态、Query 数据、
-失败状态变化时仍会全部重算求值（行解析结果复用），因为任何值都
-可能依赖它们。
-
-## 控制器模式（推荐）
-
-旧参数（`response` / `toolProvider` / `onAction` 等）仍可用，但新代码
-请用 `OpenUIController`：表单状态、Query 数据与失败态、动作分发、
-流式缓冲都归控制器管，渲染器只是它的视图；宿主可以在 widget 树外
-驱动同一份 UI、读 `formState`。
+Controller mode — streamed input, form state, and tools:
 
 ```dart
 final controller = OpenUIController(
   library: openUIStandardLibrary(),
-  toolProvider: (tool, params) async => api.call(tool, params),
-  theme: OpenUIThemeData.light(),
-  registry: ComponentRegistry().withBuilder(
-    'Callout',
-    (context, node, renderChild) => MyCallout(node.props['text'] as String),
+  toolProvider: (tool, params) async => fetchFromBackend(tool, params),
+);
+controller.push(chunk); // call per streamed chunk
+controller.finish();    // renders the final program
+
+OpenUIRenderer(library: controller.library, controller: controller)
+```
+
+The system prompt for the model comes from the library itself:
+`openUIStandardLibrary().prompt()` prints every component, its props
+in order, and its description, so the model only uses components
+that exist.
+
+## What is implemented
+
+- **Lang 1.0 parser and evaluator.** Statements are `name = Expr`
+  assignments. Expressions cover literals, references, `$variables`,
+  field access, indexing, list/object literals, calls, `@builtin`
+  functions, actions, ternary, binary/unary operators, and
+  `Query`/`Mutation` requests. Forward references resolve, and
+  errors carry codes (`unknown-component`, `type-mismatch`, …).
+- **Streaming and incremental parsing.** `StreamingParser`
+  auto-closes an incomplete trailing line so partial input renders
+  immediately; the renderer reuses an incremental parser so a
+  streamed append does not re-parse the whole program twice per
+  chunk. Form edits still re-parse fully (memoized rendering only
+  pays off for streaming appends and host rebuilds).
+- **82 components, one library.** `openUIStandardLibrary()` has
+  root `Stack`. There is no chat library in this port.
+- **Query and Mutation.** `Query`/`Mutation` run through the host's
+  `toolProvider`, with loading, error, and `@Run` retry views.
+  Host-defined tools plug in through `defineFunction`, and
+  `OpenUILibrary.extend` registers custom components.
+- **Forms.** `Form`/`FormControl` state flows back through
+  `onStateUpdate` (response mode) or `controller.formState`.
+- **Theming.** See below.
+
+## Components (82)
+
+- Layout (11): Stack, Card, Tabs, TabItem, Accordion, AccordionItem,
+  Steps, StepsItem, Carousel, Separator, Modal.
+- Content (16): CardHeader, TextContent, Text, BoldText,
+  MarkDownRenderer, Callout, TextCallout, Image, ImageBlock,
+  ImageGallery, ImageText, ImageTextLarge, IconText, CodeBlock,
+  InlineHeader, Icon.
+- Data (21): Table, Col, EditableTable, BarChart, LineChart,
+  AreaChart, RadarChart, HorizontalBarChart, Series, PieChart,
+  RadialChart, SingleStackedBarChart, Slice, ScatterChart,
+  ScatterSeries, Point, TagBlock, Tag, EntityList,
+  MetricIndicatorInline, MetricIndicatorWithStrikethrough.
+- Forms (19): Form, FormControl, Label, Input, TextArea, Select,
+  SelectItem, DatePicker, Slider, CheckBoxGroup, CheckBoxItem,
+  RadioGroup, RadioItem, SwitchGroup, SwitchItem, Chips, ChipItem,
+  OptionCards, OptionCard.
+- Actions (3): Button, Buttons, IconButton.
+- Lists (2): ListBlock, ListItem.
+- Composite cards (10): SnippetCardBlock/SnippetCardItem,
+  OverviewCardBlock/OverviewCardItem, ContextCardBlock/ContextCardItem,
+  CompositeCardBlock/CompositeCardItem, VisualCardBlock/VisualCardItem.
+
+Built-in functions (called with `@`): Count, Sum, Avg, Min, Max,
+First, Last, Filter, Sort, Round, Abs, Floor, Ceil, Each. Built-in
+actions: ToAssistant, OpenUrl, Set, Reset, Run.
+
+## Theming
+
+```dart
+// Built-ins:
+OpenUIThemeData.light();
+OpenUIThemeData.dark();
+
+// Custom:
+OpenUIThemeData(
+  colors: const OpenUIColorScheme(
+    primary: Colors.blue,
+    surface: Colors.white,
+    onSurface: Colors.black87,
+    // textMuted, border, grid, success, warning, danger, info
+    // default to the light values when omitted.
   ),
-);
-controller.push(chunk);
-controller.finish(); // 流结束
-
-OpenUIRenderer(library: library, controller: controller)
-// 控制器模式下 controller 优先于 response / onAction / toolProvider /
-// initialState；动作走 controller.onAction 流，错误走 onError 流。
-```
-
-## 注册表与自定义组件
-
-```dart
-// 替换内置组件：同名构建器优先于内置渲染。
-final registry = ComponentRegistry().withBuilder(
-  'TextContent',
-  (context, node, renderChild) => MyText(node.props['text'] as String),
-);
-// 新增组件：先在库里注册定义，再配构建器（或用 extend 一步做完）。
-final library = openUIStandardLibrary().extend(
-  components: [ComponentDef('PriceTag', '...', [PropDef('price', PropType.number)])],
-  builders: {'PriceTag': (context, node, renderChild) => Text('¥${node.props['price']}')},
-);
-```
-
-查找顺序：渲染器显式 `registry` 参数 > 控制器的 `registry` >
-库自带的 `registry`（`extend(builders: ...)` 存的地方）> 内置渲染。
-`ComponentRegistry` 不可变，`withBuilder` 返回新实例。
-
-## 控制器与主题
-
-`OpenUIThemeData` 只有三色（`primary / surface / onSurface`）+
-图表配色 `chartPalette` + `cardRadius`（默认 12）+ 两个注入点：
-`skeletonBuilder`（骨架屏）和 `errorBuilder`（Query 失败界面）。
-`OpenUIThemeData.light()` / `.dark()` 开箱即用；更细的排版/间距
-字段目前没有，需要再加。控制器模式下主题来自控制器，否则用浅色。
-
-## 库 API
-
-```dart
-final library = openUIStandardLibrary()
-    .extend(
-      components: [...],   // 按名替换已有组件定义
-      remove: ['OldCard'], // 删组件；同名新增优先于删除
-      functions: [...],    // 自定义函数（见“函数”）
-      actions: [...],      // 自定义动作定义（严格校验）
-      builders: {...},     // 自定义构建器，存在库的 registry 上
-    );
-library.prompt(
-  preamble: '...', additionalRules: [...],
-  examples: [...], includeBuiltins: true,
-); // 生成给模型的系统提示：组件名、props 顺序、描述、函数
-```
-
-自定义动作校验是严格的：类型错、必填缺失、超参都会让整个动作
-无操作，并发出 `runtime-error`（函数超参是截断后继续跑，动作不
-截断，因为动作有副作用）。未在库里声明的动作原样透传为事件。
-
-## 手写原语
-
-`Skeleton`（`count` 条占位条）、`TableSkeleton`（占位表格）、
-`Citation`（`[n]` 角标，`onTap` 可选）、`Sources`（标题行列表，
-`faviconUrl` 有值时显示网络图标）。Table 的列里有加载中的 Query
-时渲染 `TableSkeleton`；有失败的 Query 时露出错误界面（主题
-`errorBuilder`，否则 `数据加载失败：<tool>`），不再悄悄变空列。
-
-## 图表
-
-常规图表（Bar/Line/Area/HorizontalBar/Pie/Radar/Radial/
-SingleStackedBar/Scatter）全部自绘（CustomPainter），颜色全部取主题
-`chartPalette`。图例格式、盒子高度、数值刻度与散点 z 气泡均与
-此前一致；两处有意改动：HorizontalBar 类目标题横排在左侧
-（此前旋转后在窄列里逐字母竖排），1/2 类别雷达按真实几何画
-（点/线，不再补成三角形）。悬停 tooltip 暂无：React 图表默认
-带悬停 tooltip，属待补的对齐缺口（此前 fl_chart 版同样没有）。
-
-## AgentInterface 聊天外壳
-
-```dart
-AgentInterface(
-  storage: myStorage, // AgentStorage：list/load/save/delete 线程
-  llm: myLlm,         // AgentLlm：Stream<String> send(history, prompt)
-  library: openUIStandardLibrary(),
-  toolProvider: (tool, params) async => ...,
-  slots: AgentSlots(welcome: (context, state) => MyWelcome()),
-  toolCalls: () => currentToolCalls,   // 只读时间线，外壳不执行工具
-  artifacts: () => currentArtifacts,  // 右侧工作区面板
+  chartPalette: const [Colors.blue, Colors.green, Colors.orange],
 )
 ```
 
-外壳本身不调模型 API、不执行工具：模型由宿主的 `AgentLlm` 实现
-提供，工具调用只以只读时间线展示。默认含侧边栏线程列表（>= 700px
-为 280 宽侧栏，窄屏收进抽屉）、线程头重命名/删除、欢迎态、流式
-composer；`AgentSlots` 的八个槽（sidebar、sidebarHeader、sidebarFooter、
-mobileHeader、threadHeader、welcome、composer、workspace）有值时
-整体替换对应区域，无值时走默认。
+`OpenUIColorScheme` is semantic: `primary` / `surface` /
+`onSurface`, plus `textMuted` (secondary text, chart axis labels),
+`border` (chart boxes, axis lines, tooltip borders), `grid` (chart
+gridlines and tracks), and `success` / `warning` / `danger` / `info`
+(Callout variants). Charts read their chrome from the theme through
+a `ChartColors` bundle; the series palette stays separate
+(`chartPalette`). `cardRadius` and the `skeletonBuilder` /
+`errorBuilder` injection points live on `OpenUIThemeData`.
 
-## 迁移指南
+## Charts
 
-### 旧渲染器参数 → 控制器模式
+Eight types, all drawn with `CustomPainter` (no chart package):
+Bar, Line, Area, HorizontalBar, Pie, Radial, SingleStackedBar,
+Scatter. Behavior follows React: hover tooltips (mouse hover and
+touch drag; a stationary tap shows nothing), legend click to hide a
+series or slice (pie re-normalizes, radial rings keep their radii,
+scales are computed over all series so toggling never rescales),
+zero-anchored nice domains with negatives, and stacked bars as a
+horizontal track.
 
-| 旧写法 | 新写法 |
-|---|---|
-| `OpenUIRenderer(library: l, response: r, toolProvider: p, onAction: f)` | `OpenUIController(library: l, toolProvider: p)` + `OpenUIRenderer(library: l, controller: c)`，动作改订阅 `c.onAction` 流 |
-| `response` 累计文本 + `isStreaming: true` | `controller.push(chunk)`，结束时 `controller.finish()` |
-| `initialState: {...}` | `OpenUIController(..., initialState: {...})`，之后读 `controller.formState` |
-| `onStateUpdate` 回调 | 控制器 `setFormValue` 后读 `formState`，或监听控制器（`ChangeNotifier`） |
-| `onToolError` 回调 | 控制器 `onError` 流；失败的 Query 本身已在界面上露出错误态 |
+Bar/Line/Area accept three layout props (positional, after
+`height`): `density` (`compact` 48 / `default` 72 / `spacious` 96px
+slots, scroll mode only), `condensed` (fit mode: all categories
+share the container width, no scrolling, labels thinned and
+truncated), and `tickVariant` (`singleLine` / `multiLine` /
+`angled`; angled is condensed-only and rotates labels −45°).
+Axis ticks use React's number format (1.0K at 1000, M/B/T above);
+tooltips use grouped numbers below 100000 and K/M/B/T above.
 
-控制器模式下控制器优先，旧参数与控制器混传时旧参数被忽略；
-只传旧参数时行为与原来一致。
+`onTap` exists on every chart widget, but only for hosts that
+construct widgets directly in Dart: Lang text cannot carry
+callbacks, so Lang-driven charts are view-only.
 
-### `openUIMvpLibrary` → `openUIStandardLibrary()`
+## Architecture
 
-两者返回同一个库，旧名字仍可用，纯粹是改名：新代码请用
-`openUIStandardLibrary()`。自 1.0.0 起旧名字已加 `@Deprecated`
-注解（仓库内调用已全部迁移，只剩一条为该别名本身背书的测试）。
-
-### 示例
-
-`example/` 里有四个屏：聊天富回答、业务看板（含 Task 6 留下的
-两处人眼复核点：横向柱状图的旋转标题位置、2 类雷达图的补齐
-三角形）、表单 + Query、主题切换 + 自定义组件（主题与替换组件
-同屏演示）。跑：`cd example && flutter run`；测：`flutter test`
-（主包）与 `example` 内的 `flutter test`。
-
-## Query / Mutation
-
-语法沿用官方示例的形状（工具名、参数对象、可选初始值）：
-
-```dart
-OpenUIRenderer(
-  library: library,
-  response: '''
-root = Stack([count, btn])
-count = TextContent("" + @Count(tickets.rows))
-tickets = Query("list_tickets", {"status": "open"}, {"rows": []})
-btn = Button("重试", Action([@Run(retry)]))
-retry = Mutation("retry_deployment", {"project": "prod"})
-''',
-  toolProvider: (tool, params) async {
-    if (tool == 'list_tickets') return await api.listTickets(params);
-    if (tool == 'retry_deployment') return await api.retry(params);
-    throw StateError('unknown tool \$tool');
-  },
-  onToolError: (tool, error) { /* 宿主展示错误 */ },
-)
+```
+lib/src/
+  core/     Lang, library, registry (language + registration)
+  runtime/  controller, renderer, theme (host-facing runtime)
+  widgets/  primitives, extra widgets (shared widget implementations)
+  charts/   chart widgets + painters (one file per chart type)
 ```
 
-规则：Query 未返回且无初始值时，依赖它的数据先渲染为骨架屏
-（`QueryLoading` 会穿过字段访问、索引访问、运算与内置函数，直到
-直接依赖它的组件）；有初始值时先渲染初始值，返回后替换。
-`@Run(查询名)` 只重取该查询；`@Run(Mutation 名)` 执行 Mutation，
-成功后重取全部查询，失败则停止该动作列表的后续动作（并发出
-`mutationError` 事件）。失败的查询不会每帧重试，只有显式 `@Run`
-重取才会再跑。`$变量` 变化导致 Query 参数变化时，渲染器会按新
-参数重取。流式进行时表单与按钮会被禁用（`isStreaming: true`）。
-索引访问已支持：`tickets.rows[0].status`。
+```
+Lang text (streamed)
+  -> StreamingParser (splits lines; autocloser finishes a partial tail)
+  -> Parser + evaluator (statements, expressions, forward refs,
+     $variables, actions, Query/Mutation, error codes)
+  -> ElementNode tree (Flutter-independent IR)
+  -> OpenUIRenderer (maps nodes to Flutter widgets;
+     Query/Mutation run through toolProvider)
+```
 
-## 已实现 / 未实现
+The parser/evaluator itself uses no Flutter API, but `core/lang.dart`
+imports `core/registry.dart` (which carries widget builders), so the
+language core cannot currently be imported by a pure-Dart package.
+That coupling is a known trade-off, not an oversight.
 
-已实现：行语句、位置参数、字面量（字符串/数字/布尔/null）、列表、
-对象、字段访问（`data.rows`、`t.priority`）、索引访问（`rows[0]`）、
-`Query()/Mutation()` 接线与流式自动补全（见上文专节）、`$变量`、三元表达式、
-`+` 连接/加法、前向引用、重定义以后者为准、
-`root` 入口及回退规则、`@ToAssistant/@OpenUrl/@Set/@Reset/@Run`、
-自定义动作（`@Name(args)` 以事件发出）、错误码
-（`unknown-component / missing-required / null-required / type-mismatch /
-excess-args / unknown-function / no-root / parse-failed`）。
+## Differences from React
 
-函数（已补齐）：`defineFunction` 定义自定义函数（名字、描述、参数、
-可选返回值类型、纯同步实现，接收按参数名组织的对象，默认值已应用）；
-参数校验按官方 Functions 文档：字面量错为 `type-mismatch`、必填缺失为
-`missing-required`、必填 null 为 `null-required`、超参为 `excess-args`
-（截断后继续跑）、运行时必填 null 静默为 null、运行时类型错与返回值
-不匹配为 `runtime-error`；`library.prompt()` 列出内置函数与自定义函数。
-内置函数：`Count / Sum / Avg / Min / Max / First / Last / Filter / Sort /
-Round / Abs / Floor / Ceil / Each`（内置函数会转换参数，如
-`@Sum(["1", 2])` 得 `3`；`@Each` 在模板里绑定循环变量）。
+- **Default palette.** With no palette given, this port uses
+  blue/green/orange/purple/teal/red; React's no-palette fallback is
+  a single-hue blue ramp (OCEAN). Pass `chartPalette` to match.
+- **No entrance animations.** React's are off by default as well.
+- **onClick is direct-widget-only**, as described above.
+- **Markdown** comes from `flutter_markdown_plus`;
+  **CodeBlock is plain text** (no syntax highlighting dependency).
+- **No pixel-level parity check against React rendering exists.**
+  Goldens compare Flutter against itself, and the test font is
+  Ahem (all text renders as blocks), so font metrics, sizes, and
+  CJK line-breaking are unverified against React.
+- **No chat library.** React ships a general library and a chat
+  library; this port implements the general one only.
 
-已补齐（本轮之前是“未实现”）：`AgentInterface` 聊天外壳、手写层
-原语（主题、引用/来源、骨架屏、热力图/漏斗图/日历热力图/Mini 图表
-与堆积图例）、Modal 真弹窗、EditableTable 状态绑定、库 API
-（extend、提示词选项、自定义动作定义与严格校验）、存储消息解析
-（`StoredMessage` / `parseStoredMessage`，含 formState 恢复）、渲染器
-回调（onError/onParseResult）、Query 失败的界面态、官方用例对照与
-金测（Task 10：React 文档风格程序 + 一图一卡金测）。官方 props
-层面已对齐（含三批 props 对齐、EditableTable 重构、通用/聊天双库
-拆分、聊天 Card sources 与行内引用、rules 校验引擎）；剩余偏差
-见 CHANGELOG（如聊天内容并集不强制、Stack/Card gap 默认等）。
-
-未实现（有意留到下一阶段）：token 级增量解析（现为每 push 全文
-重解析）、pub.dev 发布与 CI、存储消息的
-完整 build/parseMessage 往返。
-Markdown 全量语法已用 flutter_markdown_plus 补齐，Query/Mutation
-真实接线与行内自动补全也已补齐（见上文）。
-
-## 已知取舍
-
-- `lang.dart` 与 `registry.dart` 的耦合：Task 3 的库上挂接构建器
-  要求与计划里“纯 Dart 核心”的架构冲突，裁决是接受耦合（解析/
-  求值逻辑本身不用 Flutter API，只有 registry 字段带构建器），纯度
-  恢复留待最终评审裁决，不在本任务里重构。
-- CodeBlock 无高亮：syntax_highlight 曾接过又被回退（传递依赖带
-  原生插件、抬高 SDK 最低版本）；更轻的路线（re_highlight、手写
-  高亮）已调研，用户决定先保持纯文本，未经新决定不加。
-- SDK 最低版本声明已与 fl_chart 的要求对齐（Flutter >= 3.27.4、Dart ^3.6.2）。
-
-## 验证
+## Development
 
 ```sh
-flutter test
-flutter analyze
+flutter test        # main package suite
+flutter analyze     # main package + example
+cd example && flutter test
 ```
+
+Goldens live in `test/goldens/` and `test/charts/goldens/`.
+Regenerate with `flutter test --update-goldens`, then inspect the
+new images before committing: a regenerated golden is a claim, not
+a pass. The `example/` app has four screens (rich answer, business
+dashboard, form + Query, theme & custom components).
+
+Further reading: `docs/react-1.0-diff/` holds the React 0.18.1
+parity evidence (inventories, prop diffs, conformance notes), and
+`CHANGELOG.md` records each change, including breaking ones.
+
+## License
+
+To be decided before the first publish.
