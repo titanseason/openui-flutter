@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Renderer dispatch is now a registry: the built-in component
+  switch is replaced by a `_builtinBuilders` map (73 names → 68
+  functions; Text/BoldText share one, the five card blocks share
+  one). Builders take a `RendererContext` facade (theme, form
+  state, dispatch, child rendering, shared helpers); the custom
+  registry still wins over the built-in map, and unknown names
+  still render empty. No behavior change: all tests and goldens
+  pass unchanged.
 - Docs: README rewritten in English (default) with a Chinese
   mirror (`README.zh-CN.md`); the old README described the
   removed chat module and 86 components. The pubspec

@@ -24,6 +24,41 @@ IconData? _iconFromProp(Object? value) {
   return null;
 }
 
+/// Builds one built-in component. [ctx] is the renderer's facade: it
+/// exposes exactly what a built-in builder may touch (theme, form
+/// state, dispatch, child rendering, shared layout helpers), so a
+/// builder never reaches into the renderer's private fields directly.
+/// Custom registry builders keep their own, narrower signature.
+typedef BuiltinBuilder = Widget Function(
+    BuildContext context, ElementNode node, RendererContext ctx);
+
+/// Facade over the renderer state handed to built-in builders. The
+/// state class implements it by delegating to its private members;
+/// a builder can be unit-tested against a fake of this interface
+/// without a renderer.
+abstract class RendererContext {
+  OpenUIThemeData get theme;
+  ChartColors get chartColors;
+  bool get isStreaming;
+  Object? stateValue(String key);
+  bool stateHas(String key);
+  void setValue(String key, Object? value);
+  Future<void> dispatch(Object? action);
+  Widget buildNode(ElementNode node);
+  Widget flexLayout(ElementNode node, List<Widget> children);
+  Widget cardBlock(ElementNode node);
+  Widget cardItemCard(List<Widget> children);
+  Widget bgCardItem(ElementNode node, Widget content);
+  Widget numberedListTile(ElementNode item, int index);
+  Widget trendWidget(Object? trend);
+  List<String> strings(Object? value);
+  List<ElementNode> seriesNodes(Object? value);
+  ({List<String> labels, List<double> values}) sliceData(ElementNode node);
+  List<ElementNode> datasetNodes(Object? value);
+  List<Map<String, Object?>> mapList(Object? value);
+  List<double> numbers(Object? value);
+}
+
 class OpenUIRenderer extends StatefulWidget {
   const OpenUIRenderer({
     super.key,
@@ -69,7 +104,8 @@ class OpenUIRenderer extends StatefulWidget {
   State<OpenUIRenderer> createState() => _OpenUIRendererState();
 }
 
-class _OpenUIRendererState extends State<OpenUIRenderer> {
+class _OpenUIRendererState extends State<OpenUIRenderer>
+    implements RendererContext {
   late Map<String, Object?> _state;
   final Map<String, Object?> _queryData = {};
   final Map<String, String> _queryParams = {};
@@ -187,6 +223,53 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
   /// Chart chrome from the theme: axis text from textMuted, grid
   /// from grid, borders from border.
   ChartColors get _chartColors => ChartColors(axisText: _theme.colors.textMuted, grid: _theme.colors.grid, border: _theme.colors.border);
+
+  // RendererContext: built-in builders run through this facade,
+  // never through the state's private fields directly.
+  @override
+  OpenUIThemeData get theme => _theme;
+  @override
+  ChartColors get chartColors => _chartColors;
+  @override
+  bool get isStreaming => _effectiveStreaming;
+  @override
+  Object? stateValue(String key) => _stateValue(key);
+  @override
+  bool stateHas(String key) => _stateHas(key);
+  @override
+  void setValue(String key, Object? value) => _setValue(key, value);
+  @override
+  Future<void> dispatch(Object? action) => _dispatch(action);
+  @override
+  Widget buildNode(ElementNode node) => _buildNode(node);
+  @override
+  Widget flexLayout(ElementNode node, List<Widget> children) =>
+      _flexLayout(node, children);
+  @override
+  Widget cardBlock(ElementNode node) => _cardBlock(node);
+  @override
+  Widget cardItemCard(List<Widget> children) => _cardItemCard(children);
+  @override
+  Widget bgCardItem(ElementNode node, Widget content) =>
+      _bgCardItem(node, content);
+  @override
+  Widget numberedListTile(ElementNode item, int index) =>
+      _numberedListTile(item, index);
+  @override
+  Widget trendWidget(Object? trend) => _trendWidget(trend);
+  @override
+  List<String> strings(Object? value) => _strings(value);
+  @override
+  List<ElementNode> seriesNodes(Object? value) => _seriesNodes(value);
+  @override
+  ({List<String> labels, List<double> values}) sliceData(ElementNode node) =>
+      _sliceData(node);
+  @override
+  List<ElementNode> datasetNodes(Object? value) => _datasetNodes(value);
+  @override
+  List<Map<String, Object?>> mapList(Object? value) => _mapList(value);
+  @override
+  List<double> numbers(Object? value) => _numbers(value);
   ComponentRegistry? get _effectiveRegistry =>
       widget.registry ??
       widget.controller?.registry ??
@@ -456,8 +539,8 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
 
   Widget _buildNodeInner(ElementNode node) {
     // Lookup order: explicit registry first, controller/library
-    // registry second (see _effectiveRegistry), built-in switch
-    // third, the switch's default last (never a crash).
+    // registry second (see _effectiveRegistry), the built-in
+    // map third, empty last (never a crash).
     final builder = _effectiveRegistry?.lookup(node.component);
     if (builder != null) {
       // A subtree that ran a custom builder is never cached, since
@@ -466,996 +549,11 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       _customBuilderUsed = true;
       return builder(context, node, _buildNode);
     }
-    switch (node.component) {
-      case '__Skeleton':
-        return _theme.skeletonBuilder != null ? _theme.skeletonBuilder!(context) : const _Skeleton();
-      case '__QueryError':
-        // A Query failed and has no data and no initial value. The
-        // tool call itself still reports through onToolError (old
-        // mode) / the controller's onError stream exactly once per
-        // failed fetch; this is only the view.
-        final tool = node.stringOf('tool');
-        if (_theme.errorBuilder != null) {
-          return _theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
-        }
-        return Text('数据加载失败：$tool');
-      case 'Stack':
-        return _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
-      case 'Card':
-        // Variant/flex only: the card carries no sources.
-        final cardBody = _flexLayout(node, [for (final c in node.nodesOf('children')) _buildNode(c)]);
-        return switch (node.stringOf('variant', 'card')) {
-          'clear' => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: cardBody),
-          'sunk' => Card(
-              color: Colors.grey.shade100,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
-            ),
-          _ => Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
-            ),
-        };
-      case 'CardHeader':
-        // Both props are optional now; an empty header renders nothing.
-        if (node.props['title'] is! String && node.props['subtitle'] is! String) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
-            ],
-          ),
-        );
-      case 'TextContent':
-        final size = node.stringOf('size', 'default');
-        final style = switch (size) {
-          'small' => const TextStyle(fontSize: 13, color: Colors.grey),
-          'large' => const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          'small-heavy' => const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          'large-heavy' => const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          _ => const TextStyle(fontSize: 15),
-        };
-        final textContent = node.stringOf('text');
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(textContent, style: style));
-      case 'MarkDownRenderer':
-        final body = _MarkdownWidget(text: node.stringOf('textMarkdown'));
-        return switch (node.stringOf('variant', 'clear')) {
-          'card' => Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_theme.cardRadius)),
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              child: Padding(padding: const EdgeInsets.all(12), child: body),
-            ),
-          'sunk' => Container(margin: const EdgeInsets.symmetric(vertical: 6), padding: const EdgeInsets.all(12), color: Colors.grey.shade100, child: body),
-          _ => body,
-        };
-      case 'Callout':
-        // visible == false renders nothing; absent means visible.
-        if (node.props['visible'] == false) return const SizedBox.shrink();
-        final calloutColor = switch (node.stringOf('variant')) {
-          'warning' => _theme.colors.warning,
-          'error' => _theme.colors.danger,
-          'success' => _theme.colors.success,
-          'neutral' => _theme.colors.textMuted,
-          _ => _theme.colors.info,
-        };
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: calloutColor.withValues(alpha: 0.08),
-            border: Border(left: BorderSide(color: calloutColor, width: 4)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(node.stringOf('description')),
-            ],
-          ),
-        );
-      case 'Image':
-        final src = node.props['src'] is String ? node.stringOf('src') : null;
-        // src is optional now; without it the required alt text is shown.
-        if (src == null) return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(node.stringOf('alt')));
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              src,
-              height: 180,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                height: 120,
-                color: Colors.grey.shade200,
-                alignment: Alignment.center,
-                child: Text(node.stringOf('alt', '图片加载失败')),
-              ),
-            ),
-          ),
-        );
-      case 'Table':
-        final cols = node.nodesOf('columns');
-        if (cols.isEmpty) return const SizedBox.shrink();
-        // A failed Query inside the columns used to degrade to an
-        // empty column (an __QueryError node has no label/values).
-        // Surface the error instead, consistently with the
-        // __QueryError view for direct dependents: the theme error
-        // builder when supplied, else the same failure text.
-        ElementNode? failedCol;
-        for (final c in cols) {
-          if (c.component == '__QueryError') {
-            failedCol = c;
-            break;
-          }
-        }
-        if (failedCol != null) {
-          final tool = failedCol.stringOf('tool');
-          if (_theme.errorBuilder != null) {
-            return _theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
-          }
-          return Text('数据加载失败：$tool');
-        }
-        // A loading Query inside the columns becomes a __Skeleton
-        // placeholder node; render a table-shaped skeleton instead
-        // of an empty DataTable. (A Col with genuinely empty values
-        // is not a skeleton and still renders a normal table.)
-        if (cols.any((c) => c.component == '__Skeleton')) return const TableSkeleton();
-        final rows = cols.map((c) => (c.props['data'] as List?) ?? const []).toList();
-        final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            columns: [for (final c in cols) DataColumn(label: Text(c.stringOf('label')))],
-            rows: [
-              for (var r = 0; r < rowCount; r++)
-                DataRow(cells: [for (var ci = 0; ci < cols.length; ci++) DataCell(Text(ci < rows.length && r < rows[ci].length ? '${rows[ci][r]}' : ''))]),
-            ],
-          ),
-        );
-      case 'BarChart':
-        return _ChartWidget(kind: _ChartKind.bar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, colors: _chartColors, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
-      case 'LineChart':
-        return _ChartWidget(kind: _ChartKind.line, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, colors: _chartColors, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
-      case 'PieChart':
-        final pie = _sliceData(node);
-        return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: _theme.chartPalette, colors: _chartColors);
-      case 'Form':
-        // Fields render in order, then the Buttons node. `name` is the
-        // form identifier and renders nothing by itself.
-        final formButtons = node.nodeOf('buttons');
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final c in node.nodesOf('fields')) _buildNode(c), if (formButtons != null) _buildNode(formButtons)],
-        );
-      case 'Input':
-        // State key is `name`; the old `label`/`bind` props are gone
-        // (the label belongs on FormControl now).
-        final inputKey = node.stringOf('name');
-        final initial = _stateHas(inputKey) ? '${_stateValue(inputKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
-        final inputType = node.stringOf('type', 'text');
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: TextFormField(
-            initialValue: initial,
-            enabled: !_effectiveStreaming,
-            obscureText: inputType == 'password',
-            keyboardType: switch (inputType) {
-              'email' => TextInputType.emailAddress,
-              'number' => TextInputType.number,
-              'url' => TextInputType.url,
-              _ => TextInputType.text,
-            },
-            decoration: InputDecoration(
-              hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (v) => _setValue(inputKey, v),
-          ),
-        );
-      case 'Select':
-        final selectKey = node.stringOf('name');
-        return _SelectWidget(
-          items: node.nodesOf('items'),
-          stateKey: selectKey,
-          stateValue: _stateHas(selectKey) ? _stateValue(selectKey) : node.props['value'],
-          placeholder: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
-          size: node.stringOf('size', 'medium'),
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'Button':
-        final destructive = node.stringOf('type', 'normal') == 'destructive';
-        final buttonFontSize = switch (node.stringOf('size', 'medium')) {
-          'extra-small' => 12.0,
-          'small' => 13.0,
-          'large' => 17.0,
-          _ => 15.0,
-        };
-        final buttonPadding = switch (node.stringOf('size', 'medium')) {
-          'extra-small' => const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          'small' => const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          'large' => const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          _ => const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        };
-        final buttonLabel = Text(node.stringOf('label'), style: TextStyle(fontSize: buttonFontSize));
-        final onPressed = _effectiveStreaming ? null : () => _dispatch(node.props['action']);
-        final button = switch (node.stringOf('variant', 'primary')) {
-          'secondary' => OutlinedButton(
-              onPressed: onPressed,
-              style: OutlinedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null, side: destructive ? const BorderSide(color: Colors.red) : null),
-              child: buttonLabel,
-            ),
-          'tertiary' => TextButton(
-              onPressed: onPressed,
-              style: TextButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null),
-              child: buttonLabel,
-            ),
-          _ => ElevatedButton(
-              onPressed: onPressed,
-              style: ElevatedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.white : null, backgroundColor: destructive ? Colors.red : null),
-              child: buttonLabel,
-            ),
-        };
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: button);
-      case 'Chips':
-        final chipsKey = node.stringOf('name');
-        return _ChipsWidget(
-          items: node.nodesOf('items'),
-          stateKey: chipsKey,
-          stateValue: _stateHas(chipsKey) ? _stateValue(chipsKey) : node.props['defaultValue'],
-          type: node.stringOf('type', 'multiple'),
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'Tabs':
-        return _TabsWidget(items: node.nodesOf('items'), buildNode: _buildNode);
-      case 'TabItem':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final c in node.nodesOf('content')) _buildNode(c)],
-        );
-      // ---- Layout (remaining) ----
-      case 'Accordion':
-        return Column(children: [for (final c in node.nodesOf('items')) _buildNode(c)]);
-      case 'AccordionItem':
-        return ExpansionTile(
-          title: Text(node.stringOf('trigger')),
-          children: [for (final c in node.nodesOf('content')) _buildNode(c)],
-        );
-      case 'Steps':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [for (var i = 0; i < node.nodesOf('items').length; i++) Row(crossAxisAlignment: CrossAxisAlignment.start, children: [CircleAvatar(radius: 12, child: Text('${i + 1}', style: const TextStyle(fontSize: 12))), const SizedBox(width: 8), Expanded(child: _buildNode(node.nodesOf('items')[i]))])],
-        );
-      case 'StepsItem':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)), Text(node.stringOf('details'))],
-        );
-      case 'Carousel':
-        // children is a list of slides; each slide is a list of nodes
-        // (a bare node is leniently treated as a one-node slide).
-        final slides = <List<ElementNode>>[];
-        if (node.props['children'] is List) {
-          for (final slide in (node.props['children'] as List)) {
-            if (slide is List) {
-              slides.add([for (final n in slide) if (n is ElementNode) n]);
-            } else if (slide is ElementNode) {
-              slides.add([slide]);
-            }
-          }
-        }
-        if (slides.isEmpty) return const SizedBox.shrink();
-        final sunk = node.stringOf('variant', 'card') == 'sunk';
-        // PageView.builder: slide widgets are built on demand for the
-        // pages the viewport asks for, instead of all slides up front
-        // on every build (the previous PageView children list).
-        return SizedBox(
-          height: 220,
-          child: PageView.builder(
-            itemCount: slides.length,
-            itemBuilder: (context, index) {
-              final slide = slides[index];
-              return Container(
-                color: sunk ? Colors.grey.shade100 : null,
-                child: SingleChildScrollView(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final c in slide) _buildNode(c)]),
-                ),
-              );
-            },
-          ),
-        );
-      case 'Separator':
-        // decorative separators are hidden from assistive tech, as
-        // React's aria-hidden decorative separators.
-        final Widget divider = node.stringOf('orientation', 'horizontal') == 'vertical'
-            ? Center(child: Container(width: 1, height: 24, color: Colors.grey.shade300))
-            : const Divider(height: 24);
-        if (node.props['decorative'] == true) return ExcludeSemantics(child: divider);
-        return divider;
-      case 'Modal':
-        // A real overlay dialog: the node itself renders nothing
-        // inline; _ModalWidget shows the dialog once on first build
-        // and never re-opens it after close for this render. When
-        // the node leaves the tree its state is disposed, so a
-        // Modal that re-enters the tree opens again. open == false
-        // renders nothing and never opens the dialog.
-        return _ModalWidget(node: node, buildNode: _buildNode, open: node.props['open'] != false, size: node.stringOf('size', 'md'));
-      // ---- Content (remaining) ----
-      case 'Text':
-      case 'BoldText':
-        // value-first is a documented deviation from schema order
-        // (see library.dart). variant number vs text is semantic
-        // only in this port: no distinct styling. subtextVariant is
-        // accepted but likewise has no distinct styling.
-        final textBold = node.component == 'BoldText';
-        final textSize = switch (node.stringOf('size', 'sm')) {
-          'xs' => 11.0,
-          'md' => 15.0,
-          'lg' => 18.0,
-          _ => 13.0,
-        };
-        final mainText = Text(node.stringOf('value'), style: TextStyle(fontSize: textSize, fontWeight: textBold ? FontWeight.bold : null));
-        if (node.props['subtext'] is! String) {
-          return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: mainText);
-        }
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [mainText, Text(node.stringOf('subtext'), style: TextStyle(fontSize: textSize - 1, color: Colors.grey))],
-          ),
-        );
-      case 'TextCallout':
-        final textCalloutColor = switch (node.stringOf('variant', 'neutral')) {
-          'info' => Colors.blue,
-          'warning' => Colors.orange,
-          'success' => Colors.green,
-          'danger' => Colors.red,
-          _ => Colors.grey,
-        };
-        if (node.props['title'] is! String && node.props['description'] is! String) return const SizedBox.shrink();
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: textCalloutColor.withValues(alpha: 0.08),
-            border: Border(left: BorderSide(color: textCalloutColor, width: 4)),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
-              if (node.props['description'] is String) Text(node.stringOf('description')),
-            ],
-          ),
-        );
-      case 'ImageBlock':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 180, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: const Text('图片加载失败')))),
-            if (node.props['alt'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('alt'), style: const TextStyle(color: Colors.grey, fontSize: 13))),
-          ],
-        );
-      case 'ImageGallery':
-        // Entries are {src, alt?, details?} maps; plain URL strings
-        // are leniently accepted as src-only entries.
-        final galleryEntries = <({String src, String? alt, String? details})>[];
-        if (node.props['images'] is List) {
-          for (final e in (node.props['images'] as List)) {
-            if (e is Map && e['src'] is String) {
-              galleryEntries.add((src: e['src'] as String, alt: e['alt'] is String ? e['alt'] as String : null, details: e['details'] is String ? e['details'] as String : null));
-            } else if (e is String) {
-              galleryEntries.add((src: e, alt: null, details: null));
-            }
-          }
-        }
-        return SizedBox(
-          height: 170,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final entry in galleryEntries)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(entry.src, width: 200, height: 140, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 200, height: 140, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(entry.alt ?? '图片加载失败', style: const TextStyle(fontSize: 12)))),
-                      ),
-                      if (entry.details != null) SizedBox(width: 200, child: Text(entry.details!, style: const TextStyle(color: Colors.grey, fontSize: 12))),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        );
-      case 'ImageText':
-        final imageTextSize = node.props['imageSize'] is num ? (node.props['imageSize'] as num).toDouble() : 80.0;
-        final imageTextImage = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(node.stringOf('src'), width: imageTextSize, height: imageTextSize, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: imageTextSize, height: imageTextSize, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12)))),
-        );
-        final imageTextBody = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
-            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
-          ],
-        );
-        if (node.stringOf('layout', 'horizontal') == 'vertical') {
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [imageTextImage, const SizedBox(height: 6), imageTextBody]);
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [imageTextImage, const SizedBox(width: 8), Expanded(child: imageTextBody)],
-        );
-      case 'ImageTextLarge':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12))))),
-            const SizedBox(height: 6),
-            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
-            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
-          ],
-        );
-      case 'IconText':
-        // icon is an Icon node (React Icon ref) or a string name.
-        final iconTextData = _iconFromProp(node.props['icon']) ?? Icons.circle;
-        final iconSize = switch (node.stringOf('iconSize', 'm')) {
-          'xs' => 12.0,
-          's' => 16.0,
-          'l' => 24.0,
-          'xl' => 28.0,
-          'sm' => 16.0,
-          'md' => 20.0,
-          'lg' => 24.0,
-          _ => 20.0,
-        };
-        final iconVariant = node.stringOf('iconVariant', 'neutral');
-        final iconColor = switch (iconVariant) {
-          'info' => Colors.blue,
-          'success' => Colors.green,
-          'warning' => Colors.orange,
-          'danger' => Colors.red,
-          'neutral' => Colors.grey.shade700,
-          _ => Colors.grey.shade700,
-        };
-        final iconWidget = switch (iconVariant) {
-          'inverted' => Container(decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
-          'filled' => Container(decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
-          'soft' => Container(decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: iconColor)),
-          _ => Icon(iconTextData, size: iconSize, color: iconColor),
-        };
-        final iconTextBody = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
-            if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
-          ],
-        );
-        if (node.stringOf('layout', 'horizontal') == 'vertical') {
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [iconWidget, const SizedBox(height: 6), iconTextBody]);
-        }
-        return Row(children: [iconWidget, const SizedBox(width: 6), Expanded(child: iconTextBody)]);
-      case 'CodeBlock':
-        // Plain text by decision (no highlighting); language is shown
-        // as a caption above the code.
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(node.stringOf('language'), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.all(10),
-              color: Colors.grey.shade100,
-              child: Text(node.stringOf('codeString'), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
-            ),
-          ],
-        );
-      case 'InlineHeader':
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(node.stringOf('heading'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              if (node.props['description'] is String) Text(node.stringOf('description'), style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            ],
-          ),
-        );
-      case 'Icon':
-        // category picks the fallback icon when the name does not
-        // resolve, as in React's categoryFallbacks.
-        return Icon(iconByName(node.stringOf('name'), node.props['category'] is String ? node.stringOf('category') : null));
-      // ---- Data (remaining) ----
-      case 'EditableTable':
-        // React shape: name/columns objects/data rows. Cell edits
-        // write immediately to form state under
-        // "<namespace>:<rowId>:<columnKey>" (namespace = name, or the
-        // statement id when name is empty); "Save Changes" assembles
-        // the full edited rows and writes them under `name` (skipped
-        // when name is empty, since there is no key to submit under).
-        final tableName = node.stringOf('name');
-        final namespace = tableName.isEmpty ? node.statementId : tableName;
-        final columns = _mapList(node.props['columns']);
-        final dataRows = _mapList(node.props['data']);
-        Object? cellValue(int r, int ci) {
-          final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${columns[ci]['key'] ?? 'default'}';
-          if (_stateHas(key)) return _stateValue(key);
-          final values = dataRows[r]['values'];
-          if (values is List && ci < values.length) return values[ci];
-          return null;
-        }
-
-        Widget cellEditor(BuildContext context, int r, int ci) {
-          final column = columns[ci];
-          final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${column['key'] ?? 'default'}';
-          final current = cellValue(r, ci);
-          final width = (column['width'] as num?)?.toDouble() ?? 120;
-          final type = '${column['type'] ?? 'text'}';
-          Widget field;
-          switch (type) {
-            case 'select':
-              final options = _mapList(column['options']);
-              final currentValue = current;
-              field = DropdownButtonFormField<Object?>(
-                initialValue: options.any((o) => o['value'] == currentValue) ? currentValue : null,
-                decoration: const InputDecoration(border: InputBorder.none),
-                items: [for (final o in options) DropdownMenuItem<Object?>(value: o['value'], child: Text('${o['label'] ?? o['value'] ?? ''}'))],
-                onChanged: (v) => _setValue(key, v),
-              );
-            case 'date-single':
-              final initial = current == null ? '' : '$current';
-              field = TextFormField(
-                initialValue: initial,
-                readOnly: true,
-                decoration: const InputDecoration(border: InputBorder.none),
-                onTap: () async {
-                  final parsed = DateTime.tryParse(initial);
-                  final picked = await showDatePicker(context: context, initialDate: parsed ?? DateTime.now(), firstDate: DateTime(1900), lastDate: DateTime(2100));
-                  if (picked != null) {
-                    _setValue(key, '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
-                  }
-                },
-              );
-            case 'number':
-              field = TextFormField(
-                initialValue: current == null ? '' : '$current',
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(border: InputBorder.none),
-                onChanged: (v) => _setValue(key, int.tryParse(v) ?? double.tryParse(v) ?? v),
-              );
-            case 'url':
-              field = TextFormField(
-                initialValue: current == null ? '' : '$current',
-                keyboardType: TextInputType.url,
-                decoration: const InputDecoration(border: InputBorder.none),
-                onChanged: (v) => _setValue(key, v),
-              );
-            default:
-              field = TextFormField(
-                initialValue: current == null ? '' : '$current',
-                decoration: const InputDecoration(border: InputBorder.none),
-                onChanged: (v) => _setValue(key, v),
-              );
-          }
-          return SizedBox(width: width, child: field);
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (columns.isNotEmpty)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: [for (final c in columns) DataColumn(label: Text('${c['header'] ?? ''}'))],
-                  rows: [
-                    for (var r = 0; r < dataRows.length; r++)
-                      DataRow(cells: [for (var ci = 0; ci < columns.length; ci++) DataCell(Builder(builder: (context) => cellEditor(context, r, ci)))]),
-                  ],
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton(
-                  onPressed: _effectiveStreaming
-                      ? null
-                      : () {
-                          if (tableName.isEmpty) return;
-                          final rows = [
-                            for (var r = 0; r < dataRows.length; r++)
-                              {
-                                'id': dataRows[r]['id'] ?? '$r',
-                                'values': [for (var ci = 0; ci < columns.length; ci++) cellValue(r, ci)],
-                              },
-                          ];
-                          _setValue(tableName, rows);
-                        },
-                  child: const Text('Save Changes'),
-                ),
-              ),
-            ),
-          ],
-        );
-      case 'AreaChart':
-        return _ChartWidget(kind: _ChartKind.area, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, colors: _chartColors, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
-      case 'RadarChart':
-        return RadarChartWidget(categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, colors: _chartColors);
-      case 'HorizontalBarChart':
-        return _ChartWidget(kind: _ChartKind.hbar, categories: _strings(node.props['labels']), series: _seriesNodes(node.props['series']), palette: _theme.chartPalette, colors: _chartColors, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
-      case 'RadialChart':
-        final radial = _sliceData(node);
-        return RadialChartWidget(labels: radial.labels, values: radial.values, palette: _theme.chartPalette, colors: _chartColors);
-      case 'SingleStackedBarChart':
-        final stacked = _sliceData(node);
-        return SingleStackedBarWidget(labels: stacked.labels, values: stacked.values, palette: _theme.chartPalette, colors: _chartColors);
-      case 'ScatterChart':
-        return _LabeledChart(
-          xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null,
-          yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null,
-          child: ScatterChartWidget(series: _datasetNodes(node.props['datasets']), palette: _theme.chartPalette, colors: _chartColors),
-        );
-      case 'TagBlock':
-        final tagSize = switch (node.stringOf('size', 'md')) {
-          'sm' => 11.0,
-          'lg' => 15.0,
-          _ => 13.0,
-        };
-        return Wrap(spacing: 8, children: [for (final tag in _strings(node.props['tags'])) Chip(label: Text(tag, style: TextStyle(fontSize: tagSize)))]);
-      case 'Tag':
-        // icon is an Icon node (React Icon ref) or a string name.
-        final tagColor = switch (node.stringOf('variant', 'neutral')) {
-          'info' => Colors.blue.shade100,
-          'success' => Colors.green.shade100,
-          'warning' => Colors.orange.shade100,
-          'danger' => Colors.red.shade100,
-          _ => Colors.grey.shade200,
-        };
-        final tagFontSize = switch (node.stringOf('size', 'md')) {
-          'sm' => 11.0,
-          'lg' => 15.0,
-          _ => 13.0,
-        };
-        return Chip(
-          label: Text(node.stringOf('text'), style: TextStyle(fontSize: tagFontSize)),
-          avatar: _iconFromProp(node.props['icon']) != null ? Icon(_iconFromProp(node.props['icon'])!, size: 18) : null,
-          backgroundColor: tagColor,
-        );
-      case 'EntityList':
-        // rows are {left, right, rightVariant?} maps; rightVariant
-        // 'number' renders the trailing value in tabular figures, as
-        // in React. header/footer are row objects.
-        final entityDense = node.stringOf('size', 'default') == 'small';
-        Widget entityRow(Map map, {bool bold = false}) {
-          // rightVariant styles only the trailing value, as in React;
-          // the left title never gets tabular figures.
-          final isNumber = map['rightVariant'] == 'number';
-          final titleStyle = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
-          final trailingStyle = (bold || isNumber)
-              ? TextStyle(
-                  fontWeight: bold ? FontWeight.bold : null,
-                  fontFeatures: isNumber ? const [FontFeature.tabularFigures()] : null,
-                )
-              : null;
-          return ListTile(
-            dense: entityDense,
-            leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),
-            title: Text(map['left'] is String ? map['left'] as String : '', style: titleStyle),
-            trailing: Text(map['right'] is String ? map['right'] as String : (map['right'] == null ? '' : '${map['right']}'), style: trailingStyle),
-          );
-        }
-
-        final entityChildren = <Widget>[];
-        if (node.props['header'] is Map) {
-          entityChildren.add(entityRow(node.props['header'] as Map, bold: true));
-          entityChildren.add(const Divider(height: 1));
-        }
-        if (node.props['rows'] is List) {
-          for (final row in (node.props['rows'] as List)) {
-            if (row is Map) entityChildren.add(entityRow(row));
-          }
-        }
-        if (node.props['footer'] is Map) {
-          entityChildren.add(const Divider(height: 1));
-          entityChildren.add(entityRow(node.props['footer'] as Map, bold: true));
-        }
-        return Column(children: entityChildren);
-      case 'MetricIndicatorInline':
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(children: [Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), _trendWidget(node.props['trend'])]),
-        );
-      case 'MetricIndicatorWithStrikethrough':
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(children: [if (node.props['previousValue'] is String) Padding(padding: const EdgeInsets.only(right: 8), child: Text(node.stringOf('previousValue'), style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey))), Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), _trendWidget(node.props['trend'])]),
-        );
-      // ---- Form (remaining) ----
-      case 'FormControl':
-        // The mapper does not enforce the input union: any node is
-        // accepted as `input`. Rules are validated live with
-        // validateRules, but only for touched fields: a field counts
-        // as touched when its name key exists in form state (i.e. the
-        // user changed it), so untouched fields never show an error.
-        // There is no submit gate; hosts can call validateRules
-        // directly for submit-time validation.
-        final inputNode = node.nodeOf('input');
-        final inputRules = inputNode?.props['rules'];
-        final requiredMark = inputRules is Map && inputRules['required'] == true ? ' *' : '';
-        String? validationError;
-        if (inputNode != null && inputRules is Map) {
-          final inputName = inputNode.stringOf('name');
-          if (inputName.isNotEmpty && _stateHas(inputName)) {
-            validationError = validateRules(inputRules, _stateValue(inputName));
-          }
-        }
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Text('${node.stringOf('label')}$requiredMark', style: const TextStyle(fontWeight: FontWeight.bold)), if (inputNode != null) _buildNode(inputNode), if (validationError != null) Text(validationError, style: const TextStyle(color: Colors.red, fontSize: 13)), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
-          ),
-        );
-      case 'Label':
-        return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontWeight: FontWeight.bold)));
-      case 'TextArea':
-        final areaKey = node.stringOf('name');
-        final initial = _stateHas(areaKey) ? '${_stateValue(areaKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: TextFormField(
-            initialValue: initial,
-            maxLines: node.props['rows'] is num ? (node.props['rows'] as num).toInt() : 4,
-            enabled: !_effectiveStreaming,
-            decoration: InputDecoration(hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
-            onChanged: (v) => _setValue(areaKey, v),
-          ),
-        );
-      case 'DatePicker':
-        // mode range uses showDateRangePicker and stores a
-        // {from, to} map of yyyy-MM-dd strings, mirroring React's
-        // DateRange {from, to} value shape.
-        final dateKey = node.stringOf('name');
-        if (node.stringOf('mode', 'single') == 'range') {
-          final raw = _stateHas(dateKey) ? _stateValue(dateKey) : node.props['value'];
-          return DateRangeField(
-            stateKey: dateKey,
-            value: raw is Map ? raw : null,
-            enabled: !_effectiveStreaming,
-            onChanged: (k, v) {
-              if (k != null) _setValue(k, v);
-            },
-          );
-        }
-        final value = _stateHas(dateKey) ? '${_stateValue(dateKey)}' : (node.props['value'] is String ? node.stringOf('value') : null);
-        return DatePickerField(
-          stateKey: dateKey,
-          value: value,
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'Slider':
-        // Value is an array of numbers; single-thumb use takes the
-        // first element, and writes back a one-element array.
-        final sliderKey = node.stringOf('name');
-        final sliderNumbers = _numbers(_stateHas(sliderKey) ? _stateValue(sliderKey) : (node.props['value'] ?? node.props['defaultValue']));
-        final sliderMin = node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0;
-        final sliderMax = node.props['max'] is num ? (node.props['max'] as num).toDouble() : 100.0;
-        final sliderStep = node.props['step'] is num ? (node.props['step'] as num).toDouble() : null;
-        return SliderField(
-          label: node.props['label'] is String ? node.stringOf('label') : null,
-          stateKey: sliderKey,
-          value: sliderNumbers.isNotEmpty ? sliderNumbers.first : sliderMin,
-          min: sliderMin,
-          max: sliderMax,
-          divisions: node.stringOf('variant') == 'discrete' && sliderStep != null && sliderStep > 0 ? ((sliderMax - sliderMin) / sliderStep).round().clamp(1, 1000000) : null,
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, [v]);
-          },
-        );
-      case 'CheckBoxGroup':
-        final checkKey = node.stringOf('name');
-        return MultiSelectGroupWidget(
-          items: node.nodesOf('items'),
-          stateKey: checkKey,
-          stateValue: _stateHas(checkKey) ? _stateValue(checkKey) : null,
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'SwitchGroup':
-        final switchKey = node.stringOf('name');
-        return SwitchGroupWidget(
-          items: node.nodesOf('items'),
-          stateKey: switchKey,
-          stateValue: _stateHas(switchKey) ? _stateValue(switchKey) : null,
-          variant: node.stringOf('variant', 'clear'),
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'RadioGroup':
-        final radioKey = node.stringOf('name');
-        return SingleSelectGroupWidget(
-          items: node.nodesOf('items'),
-          stateKey: radioKey,
-          stateValue: _stateHas(radioKey) ? _stateValue(radioKey) : node.props['defaultValue'],
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      case 'OptionCards':
-        final cardsKey = node.stringOf('name');
-        return SingleSelectGroupWidget(
-          items: node.nodesOf('items'),
-          stateKey: cardsKey,
-          stateValue: _stateHas(cardsKey) ? _stateValue(cardsKey) : node.props['defaultValue'],
-          multi: node.stringOf('type', 'single') == 'multiple',
-          asCards: true,
-          buildNode: _buildNode,
-          enabled: !_effectiveStreaming,
-          onChanged: (k, v) {
-            if (k != null) _setValue(k, v);
-          },
-        );
-      // ---- Actions (remaining) ----
-      case 'Buttons':
-        final buttons = [for (final c in node.nodesOf('buttons')) _buildNode(c)];
-        if (node.stringOf('direction', 'row') == 'column') {
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: buttons);
-        }
-        return Wrap(spacing: 8, children: buttons);
-      case 'IconButton':
-        // icon is an Icon node (React Icon ref) or a string name;
-        // name is used as the tooltip.
-        final iconButtonSize = switch (node.stringOf('size', 'medium')) {
-          'extra-small' => 16.0,
-          'small' => 20.0,
-          'large' => 28.0,
-          _ => 24.0,
-        };
-        final iconButtonColor = switch (node.stringOf('variant', 'secondary')) {
-          'primary' => Colors.blue,
-          'tertiary' => null,
-          _ => Colors.grey.shade700,
-        };
-        return Tooltip(
-          message: node.stringOf('name'),
-          child: IconButton(
-            icon: Icon(_iconFromProp(node.props['icon']) ?? Icons.circle, size: iconButtonSize),
-            color: iconButtonColor,
-            style: node.stringOf('shape', 'circle') == 'square' ? IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))) : null,
-            onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']),
-          ),
-        );
-      // ---- Dialogue (remaining) ----
-      case 'ListBlock':
-        final listItems = node.nodesOf('items');
-        Widget listBody;
-        if (node.stringOf('variant', '') == 'number') {
-          // Numbered leading is a ListBlock-level concern, so this
-          // path renders items directly and bypasses custom ListItem
-          // registry builders for them.
-          listBody = Column(
-            children: [
-              for (var i = 0; i < listItems.length; i++) _numberedListTile(listItems[i], i + 1),
-            ],
-          );
-        } else {
-          listBody = Column(children: [for (final c in listItems) _buildNode(c)]);
-        }
-        if (node.stringOf('size', 'default') == 'small') {
-          listBody = ListTileTheme(data: const ListTileThemeData(dense: true), child: listBody);
-        }
-        return listBody;
-      case 'ListItem':
-        final listImage = node.props['image'];
-        Widget? listLeading;
-        if (listImage is Map && listImage['src'] is String) {
-          final alt = listImage['alt'] is String ? listImage['alt'] as String : '图片加载失败';
-          listLeading = ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Image.network(listImage['src'] as String, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 48, height: 48, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(alt, style: const TextStyle(fontSize: 10)))),
-          );
-        }
-        return ListTile(
-          leading: listLeading ?? const Text('•'),
-          title: Text(node.stringOf('title')),
-          subtitle: node.props['subtitle'] is String ? Text(node.stringOf('subtitle')) : null,
-          trailing: node.props['actionLabel'] is String
-              ? TextButton(onPressed: _effectiveStreaming ? null : () => _dispatch(node.props['action']), child: Text(node.stringOf('actionLabel')))
-              : null,
-          onTap: node.props['action'] != null && node.props['actionLabel'] is! String ? () => _dispatch(node.props['action']) : null,
-        );
-      // ---- Composite cards ----
-      // Blocks share items/layout/responsive/action/gap (React 0.18.1
-      // schemas); `responsive` switches the grid between container
-      // breakpoints (see _cardGrid).
-      case 'SnippetCardBlock':
-      case 'OverviewCardBlock':
-      case 'ContextCardBlock':
-      case 'CompositeCardBlock':
-      case 'VisualCardBlock':
-        return _cardBlock(node);
-      case 'SnippetCardItem':
-        final lhs = node.nodeOf('lhs');
-        final rhs = node.nodeOf('rhs');
-        return _cardItemCard([if (lhs != null) _buildNode(lhs), if (rhs != null) _buildNode(rhs)]);
-      case 'OverviewCardItem':
-        final top = node.nodeOf('top');
-        final bottom = node.nodeOf('bottom');
-        return _cardItemCard([if (top != null) _buildNode(top), if (bottom != null) _buildNode(bottom)]);
-      case 'ContextCardItem':
-        return _bgCardItem(
-          node,
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              if (node.nodeOf('title') != null) _buildNode(node.nodeOf('title')!),
-              if (node.props['body'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('body'))),
-            ],
-          ),
-        );
-      case 'CompositeCardItem':
-        final header = node.nodeOf('header');
-        final footer = node.props['footer'];
-        final price = footer is Map ? footer['price'] : null;
-        final button = footer is Map ? footer['button'] : null;
-        return _cardItemCard([
-          if (header != null) _buildNode(header),
-          for (final c in node.nodesOf('body')) _buildNode(c),
-          if (price is ElementNode || button is ElementNode)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(children: [if (price is ElementNode) Expanded(child: _buildNode(price)), if (button is ElementNode) _buildNode(button)]),
-            ),
-        ]);
-      case 'VisualCardItem':
-        final body = node.nodeOf('body');
-        final tag = node.nodeOf('tag');
-        return _bgCardItem(
-          node,
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [if (body != null) _buildNode(body), if (tag != null) Padding(padding: const EdgeInsets.only(top: 6), child: _buildNode(tag))],
-          ),
-        );
-      default:
-        // Col, Series, Slice, ScatterSeries, Point, SelectItem, ChipItem,
-        // CheckBoxItem, RadioItem, SwitchItem, OptionCard
-        // are only meaningful inside their parent; rendered alone they
-        // are empty.
-        return const SizedBox.shrink();
-    }
+    // Built-in components are the default registry: a map lookup
+    // by name. Unknown names (parent-only nodes like Col, Series,
+    // Slice, and the item types) render empty, never a crash.
+    return _builtinBuilders[node.component]?.call(context, node, this) ??
+        const SizedBox.shrink();
   }
 
   // ---- Composite card helpers ----
@@ -1803,6 +901,1198 @@ class _OpenUIRendererState extends State<OpenUIRenderer> {
       onTap: item.props['action'] != null && item.props['actionLabel'] is! String ? () => _dispatch(item.props['action']) : null,
     );
   }
+}
+
+/// The default registry: every built-in component, by name.
+/// The custom registry in _buildNodeInner is consulted first,
+/// so a host builder with the same name overrides the built-in.
+final Map<String, BuiltinBuilder> _builtinBuilders = {
+  '__Skeleton': _buildSkeleton,
+  '__QueryError': _buildQueryError,
+  'Stack': _buildStack,
+  'Card': _buildCard,
+  'CardHeader': _buildCardHeader,
+  'TextContent': _buildTextContent,
+  'MarkDownRenderer': _buildMarkDownRenderer,
+  'Callout': _buildCallout,
+  'Image': _buildImage,
+  'Table': _buildTable,
+  'BarChart': _buildBarChart,
+  'LineChart': _buildLineChart,
+  'PieChart': _buildPieChart,
+  'Form': _buildForm,
+  'Input': _buildInput,
+  'Select': _buildSelect,
+  'Button': _buildButton,
+  'Chips': _buildChips,
+  'Tabs': _buildTabs,
+  'TabItem': _buildTabItem,
+  'Accordion': _buildAccordion,
+  'AccordionItem': _buildAccordionItem,
+  'Steps': _buildSteps,
+  'StepsItem': _buildStepsItem,
+  'Carousel': _buildCarousel,
+  'Separator': _buildSeparator,
+  'Modal': _buildModal,
+  'Text': _buildText,
+  'BoldText': _buildText,
+  'TextCallout': _buildTextCallout,
+  'ImageBlock': _buildImageBlock,
+  'ImageGallery': _buildImageGallery,
+  'ImageText': _buildImageText,
+  'ImageTextLarge': _buildImageTextLarge,
+  'IconText': _buildIconText,
+  'CodeBlock': _buildCodeBlock,
+  'InlineHeader': _buildInlineHeader,
+  'Icon': _buildIcon,
+  'EditableTable': _buildEditableTable,
+  'AreaChart': _buildAreaChart,
+  'RadarChart': _buildRadarChart,
+  'HorizontalBarChart': _buildHorizontalBarChart,
+  'RadialChart': _buildRadialChart,
+  'SingleStackedBarChart': _buildSingleStackedBarChart,
+  'ScatterChart': _buildScatterChart,
+  'TagBlock': _buildTagBlock,
+  'Tag': _buildTag,
+  'EntityList': _buildEntityList,
+  'MetricIndicatorInline': _buildMetricIndicatorInline,
+  'MetricIndicatorWithStrikethrough': _buildMetricIndicatorWithStrikethrough,
+  'FormControl': _buildFormControl,
+  'Label': _buildLabel,
+  'TextArea': _buildTextArea,
+  'DatePicker': _buildDatePicker,
+  'Slider': _buildSlider,
+  'CheckBoxGroup': _buildCheckBoxGroup,
+  'SwitchGroup': _buildSwitchGroup,
+  'RadioGroup': _buildRadioGroup,
+  'OptionCards': _buildOptionCards,
+  'Buttons': _buildButtons,
+  'IconButton': _buildIconButton,
+  'ListBlock': _buildListBlock,
+  'ListItem': _buildListItem,
+  'SnippetCardBlock': _buildCardBlock,
+  'OverviewCardBlock': _buildCardBlock,
+  'ContextCardBlock': _buildCardBlock,
+  'CompositeCardBlock': _buildCardBlock,
+  'VisualCardBlock': _buildCardBlock,
+  'SnippetCardItem': _buildSnippetCardItem,
+  'OverviewCardItem': _buildOverviewCardItem,
+  'ContextCardItem': _buildContextCardItem,
+  'CompositeCardItem': _buildCompositeCardItem,
+  'VisualCardItem': _buildVisualCardItem,
+};
+
+Widget _buildSkeleton(BuildContext context, ElementNode node, RendererContext ctx) {
+  return ctx.theme.skeletonBuilder != null ? ctx.theme.skeletonBuilder!(context) : const _Skeleton();
+}
+
+Widget _buildQueryError(BuildContext context, ElementNode node, RendererContext ctx) {
+  // A Query failed and has no data and no initial value. The
+  // tool call itself still reports through onToolError (old
+  // mode) / the controller's onError stream exactly once per
+  // failed fetch; this is only the view.
+  final tool = node.stringOf('tool');
+  if (ctx.theme.errorBuilder != null) {
+    return ctx.theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
+  }
+  return Text('数据加载失败：$tool');
+}
+
+Widget _buildStack(BuildContext context, ElementNode node, RendererContext ctx) {
+  return ctx.flexLayout(node, [for (final c in node.nodesOf('children')) ctx.buildNode(c)]);
+}
+
+Widget _buildCard(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Variant/flex only: the card carries no sources.
+  final cardBody = ctx.flexLayout(node, [for (final c in node.nodesOf('children')) ctx.buildNode(c)]);
+  return switch (node.stringOf('variant', 'card')) {
+    'clear' => Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: cardBody),
+    'sunk' => Card(
+        color: Colors.grey.shade100,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ctx.theme.cardRadius)),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
+      ),
+    _ => Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ctx.theme.cardRadius)),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        child: Padding(padding: const EdgeInsets.all(12), child: cardBody),
+      ),
+  };
+}
+
+Widget _buildCardHeader(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Both props are optional now; an empty header renders nothing.
+  if (node.props['title'] is! String && node.props['subtitle'] is! String) return const SizedBox.shrink();
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+      ],
+    ),
+  );
+}
+
+Widget _buildTextContent(BuildContext context, ElementNode node, RendererContext ctx) {
+  final size = node.stringOf('size', 'default');
+  final style = switch (size) {
+    'small' => const TextStyle(fontSize: 13, color: Colors.grey),
+    'large' => const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    'small-heavy' => const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+    'large-heavy' => const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+    _ => const TextStyle(fontSize: 15),
+  };
+  final textContent = node.stringOf('text');
+  return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(textContent, style: style));
+}
+
+Widget _buildMarkDownRenderer(BuildContext context, ElementNode node, RendererContext ctx) {
+  final body = _MarkdownWidget(text: node.stringOf('textMarkdown'));
+  return switch (node.stringOf('variant', 'clear')) {
+    'card' => Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ctx.theme.cardRadius)),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        child: Padding(padding: const EdgeInsets.all(12), child: body),
+      ),
+    'sunk' => Container(margin: const EdgeInsets.symmetric(vertical: 6), padding: const EdgeInsets.all(12), color: Colors.grey.shade100, child: body),
+    _ => body,
+  };
+}
+
+Widget _buildCallout(BuildContext context, ElementNode node, RendererContext ctx) {
+  // visible == false renders nothing; absent means visible.
+  if (node.props['visible'] == false) return const SizedBox.shrink();
+  final calloutColor = switch (node.stringOf('variant')) {
+    'warning' => ctx.theme.colors.warning,
+    'error' => ctx.theme.colors.danger,
+    'success' => ctx.theme.colors.success,
+    'neutral' => ctx.theme.colors.textMuted,
+    _ => ctx.theme.colors.info,
+  };
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: calloutColor.withValues(alpha: 0.08),
+      border: Border(left: BorderSide(color: calloutColor, width: 4)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(node.stringOf('description')),
+      ],
+    ),
+  );
+}
+
+Widget _buildImage(BuildContext context, ElementNode node, RendererContext ctx) {
+  final src = node.props['src'] is String ? node.stringOf('src') : null;
+  // src is optional now; without it the required alt text is shown.
+  if (src == null) return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Text(node.stringOf('alt')));
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        src,
+        height: 180,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 120,
+          color: Colors.grey.shade200,
+          alignment: Alignment.center,
+          child: Text(node.stringOf('alt', '图片加载失败')),
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildTable(BuildContext context, ElementNode node, RendererContext ctx) {
+  final cols = node.nodesOf('columns');
+  if (cols.isEmpty) return const SizedBox.shrink();
+  // A failed Query inside the columns used to degrade to an
+  // empty column (an __QueryError node has no label/values).
+  // Surface the error instead, consistently with the
+  // __QueryError view for direct dependents: the theme error
+  // builder when supplied, else the same failure text.
+  ElementNode? failedCol;
+  for (final c in cols) {
+    if (c.component == '__QueryError') {
+      failedCol = c;
+      break;
+    }
+  }
+  if (failedCol != null) {
+    final tool = failedCol.stringOf('tool');
+    if (ctx.theme.errorBuilder != null) {
+      return ctx.theme.errorBuilder!(context, OpenUIError('tool-error', '数据加载失败：$tool'));
+    }
+    return Text('数据加载失败：$tool');
+  }
+  // A loading Query inside the columns becomes a __Skeleton
+  // placeholder node; render a table-shaped skeleton instead
+  // of an empty DataTable. (A Col with genuinely empty values
+  // is not a skeleton and still renders a normal table.)
+  if (cols.any((c) => c.component == '__Skeleton')) return const TableSkeleton();
+  final rows = cols.map((c) => (c.props['data'] as List?) ?? const []).toList();
+  final rowCount = rows.fold<int>(0, (m, r) => math.max(m, r.length));
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      columns: [for (final c in cols) DataColumn(label: Text(c.stringOf('label')))],
+      rows: [
+        for (var r = 0; r < rowCount; r++)
+          DataRow(cells: [for (var ci = 0; ci < cols.length; ci++) DataCell(Text(ci < rows.length && r < rows[ci].length ? '${rows[ci][r]}' : ''))]),
+      ],
+    ),
+  );
+}
+
+Widget _buildBarChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _ChartWidget(kind: _ChartKind.bar, categories: ctx.strings(node.props['labels']), series: ctx.seriesNodes(node.props['series']), palette: ctx.theme.chartPalette, colors: ctx.chartColors, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
+}
+
+Widget _buildLineChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _ChartWidget(kind: _ChartKind.line, categories: ctx.strings(node.props['labels']), series: ctx.seriesNodes(node.props['series']), palette: ctx.theme.chartPalette, colors: ctx.chartColors, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
+}
+
+Widget _buildPieChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  final pie = ctx.sliceData(node);
+  return _PieWidget(labels: pie.labels, values: pie.values, variant: node.stringOf('variant', 'pie'), appearance: node.stringOf('appearance', 'circular'), palette: ctx.theme.chartPalette, colors: ctx.chartColors);
+}
+
+Widget _buildForm(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Fields render in order, then the Buttons node. `name` is the
+  // form identifier and renders nothing by itself.
+  final formButtons = node.nodeOf('buttons');
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [for (final c in node.nodesOf('fields')) ctx.buildNode(c), if (formButtons != null) ctx.buildNode(formButtons)],
+  );
+}
+
+Widget _buildInput(BuildContext context, ElementNode node, RendererContext ctx) {
+  // State key is `name`; the old `label`/`bind` props are gone
+  // (the label belongs on FormControl now).
+  final inputKey = node.stringOf('name');
+  final initial = ctx.stateHas(inputKey) ? '${ctx.stateValue(inputKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+  final inputType = node.stringOf('type', 'text');
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: TextFormField(
+      initialValue: initial,
+      enabled: !ctx.isStreaming,
+      obscureText: inputType == 'password',
+      keyboardType: switch (inputType) {
+        'email' => TextInputType.emailAddress,
+        'number' => TextInputType.number,
+        'url' => TextInputType.url,
+        _ => TextInputType.text,
+      },
+      decoration: InputDecoration(
+        hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
+        border: const OutlineInputBorder(),
+      ),
+      onChanged: (v) => ctx.setValue(inputKey, v),
+    ),
+  );
+}
+
+Widget _buildSelect(BuildContext context, ElementNode node, RendererContext ctx) {
+  final selectKey = node.stringOf('name');
+  return _SelectWidget(
+    items: node.nodesOf('items'),
+    stateKey: selectKey,
+    stateValue: ctx.stateHas(selectKey) ? ctx.stateValue(selectKey) : node.props['value'],
+    placeholder: node.props['placeholder'] is String ? node.stringOf('placeholder') : null,
+    size: node.stringOf('size', 'medium'),
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildButton(BuildContext context, ElementNode node, RendererContext ctx) {
+  final destructive = node.stringOf('type', 'normal') == 'destructive';
+  final buttonFontSize = switch (node.stringOf('size', 'medium')) {
+    'extra-small' => 12.0,
+    'small' => 13.0,
+    'large' => 17.0,
+    _ => 15.0,
+  };
+  final buttonPadding = switch (node.stringOf('size', 'medium')) {
+    'extra-small' => const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    'small' => const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    'large' => const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    _ => const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+  };
+  final buttonLabel = Text(node.stringOf('label'), style: TextStyle(fontSize: buttonFontSize));
+  final onPressed = ctx.isStreaming ? null : () => ctx.dispatch(node.props['action']);
+  final button = switch (node.stringOf('variant', 'primary')) {
+    'secondary' => OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null, side: destructive ? const BorderSide(color: Colors.red) : null),
+        child: buttonLabel,
+      ),
+    'tertiary' => TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.red : null),
+        child: buttonLabel,
+      ),
+    _ => ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(padding: buttonPadding, foregroundColor: destructive ? Colors.white : null, backgroundColor: destructive ? Colors.red : null),
+        child: buttonLabel,
+      ),
+  };
+  return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: button);
+}
+
+Widget _buildChips(BuildContext context, ElementNode node, RendererContext ctx) {
+  final chipsKey = node.stringOf('name');
+  return _ChipsWidget(
+    items: node.nodesOf('items'),
+    stateKey: chipsKey,
+    stateValue: ctx.stateHas(chipsKey) ? ctx.stateValue(chipsKey) : node.props['defaultValue'],
+    type: node.stringOf('type', 'multiple'),
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildTabs(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _TabsWidget(items: node.nodesOf('items'), buildNode: ctx.buildNode);
+}
+
+Widget _buildTabItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [for (final c in node.nodesOf('content')) ctx.buildNode(c)],
+  );
+}
+
+// ---- Layout (remaining) ----
+Widget _buildAccordion(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(children: [for (final c in node.nodesOf('items')) ctx.buildNode(c)]);
+}
+
+Widget _buildAccordionItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  return ExpansionTile(
+    title: Text(node.stringOf('trigger')),
+    children: [for (final c in node.nodesOf('content')) ctx.buildNode(c)],
+  );
+}
+
+Widget _buildSteps(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [for (var i = 0; i < node.nodesOf('items').length; i++) Row(crossAxisAlignment: CrossAxisAlignment.start, children: [CircleAvatar(radius: 12, child: Text('${i + 1}', style: const TextStyle(fontSize: 12))), const SizedBox(width: 8), Expanded(child: ctx.buildNode(node.nodesOf('items')[i]))])],
+  );
+}
+
+Widget _buildStepsItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)), Text(node.stringOf('details'))],
+  );
+}
+
+Widget _buildCarousel(BuildContext context, ElementNode node, RendererContext ctx) {
+  // children is a list of slides; each slide is a list of nodes
+  // (a bare node is leniently treated as a one-node slide).
+  final slides = <List<ElementNode>>[];
+  if (node.props['children'] is List) {
+    for (final slide in (node.props['children'] as List)) {
+      if (slide is List) {
+        slides.add([for (final n in slide) if (n is ElementNode) n]);
+      } else if (slide is ElementNode) {
+        slides.add([slide]);
+      }
+    }
+  }
+  if (slides.isEmpty) return const SizedBox.shrink();
+  final sunk = node.stringOf('variant', 'card') == 'sunk';
+  // PageView.builder: slide widgets are built on demand for the
+  // pages the viewport asks for, instead of all slides up front
+  // on every build (the previous PageView children list).
+  return SizedBox(
+    height: 220,
+    child: PageView.builder(
+      itemCount: slides.length,
+      itemBuilder: (context, index) {
+        final slide = slides[index];
+        return Container(
+          color: sunk ? Colors.grey.shade100 : null,
+          child: SingleChildScrollView(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final c in slide) ctx.buildNode(c)]),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildSeparator(BuildContext context, ElementNode node, RendererContext ctx) {
+  // decorative separators are hidden from assistive tech, as
+  // React's aria-hidden decorative separators.
+  final Widget divider = node.stringOf('orientation', 'horizontal') == 'vertical'
+      ? Center(child: Container(width: 1, height: 24, color: Colors.grey.shade300))
+      : const Divider(height: 24);
+  if (node.props['decorative'] == true) return ExcludeSemantics(child: divider);
+  return divider;
+}
+
+Widget _buildModal(BuildContext context, ElementNode node, RendererContext ctx) {
+  // A real overlay dialog: the node itself renders nothing
+  // inline; _ModalWidget shows the dialog once on first build
+  // and never re-opens it after close for this render. When
+  // the node leaves the tree its state is disposed, so a
+  // Modal that re-enters the tree opens again. open == false
+  // renders nothing and never opens the dialog.
+  return _ModalWidget(node: node, buildNode: ctx.buildNode, open: node.props['open'] != false, size: node.stringOf('size', 'md'));
+}
+
+// ---- Content (remaining) ----
+Widget _buildText(BuildContext context, ElementNode node, RendererContext ctx) {
+  // value-first is a documented deviation from schema order
+  // (see library.dart). variant number vs text is semantic
+  // only in this port: no distinct styling. subtextVariant is
+  // accepted but likewise has no distinct styling.
+  final textBold = node.component == 'BoldText';
+  final textSize = switch (node.stringOf('size', 'sm')) {
+    'xs' => 11.0,
+    'md' => 15.0,
+    'lg' => 18.0,
+    _ => 13.0,
+  };
+  final mainText = Text(node.stringOf('value'), style: TextStyle(fontSize: textSize, fontWeight: textBold ? FontWeight.bold : null));
+  if (node.props['subtext'] is! String) {
+    return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: mainText);
+  }
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [mainText, Text(node.stringOf('subtext'), style: TextStyle(fontSize: textSize - 1, color: Colors.grey))],
+    ),
+  );
+}
+
+Widget _buildTextCallout(BuildContext context, ElementNode node, RendererContext ctx) {
+  final textCalloutColor = switch (node.stringOf('variant', 'neutral')) {
+    'info' => Colors.blue,
+    'warning' => Colors.orange,
+    'success' => Colors.green,
+    'danger' => Colors.red,
+    _ => Colors.grey,
+  };
+  if (node.props['title'] is! String && node.props['description'] is! String) return const SizedBox.shrink();
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: textCalloutColor.withValues(alpha: 0.08),
+      border: Border(left: BorderSide(color: textCalloutColor, width: 4)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontWeight: FontWeight.bold)),
+        if (node.props['description'] is String) Text(node.stringOf('description')),
+      ],
+    ),
+  );
+}
+
+Widget _buildImageBlock(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 180, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: const Text('图片加载失败')))),
+      if (node.props['alt'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('alt'), style: const TextStyle(color: Colors.grey, fontSize: 13))),
+    ],
+  );
+}
+
+Widget _buildImageGallery(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Entries are {src, alt?, details?} maps; plain URL strings
+  // are leniently accepted as src-only entries.
+  final galleryEntries = <({String src, String? alt, String? details})>[];
+  if (node.props['images'] is List) {
+    for (final e in (node.props['images'] as List)) {
+      if (e is Map && e['src'] is String) {
+        galleryEntries.add((src: e['src'] as String, alt: e['alt'] is String ? e['alt'] as String : null, details: e['details'] is String ? e['details'] as String : null));
+      } else if (e is String) {
+        galleryEntries.add((src: e, alt: null, details: null));
+      }
+    }
+  }
+  return SizedBox(
+    height: 170,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        for (final entry in galleryEntries)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(entry.src, width: 200, height: 140, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 200, height: 140, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(entry.alt ?? '图片加载失败', style: const TextStyle(fontSize: 12)))),
+                ),
+                if (entry.details != null) SizedBox(width: 200, child: Text(entry.details!, style: const TextStyle(color: Colors.grey, fontSize: 12))),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+Widget _buildImageText(BuildContext context, ElementNode node, RendererContext ctx) {
+  final imageTextSize = node.props['imageSize'] is num ? (node.props['imageSize'] as num).toDouble() : 80.0;
+  final imageTextImage = ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: Image.network(node.stringOf('src'), width: imageTextSize, height: imageTextSize, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: imageTextSize, height: imageTextSize, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12)))),
+  );
+  final imageTextBody = Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+      if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+    ],
+  );
+  if (node.stringOf('layout', 'horizontal') == 'vertical') {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [imageTextImage, const SizedBox(height: 6), imageTextBody]);
+  }
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [imageTextImage, const SizedBox(width: 8), Expanded(child: imageTextBody)],
+  );
+}
+
+Widget _buildImageTextLarge(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(node.stringOf('src'), height: 200, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 120, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(node.props['alt'] is String ? node.stringOf('alt') : '图片加载失败', style: const TextStyle(fontSize: 12))))),
+      const SizedBox(height: 6),
+      Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+      if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+    ],
+  );
+}
+
+Widget _buildIconText(BuildContext context, ElementNode node, RendererContext ctx) {
+  // icon is an Icon node (React Icon ref) or a string name.
+  final iconTextData = _iconFromProp(node.props['icon']) ?? Icons.circle;
+  final iconSize = switch (node.stringOf('iconSize', 'm')) {
+    'xs' => 12.0,
+    's' => 16.0,
+    'l' => 24.0,
+    'xl' => 28.0,
+    'sm' => 16.0,
+    'md' => 20.0,
+    'lg' => 24.0,
+    _ => 20.0,
+  };
+  final iconVariant = node.stringOf('iconVariant', 'neutral');
+  final iconColor = switch (iconVariant) {
+    'info' => Colors.blue,
+    'success' => Colors.green,
+    'warning' => Colors.orange,
+    'danger' => Colors.red,
+    'neutral' => Colors.grey.shade700,
+    _ => Colors.grey.shade700,
+  };
+  final iconWidget = switch (iconVariant) {
+    'inverted' => Container(decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
+    'filled' => Container(decoration: BoxDecoration(color: iconColor, shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: Colors.white)),
+    'soft' => Container(decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.12), shape: BoxShape.circle), padding: const EdgeInsets.all(4), child: Icon(iconTextData, size: iconSize, color: iconColor)),
+    _ => Icon(iconTextData, size: iconSize, color: iconColor),
+  };
+  final iconTextBody = Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(node.stringOf('title'), style: TextStyle(fontWeight: node.props['bold'] == true ? FontWeight.bold : null)),
+      if (node.props['subtitle'] is String) Text(node.stringOf('subtitle'), style: const TextStyle(color: Colors.grey)),
+    ],
+  );
+  if (node.stringOf('layout', 'horizontal') == 'vertical') {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [iconWidget, const SizedBox(height: 6), iconTextBody]);
+  }
+  return Row(children: [iconWidget, const SizedBox(width: 6), Expanded(child: iconTextBody)]);
+}
+
+Widget _buildCodeBlock(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Plain text by decision (no highlighting); language is shown
+  // as a caption above the code.
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(node.stringOf('language'), style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(10),
+        color: Colors.grey.shade100,
+        child: Text(node.stringOf('codeString'), style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
+      ),
+    ],
+  );
+}
+
+Widget _buildInlineHeader(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(node.stringOf('heading'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        if (node.props['description'] is String) Text(node.stringOf('description'), style: const TextStyle(color: Colors.grey, fontSize: 13)),
+      ],
+    ),
+  );
+}
+
+Widget _buildIcon(BuildContext context, ElementNode node, RendererContext ctx) {
+  // category picks the fallback icon when the name does not
+  // resolve, as in React's categoryFallbacks.
+  return Icon(iconByName(node.stringOf('name'), node.props['category'] is String ? node.stringOf('category') : null));
+}
+
+// ---- Data (remaining) ----
+Widget _buildEditableTable(BuildContext context, ElementNode node, RendererContext ctx) {
+  // React shape: name/columns objects/data rows. Cell edits
+  // write immediately to form state under
+  // "<namespace>:<rowId>:<columnKey>" (namespace = name, or the
+  // statement id when name is empty); "Save Changes" assembles
+  // the full edited rows and writes them under `name` (skipped
+  // when name is empty, since there is no key to submit under).
+  final tableName = node.stringOf('name');
+  final namespace = tableName.isEmpty ? node.statementId : tableName;
+  final columns = ctx.mapList(node.props['columns']);
+  final dataRows = ctx.mapList(node.props['data']);
+  Object? cellValue(int r, int ci) {
+    final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${columns[ci]['key'] ?? 'default'}';
+    if (ctx.stateHas(key)) return ctx.stateValue(key);
+    final values = dataRows[r]['values'];
+    if (values is List && ci < values.length) return values[ci];
+    return null;
+  }
+
+  Widget cellEditor(BuildContext context, int r, int ci) {
+    final column = columns[ci];
+    final key = '$namespace:${dataRows[r]['id'] ?? '$r'}:${column['key'] ?? 'default'}';
+    final current = cellValue(r, ci);
+    final width = (column['width'] as num?)?.toDouble() ?? 120;
+    final type = '${column['type'] ?? 'text'}';
+    Widget field;
+    switch (type) {
+      case 'select':
+        final options = ctx.mapList(column['options']);
+        final currentValue = current;
+        field = DropdownButtonFormField<Object?>(
+          initialValue: options.any((o) => o['value'] == currentValue) ? currentValue : null,
+          decoration: const InputDecoration(border: InputBorder.none),
+          items: [for (final o in options) DropdownMenuItem<Object?>(value: o['value'], child: Text('${o['label'] ?? o['value'] ?? ''}'))],
+          onChanged: (v) => ctx.setValue(key, v),
+        );
+      case 'date-single':
+        final initial = current == null ? '' : '$current';
+        field = TextFormField(
+          initialValue: initial,
+          readOnly: true,
+          decoration: const InputDecoration(border: InputBorder.none),
+          onTap: () async {
+            final parsed = DateTime.tryParse(initial);
+            final picked = await showDatePicker(context: context, initialDate: parsed ?? DateTime.now(), firstDate: DateTime(1900), lastDate: DateTime(2100));
+            if (picked != null) {
+              ctx.setValue(key, '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
+            }
+          },
+        );
+      case 'number':
+        field = TextFormField(
+          initialValue: current == null ? '' : '$current',
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(border: InputBorder.none),
+          onChanged: (v) => ctx.setValue(key, int.tryParse(v) ?? double.tryParse(v) ?? v),
+        );
+      case 'url':
+        field = TextFormField(
+          initialValue: current == null ? '' : '$current',
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(border: InputBorder.none),
+          onChanged: (v) => ctx.setValue(key, v),
+        );
+      default:
+        field = TextFormField(
+          initialValue: current == null ? '' : '$current',
+          decoration: const InputDecoration(border: InputBorder.none),
+          onChanged: (v) => ctx.setValue(key, v),
+        );
+    }
+    return SizedBox(width: width, child: field);
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (columns.isNotEmpty)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: [for (final c in columns) DataColumn(label: Text('${c['header'] ?? ''}'))],
+            rows: [
+              for (var r = 0; r < dataRows.length; r++)
+                DataRow(cells: [for (var ci = 0; ci < columns.length; ci++) DataCell(Builder(builder: (context) => cellEditor(context, r, ci)))]),
+            ],
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: ctx.isStreaming
+                ? null
+                : () {
+                    if (tableName.isEmpty) return;
+                    final rows = [
+                      for (var r = 0; r < dataRows.length; r++)
+                        {
+                          'id': dataRows[r]['id'] ?? '$r',
+                          'values': [for (var ci = 0; ci < columns.length; ci++) cellValue(r, ci)],
+                        },
+                    ];
+                    ctx.setValue(tableName, rows);
+                  },
+            child: const Text('Save Changes'),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildAreaChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _ChartWidget(kind: _ChartKind.area, categories: ctx.strings(node.props['labels']), series: ctx.seriesNodes(node.props['series']), palette: ctx.theme.chartPalette, colors: ctx.chartColors, curve: node.stringOf('variant', 'natural'), xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null, height: node.props['height'] is num ? (node.props['height'] as num).toDouble() : null, density: node.stringOf('density', 'default'), condensed: node.props['condensed'] is bool ? node.props['condensed'] as bool : false, tickVariant: node.props['tickVariant'] is String ? node.stringOf('tickVariant') : null);
+}
+
+Widget _buildRadarChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return RadarChartWidget(categories: ctx.strings(node.props['labels']), series: ctx.seriesNodes(node.props['series']), palette: ctx.theme.chartPalette, colors: ctx.chartColors);
+}
+
+Widget _buildHorizontalBarChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _ChartWidget(kind: _ChartKind.hbar, categories: ctx.strings(node.props['labels']), series: ctx.seriesNodes(node.props['series']), palette: ctx.theme.chartPalette, colors: ctx.chartColors, stacked: node.stringOf('variant') == 'stacked', xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null, yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null);
+}
+
+Widget _buildRadialChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  final radial = ctx.sliceData(node);
+  return RadialChartWidget(labels: radial.labels, values: radial.values, palette: ctx.theme.chartPalette, colors: ctx.chartColors);
+}
+
+Widget _buildSingleStackedBarChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  final stacked = ctx.sliceData(node);
+  return SingleStackedBarWidget(labels: stacked.labels, values: stacked.values, palette: ctx.theme.chartPalette, colors: ctx.chartColors);
+}
+
+Widget _buildScatterChart(BuildContext context, ElementNode node, RendererContext ctx) {
+  return _LabeledChart(
+    xLabel: node.props['xLabel'] is String ? node.stringOf('xLabel') : null,
+    yLabel: node.props['yLabel'] is String ? node.stringOf('yLabel') : null,
+    child: ScatterChartWidget(series: ctx.datasetNodes(node.props['datasets']), palette: ctx.theme.chartPalette, colors: ctx.chartColors),
+  );
+}
+
+Widget _buildTagBlock(BuildContext context, ElementNode node, RendererContext ctx) {
+  final tagSize = switch (node.stringOf('size', 'md')) {
+    'sm' => 11.0,
+    'lg' => 15.0,
+    _ => 13.0,
+  };
+  return Wrap(spacing: 8, children: [for (final tag in ctx.strings(node.props['tags'])) Chip(label: Text(tag, style: TextStyle(fontSize: tagSize)))]);
+}
+
+Widget _buildTag(BuildContext context, ElementNode node, RendererContext ctx) {
+  // icon is an Icon node (React Icon ref) or a string name.
+  final tagColor = switch (node.stringOf('variant', 'neutral')) {
+    'info' => Colors.blue.shade100,
+    'success' => Colors.green.shade100,
+    'warning' => Colors.orange.shade100,
+    'danger' => Colors.red.shade100,
+    _ => Colors.grey.shade200,
+  };
+  final tagFontSize = switch (node.stringOf('size', 'md')) {
+    'sm' => 11.0,
+    'lg' => 15.0,
+    _ => 13.0,
+  };
+  return Chip(
+    label: Text(node.stringOf('text'), style: TextStyle(fontSize: tagFontSize)),
+    avatar: _iconFromProp(node.props['icon']) != null ? Icon(_iconFromProp(node.props['icon'])!, size: 18) : null,
+    backgroundColor: tagColor,
+  );
+}
+
+Widget _buildEntityList(BuildContext context, ElementNode node, RendererContext ctx) {
+  // rows are {left, right, rightVariant?} maps; rightVariant
+  // 'number' renders the trailing value in tabular figures, as
+  // in React. header/footer are row objects.
+  final entityDense = node.stringOf('size', 'default') == 'small';
+  Widget entityRow(Map map, {bool bold = false}) {
+    // rightVariant styles only the trailing value, as in React;
+    // the left title never gets tabular figures.
+    final isNumber = map['rightVariant'] == 'number';
+    final titleStyle = bold ? const TextStyle(fontWeight: FontWeight.bold) : null;
+    final trailingStyle = (bold || isNumber)
+        ? TextStyle(
+            fontWeight: bold ? FontWeight.bold : null,
+            fontFeatures: isNumber ? const [FontFeature.tabularFigures()] : null,
+          )
+        : null;
+    return ListTile(
+      dense: entityDense,
+      leading: const CircleAvatar(child: Icon(Icons.person, size: 18)),
+      title: Text(map['left'] is String ? map['left'] as String : '', style: titleStyle),
+      trailing: Text(map['right'] is String ? map['right'] as String : (map['right'] == null ? '' : '${map['right']}'), style: trailingStyle),
+    );
+  }
+
+  final entityChildren = <Widget>[];
+  if (node.props['header'] is Map) {
+    entityChildren.add(entityRow(node.props['header'] as Map, bold: true));
+    entityChildren.add(const Divider(height: 1));
+  }
+  if (node.props['rows'] is List) {
+    for (final row in (node.props['rows'] as List)) {
+      if (row is Map) entityChildren.add(entityRow(row));
+    }
+  }
+  if (node.props['footer'] is Map) {
+    entityChildren.add(const Divider(height: 1));
+    entityChildren.add(entityRow(node.props['footer'] as Map, bold: true));
+  }
+  return Column(children: entityChildren);
+}
+
+Widget _buildMetricIndicatorInline(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), ctx.trendWidget(node.props['trend'])]),
+  );
+}
+
+Widget _buildMetricIndicatorWithStrikethrough(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [if (node.props['previousValue'] is String) Padding(padding: const EdgeInsets.only(right: 8), child: Text(node.stringOf('previousValue'), style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey))), Text('${node.props['value']}', style: const TextStyle(fontWeight: FontWeight.bold)), if (node.props['subtext'] is String) Padding(padding: const EdgeInsets.only(left: 8), child: Text(node.stringOf('subtext'), style: const TextStyle(color: Colors.grey))), ctx.trendWidget(node.props['trend'])]),
+  );
+}
+
+// ---- Form (remaining) ----
+Widget _buildFormControl(BuildContext context, ElementNode node, RendererContext ctx) {
+  // The mapper does not enforce the input union: any node is
+  // accepted as `input`. Rules are validated live with
+  // validateRules, but only for touched fields: a field counts
+  // as touched when its name key exists in form state (i.e. the
+  // user changed it), so untouched fields never show an error.
+  // There is no submit gate; hosts can call validateRules
+  // directly for submit-time validation.
+  final inputNode = node.nodeOf('input');
+  final inputRules = inputNode?.props['rules'];
+  final requiredMark = inputRules is Map && inputRules['required'] == true ? ' *' : '';
+  String? validationError;
+  if (inputNode != null && inputRules is Map) {
+    final inputName = inputNode.stringOf('name');
+    if (inputName.isNotEmpty && ctx.stateHas(inputName)) {
+      validationError = validateRules(inputRules, ctx.stateValue(inputName));
+    }
+  }
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [Text('${node.stringOf('label')}$requiredMark', style: const TextStyle(fontWeight: FontWeight.bold)), if (inputNode != null) ctx.buildNode(inputNode), if (validationError != null) Text(validationError, style: const TextStyle(color: Colors.red, fontSize: 13)), if (node.props['hint'] is String) Text(node.stringOf('hint'), style: const TextStyle(color: Colors.grey, fontSize: 13))],
+    ),
+  );
+}
+
+Widget _buildLabel(BuildContext context, ElementNode node, RendererContext ctx) {
+  return Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Text(node.stringOf('text'), style: const TextStyle(fontWeight: FontWeight.bold)));
+}
+
+Widget _buildTextArea(BuildContext context, ElementNode node, RendererContext ctx) {
+  final areaKey = node.stringOf('name');
+  final initial = ctx.stateHas(areaKey) ? '${ctx.stateValue(areaKey)}' : (node.props['value'] == null ? '' : '${node.props['value']}');
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: TextFormField(
+      initialValue: initial,
+      maxLines: node.props['rows'] is num ? (node.props['rows'] as num).toInt() : 4,
+      enabled: !ctx.isStreaming,
+      decoration: InputDecoration(hintText: node.props['placeholder'] is String ? node.stringOf('placeholder') : null, border: const OutlineInputBorder()),
+      onChanged: (v) => ctx.setValue(areaKey, v),
+    ),
+  );
+}
+
+Widget _buildDatePicker(BuildContext context, ElementNode node, RendererContext ctx) {
+  // mode range uses showDateRangePicker and stores a
+  // {from, to} map of yyyy-MM-dd strings, mirroring React's
+  // DateRange {from, to} value shape.
+  final dateKey = node.stringOf('name');
+  if (node.stringOf('mode', 'single') == 'range') {
+    final raw = ctx.stateHas(dateKey) ? ctx.stateValue(dateKey) : node.props['value'];
+    return DateRangeField(
+      stateKey: dateKey,
+      value: raw is Map ? raw : null,
+      enabled: !ctx.isStreaming,
+      onChanged: (k, v) {
+        if (k != null) ctx.setValue(k, v);
+      },
+    );
+  }
+  final value = ctx.stateHas(dateKey) ? '${ctx.stateValue(dateKey)}' : (node.props['value'] is String ? node.stringOf('value') : null);
+  return DatePickerField(
+    stateKey: dateKey,
+    value: value,
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildSlider(BuildContext context, ElementNode node, RendererContext ctx) {
+  // Value is an array of numbers; single-thumb use takes the
+  // first element, and writes back a one-element array.
+  final sliderKey = node.stringOf('name');
+  final sliderNumbers = ctx.numbers(ctx.stateHas(sliderKey) ? ctx.stateValue(sliderKey) : (node.props['value'] ?? node.props['defaultValue']));
+  final sliderMin = node.props['min'] is num ? (node.props['min'] as num).toDouble() : 0.0;
+  final sliderMax = node.props['max'] is num ? (node.props['max'] as num).toDouble() : 100.0;
+  final sliderStep = node.props['step'] is num ? (node.props['step'] as num).toDouble() : null;
+  return SliderField(
+    label: node.props['label'] is String ? node.stringOf('label') : null,
+    stateKey: sliderKey,
+    value: sliderNumbers.isNotEmpty ? sliderNumbers.first : sliderMin,
+    min: sliderMin,
+    max: sliderMax,
+    divisions: node.stringOf('variant') == 'discrete' && sliderStep != null && sliderStep > 0 ? ((sliderMax - sliderMin) / sliderStep).round().clamp(1, 1000000) : null,
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, [v]);
+    },
+  );
+}
+
+Widget _buildCheckBoxGroup(BuildContext context, ElementNode node, RendererContext ctx) {
+  final checkKey = node.stringOf('name');
+  return MultiSelectGroupWidget(
+    items: node.nodesOf('items'),
+    stateKey: checkKey,
+    stateValue: ctx.stateHas(checkKey) ? ctx.stateValue(checkKey) : null,
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildSwitchGroup(BuildContext context, ElementNode node, RendererContext ctx) {
+  final switchKey = node.stringOf('name');
+  return SwitchGroupWidget(
+    items: node.nodesOf('items'),
+    stateKey: switchKey,
+    stateValue: ctx.stateHas(switchKey) ? ctx.stateValue(switchKey) : null,
+    variant: node.stringOf('variant', 'clear'),
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildRadioGroup(BuildContext context, ElementNode node, RendererContext ctx) {
+  final radioKey = node.stringOf('name');
+  return SingleSelectGroupWidget(
+    items: node.nodesOf('items'),
+    stateKey: radioKey,
+    stateValue: ctx.stateHas(radioKey) ? ctx.stateValue(radioKey) : node.props['defaultValue'],
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+Widget _buildOptionCards(BuildContext context, ElementNode node, RendererContext ctx) {
+  final cardsKey = node.stringOf('name');
+  return SingleSelectGroupWidget(
+    items: node.nodesOf('items'),
+    stateKey: cardsKey,
+    stateValue: ctx.stateHas(cardsKey) ? ctx.stateValue(cardsKey) : node.props['defaultValue'],
+    multi: node.stringOf('type', 'single') == 'multiple',
+    asCards: true,
+    buildNode: ctx.buildNode,
+    enabled: !ctx.isStreaming,
+    onChanged: (k, v) {
+      if (k != null) ctx.setValue(k, v);
+    },
+  );
+}
+
+// ---- Actions (remaining) ----
+Widget _buildButtons(BuildContext context, ElementNode node, RendererContext ctx) {
+  final buttons = [for (final c in node.nodesOf('buttons')) ctx.buildNode(c)];
+  if (node.stringOf('direction', 'row') == 'column') {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: buttons);
+  }
+  return Wrap(spacing: 8, children: buttons);
+}
+
+Widget _buildIconButton(BuildContext context, ElementNode node, RendererContext ctx) {
+  // icon is an Icon node (React Icon ref) or a string name;
+  // name is used as the tooltip.
+  final iconButtonSize = switch (node.stringOf('size', 'medium')) {
+    'extra-small' => 16.0,
+    'small' => 20.0,
+    'large' => 28.0,
+    _ => 24.0,
+  };
+  final iconButtonColor = switch (node.stringOf('variant', 'secondary')) {
+    'primary' => Colors.blue,
+    'tertiary' => null,
+    _ => Colors.grey.shade700,
+  };
+  return Tooltip(
+    message: node.stringOf('name'),
+    child: IconButton(
+      icon: Icon(_iconFromProp(node.props['icon']) ?? Icons.circle, size: iconButtonSize),
+      color: iconButtonColor,
+      style: node.stringOf('shape', 'circle') == 'square' ? IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4))) : null,
+      onPressed: ctx.isStreaming ? null : () => ctx.dispatch(node.props['action']),
+    ),
+  );
+}
+
+// ---- Dialogue (remaining) ----
+Widget _buildListBlock(BuildContext context, ElementNode node, RendererContext ctx) {
+  final listItems = node.nodesOf('items');
+  Widget listBody;
+  if (node.stringOf('variant', '') == 'number') {
+    // Numbered leading is a ListBlock-level concern, so this
+    // path renders items directly and bypasses custom ListItem
+    // registry builders for them.
+    listBody = Column(
+      children: [
+        for (var i = 0; i < listItems.length; i++) ctx.numberedListTile(listItems[i], i + 1),
+      ],
+    );
+  } else {
+    listBody = Column(children: [for (final c in listItems) ctx.buildNode(c)]);
+  }
+  if (node.stringOf('size', 'default') == 'small') {
+    listBody = ListTileTheme(data: const ListTileThemeData(dense: true), child: listBody);
+  }
+  return listBody;
+}
+
+Widget _buildListItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  final listImage = node.props['image'];
+  Widget? listLeading;
+  if (listImage is Map && listImage['src'] is String) {
+    final alt = listImage['alt'] is String ? listImage['alt'] as String : '图片加载失败';
+    listLeading = ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.network(listImage['src'] as String, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 48, height: 48, color: Colors.grey.shade200, alignment: Alignment.center, child: Text(alt, style: const TextStyle(fontSize: 10)))),
+    );
+  }
+  return ListTile(
+    leading: listLeading ?? const Text('•'),
+    title: Text(node.stringOf('title')),
+    subtitle: node.props['subtitle'] is String ? Text(node.stringOf('subtitle')) : null,
+    trailing: node.props['actionLabel'] is String
+        ? TextButton(onPressed: ctx.isStreaming ? null : () => ctx.dispatch(node.props['action']), child: Text(node.stringOf('actionLabel')))
+        : null,
+    onTap: node.props['action'] != null && node.props['actionLabel'] is! String ? () => ctx.dispatch(node.props['action']) : null,
+  );
+}
+
+// ---- Composite cards ----
+// Blocks share items/layout/responsive/action/gap (React 0.18.1
+// schemas); `responsive` switches the grid between container
+// breakpoints (see _cardGrid).
+Widget _buildCardBlock(BuildContext context, ElementNode node, RendererContext ctx) {
+  return ctx.cardBlock(node);
+}
+
+Widget _buildSnippetCardItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  final lhs = node.nodeOf('lhs');
+  final rhs = node.nodeOf('rhs');
+  return ctx.cardItemCard([if (lhs != null) ctx.buildNode(lhs), if (rhs != null) ctx.buildNode(rhs)]);
+}
+
+Widget _buildOverviewCardItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  final top = node.nodeOf('top');
+  final bottom = node.nodeOf('bottom');
+  return ctx.cardItemCard([if (top != null) ctx.buildNode(top), if (bottom != null) ctx.buildNode(bottom)]);
+}
+
+Widget _buildContextCardItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  return ctx.bgCardItem(
+    node,
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (node.props['title'] is String) Text(node.stringOf('title'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        if (node.nodeOf('title') != null) ctx.buildNode(node.nodeOf('title')!),
+        if (node.props['body'] is String) Padding(padding: const EdgeInsets.only(top: 4), child: Text(node.stringOf('body'))),
+      ],
+    ),
+  );
+}
+
+Widget _buildCompositeCardItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  final header = node.nodeOf('header');
+  final footer = node.props['footer'];
+  final price = footer is Map ? footer['price'] : null;
+  final button = footer is Map ? footer['button'] : null;
+  return ctx.cardItemCard([
+    if (header != null) ctx.buildNode(header),
+    for (final c in node.nodesOf('body')) ctx.buildNode(c),
+    if (price is ElementNode || button is ElementNode)
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [if (price is ElementNode) Expanded(child: ctx.buildNode(price)), if (button is ElementNode) ctx.buildNode(button)]),
+      ),
+  ]);
+}
+
+Widget _buildVisualCardItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  final body = node.nodeOf('body');
+  final tag = node.nodeOf('tag');
+  return ctx.bgCardItem(
+    node,
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [if (body != null) ctx.buildNode(body), if (tag != null) Padding(padding: const EdgeInsets.only(top: 6), child: ctx.buildNode(tag))],
+    ),
+  );
 }
 
 /// Axis labels for charts: yLabel above, xLabel below, both small and muted.
