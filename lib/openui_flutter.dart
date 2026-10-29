@@ -1,9 +1,9 @@
-export 'src/controller.dart';
 export 'src/charts/charts.dart';
-export 'src/extra_widgets.dart';
-export 'src/lang.dart';
-export 'src/library.dart';
-export 'src/primitives.dart';
-export 'src/registry.dart';
-export 'src/renderer.dart';
-export 'src/theme.dart';
+export 'src/core/lang.dart';
+export 'src/core/library.dart';
+export 'src/core/registry.dart';
+export 'src/runtime/controller.dart';
+export 'src/runtime/renderer.dart';
+export 'src/runtime/theme.dart';
+export 'src/widgets/extra_widgets.dart';
+export 'src/widgets/primitives.dart';

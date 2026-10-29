@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'lang.dart';
-import 'registry.dart';
+import '../core/lang.dart';
+import '../core/registry.dart';
 import 'theme.dart';
 
 class ActionEvent {

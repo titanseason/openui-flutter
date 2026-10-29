@@ -21,7 +21,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../lang.dart';
+import '../core/lang.dart';
 
 part 'axis.dart';
 part 'bar.dart';

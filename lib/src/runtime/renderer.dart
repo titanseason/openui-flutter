@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'controller.dart';
-import 'charts/charts.dart';
-import 'extra_widgets.dart';
-import 'lang.dart';
-import 'primitives.dart';
-import 'registry.dart';
+import '../charts/charts.dart';
+import '../widgets/extra_widgets.dart';
+import '../core/lang.dart';
+import '../widgets/primitives.dart';
+import '../core/registry.dart';
 import 'theme.dart';
 
 /// Resolves an icon prop that may be a string name (this port's

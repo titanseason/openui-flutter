@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Directory layout: `lib/src` is now grouped by layer —
+  `core/` (Lang, library, registry), `runtime/` (controller,
+  renderer, theme), `widgets/` (primitives, extra widgets),
+  `charts/` (unchanged). Public imports are unaffected: only
+  the package barrel changed.
 - **Breaking: the chat module is removed.** Deleted:
   `openUIChatLibrary()` and the chat `Card` variant, the
   chat-only components (`FollowUpBlock`, `FollowUpItem`,

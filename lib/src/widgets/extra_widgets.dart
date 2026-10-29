@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'lang.dart';
+import '../core/lang.dart';
 
 /// Icon name to Material icon. React names are lucide kebab-case
 /// (e.g. 'circle-check'); they are normalized to snake_case for the

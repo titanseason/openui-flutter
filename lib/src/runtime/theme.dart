@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'lang.dart';
+import '../core/lang.dart';
 
 /// The semantic colours a component needs. The first three are the
 /// core (accent, background, text on that background); the rest
