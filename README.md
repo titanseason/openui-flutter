@@ -9,15 +9,11 @@ element tree and renders it with Flutter widgets. Charts are fully
 self-drawn; the only third-party dependency is `flutter_markdown_plus`
 for Markdown.
 
-> Status: not published on pub.dev yet. The package name is
-> `openui_lang`, the version is 1.0.0, and the repository/homepage
-> URLs in `pubspec.yaml` are still `.invalid` placeholders. Until the
-> first publish, use a path dependency on a local checkout:
+> Status: published on pub.dev as [`openui_lang` 0.18.0](https://pub.dev/packages/openui_lang). Install with:
 >
 > ```yaml
 > dependencies:
->   openui_lang:
->     path: ../openui-flutter
+>   openui_lang: ^0.18.0
 > ```
 
 ## Quick start
