@@ -9,11 +9,11 @@ element tree and renders it with Flutter widgets. Charts are fully
 self-drawn; the only third-party dependency is `flutter_markdown_plus`
 for Markdown.
 
-> Status: published on pub.dev as [`openui_lang` 0.18.0](https://pub.dev/packages/openui_lang). Install with:
+> Status: published on pub.dev as [`openui_lang` 0.18.1](https://pub.dev/packages/openui_lang). Install with:
 >
 > ```yaml
 > dependencies:
->   openui_lang: ^0.18.0
+>   openui_lang: ^0.18.1
 > ```
 
 ## Quick start

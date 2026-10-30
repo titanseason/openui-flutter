@@ -7,11 +7,11 @@ OpenUI Lang 1.0 与 82 个通用 GenUI 组件的纯 Dart Flutter 渲染器，
 输入）解析成元素树，再用 Flutter widget 渲染。图表全部自绘；
 唯一的第三方依赖是负责 Markdown 的 `flutter_markdown_plus`。
 
-> 状态：已发布到 pub.dev：[`openui_lang` 0.18.0](https://pub.dev/packages/openui_lang)。安装：
+> 状态：已发布到 pub.dev：[`openui_lang` 0.18.1](https://pub.dev/packages/openui_lang)。安装：
 >
 > ```yaml
 > dependencies:
->   openui_lang: ^0.18.0
+>   openui_lang: ^0.18.1
 > ```
 
 ## 快速开始

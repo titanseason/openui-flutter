@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.18.1
+
+- READMEs now state the package as published on pub.dev with a
+  hosted dependency snippet, replacing the stale "not published
+  yet" status (which also wrongly claimed version 1.0.0 and
+  `.invalid` repository/homepage placeholders).
+
 ## 0.18.0
 
 - Package renamed to `openui_lang` (`pubspec` name, barrel
