@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.3
+
+- Statement↔variable cycles now report a `cycle` error instead of
+  failing silently (e.g. `a = $b` / `$b = a` / `root = a` used to
+  yield a null root with no error). Cycles reached only through a
+  default's restricted evaluation are covered too.
+  Variable↔variable cycles still evaluate to null without an error:
+  the ordering gate only reads earlier-declared variables, which is
+  the frozen-default semantics, not a missed cycle.
+
 ## 0.18.2
 
 - Aligned with OpenUI Lang 1.1 (`@openuidev/lang-core` 1.1.0,

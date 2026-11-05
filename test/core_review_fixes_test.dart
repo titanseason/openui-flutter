@@ -195,6 +195,60 @@ t = TextContent("v=" + ("abc" > "a"))
 
   });
 
+  group('Mixed statement-variable cycles', () {
+    test('statement-variable mixed cycle reports a cycle error', () {
+      final r = run('a = \$b\n\$b = a\nroot = a\n');
+      expect(r.root, isNull);
+      expect(r.errors.map((e) => e.code), contains('cycle'));
+      // Declaration order does not matter: the same cycle with
+      // the variable declared first.
+      final r2 = run('\$b = a\na = \$b\nroot = a\n');
+      expect(r2.root, isNull);
+      expect(r2.errors.map((e) => e.code), contains('cycle'));
+    });
+
+    test('longer mixed cycle through two statements', () {
+      final r = run('\$b = a\na = c\nc = \$b\nroot = a\n');
+      expect(r.root, isNull);
+      expect(r.errors.map((e) => e.code), contains('cycle'));
+    });
+
+    test('statement cycle reached only through a default', () {
+      // The statements form a cycle, but the root only reads the
+      // variable, so the live path never evaluates them: before
+      // this fix the cycle failed silently (root null, no error).
+      final r = run('\$x = a\na = b\nb = a\nroot = \$x\n');
+      expect(r.root, isNull);
+      expect(r.errors.map((e) => e.code), contains('cycle'));
+    });
+
+    test('element-default cycle through a variable reports a cycle error',
+        () {
+      // $a's live element default reads $b, whose default reads c,
+      // which reads $a: the re-entrant read of $a has no frozen
+      // value yet, so it closes a cycle instead of returning null.
+      final r = run('\$a = TextContent(\$b)\n\$b = c\nc = \$a\nroot = c\n');
+      expect(r.errors.map((e) => e.code), contains('cycle'));
+    });
+
+    test('forward read through a statement stays null, no error', () {
+      // $b's default inlines a, which reads the later $c as null;
+      // there is no cycle (nothing reads $b back), so no error.
+      // The live value of a is still 5.
+      final r = run('\$b = a\na = \$c\n\$c = 5\nroot = TextContent("" + a)');
+      expect(r.errors.map((e) => e.code), isNot(contains('cycle')));
+      expect(r.root!.stringOf('text'), '5');
+    });
+
+    test('direct self-read in a default stays null, no error', () {
+      // A default reads only earlier states; itself is not earlier,
+      // so a direct self-read is a null read, not a cycle.
+      final r = run('root = TextContent("hi")\n\$a = \$a\n');
+      expect(r.root, isNotNull);
+      expect(r.errors.map((e) => e.code), isNot(contains('cycle')));
+    });
+  });
+
   group('M4 member access', () {
     test('array pluck and length', () {
       final r = run(r'''root = Stack([t])

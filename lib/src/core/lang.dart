@@ -1325,7 +1325,16 @@ class _Evaluator {
     }
     if (stmt.expr is QueryExpr) return null;
     _recordEdge(name);
-    if (!_restrictedVisiting.add(name)) return null;
+    if (!_restrictedVisiting.add(name)) {
+      // A plain statement reached again on the same restricted
+      // path is a cycle. The live path reports it via _visiting,
+      // but a cycle reached only through a variable default never
+      // gets there (the default caches the null), so it would fail
+      // silently without this guard.
+      _err(OpenUIError('cycle',
+          'Statement $name reads itself, directly or through other statements, so it has no value.'));
+      return null;
+    }
     final v = evalExpr(stmt.expr, false);
     _restrictedVisiting.remove(name);
     return v;
@@ -1335,6 +1344,28 @@ class _Evaluator {
   /// one being computed, at their frozen defaults. Anything else
   /// (later states, undeclared names) reads as null.
   Object? _restrictedState(String name) {
+    if (name == _restrictedVar) {
+      // Reading the variable whose default is being computed. A
+      // direct self-read in its own default expression reads as
+      // null (a default reads only earlier states, and itself is
+      // not earlier). But a read reached through a plain statement
+      // closes a real cycle -- the default depends on a statement
+      // that depends on the default -- so it reports a cycle error.
+      if (_restrictedVisiting.isNotEmpty) {
+        _err(OpenUIError('cycle',
+            'Variable \$$name reads itself, directly or through other statements, so it has no value.'));
+      }
+      return null;
+    }
+    if (_visiting.contains('\$$name')) {
+      // Re-entrant read of a variable whose default is still being
+      // computed by an outer frame (only reachable when an element
+      // default is evaluated live): its frozen value does not exist
+      // yet, so the read closes a cycle instead of returning it.
+      _err(OpenUIError('cycle',
+          'Variable \$$name reads itself, directly or through other variables, so it has no value.'));
+      return null;
+    }
     final self = stateOrder.indexOf(_restrictedVar);
     final idx = stateOrder.indexOf(name);
     if (self >= 0 && idx >= 0 && idx < self) {
