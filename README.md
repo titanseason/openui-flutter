@@ -3,17 +3,17 @@
 [English](./README.md) | [中文](./README.zh-CN.md)
 
 A pure-Dart Flutter renderer for OpenUI Lang 1.1 and the 82-component
-general GenUI library, aligned with `@openuidev/react-ui` 0.18.1. It
+general GenUI library, aligned with `@openuidev/react-ui` 0.18.10. It
 parses Lang programs (including streamed, partial input) into an
 element tree and renders it with Flutter widgets. Charts are fully
 self-drawn; the only third-party dependency is `flutter_markdown_plus`
 for Markdown.
 
-> Status: published on pub.dev as [`openui_lang` 0.18.2](https://pub.dev/packages/openui_lang). Install with:
+> Status: published on pub.dev as [`openui_lang` 0.18.3](https://pub.dev/packages/openui_lang). Install with:
 >
 > ```yaml
 > dependencies:
->   openui_lang: ^0.18.2
+>   openui_lang: ^0.18.3
 > ```
 
 ## Quick start

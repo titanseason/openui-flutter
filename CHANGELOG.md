@@ -2,6 +2,20 @@
 
 ## 0.18.3
 
+- Aligned Tabs and Accordion with `@openuidev/react-ui` 0.18.10
+  (PRs #820, #862; component set now matches react-ui 0.18.10's
+  general library, cloud entry still excluded by decision):
+  - Tabs opens on its first tab when it mounts with every tab
+    already present (static response or a stream delivered in one
+    chunk), follows the tab the model is writing into only while
+    streaming, and no longer switches tabs when a Query resolves
+    inside another tab after streaming ends. A user tap overrides
+    the auto-follow.
+  - Accordion opens its first item when it mounts with every item
+    already present (previously nothing auto-opened), opens the
+    newest item as items stream in, and keeps that item open while
+    its value is still streaming in. A user tap overrides the
+    auto-open.
 - Statement↔variable cycles now report a `cycle` error instead of
   failing silently (e.g. `a = $b` / `$b = a` / `root = a` used to
   yield a null root with no error). Cycles reached only through a

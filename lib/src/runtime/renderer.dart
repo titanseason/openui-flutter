@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -1470,7 +1471,7 @@ Widget _buildChips(BuildContext context, ElementNode node, RendererContext ctx) 
 }
 
 Widget _buildTabs(BuildContext context, ElementNode node, RendererContext ctx) {
-  return _TabsWidget(items: node.nodesOf('items'), buildNode: ctx.buildNode);
+  return _TabsWidget(items: node.nodesOf('items'), buildNode: ctx.buildNode, isStreaming: ctx.isStreaming);
 }
 
 Widget _buildTabItem(BuildContext context, ElementNode node, RendererContext ctx) {
@@ -1482,14 +1483,97 @@ Widget _buildTabItem(BuildContext context, ElementNode node, RendererContext ctx
 
 // ---- Layout (remaining) ----
 Widget _buildAccordion(BuildContext context, ElementNode node, RendererContext ctx) {
-  return Column(children: [for (final c in node.nodesOf('items')) ctx.buildNode(c)]);
+  return _AccordionWidget(items: node.nodesOf('items'), buildNode: ctx.buildNode);
 }
 
 Widget _buildAccordionItem(BuildContext context, ElementNode node, RendererContext ctx) {
+  // A lone item outside an Accordion keeps the old independent-tile
+  // behaviour; items inside an Accordion are rendered by
+  // _AccordionWidget, which owns the shared open state.
+  return _accordionItemTile(node, ctx.buildNode);
+}
+
+/// One accordion panel, rendered the same way whether it stands alone
+/// or inside an [_AccordionWidget]: an ExpansionTile whose header is
+/// the trigger and whose children are the item's content nodes.
+Widget _accordionItemTile(
+  ElementNode item,
+  Widget Function(ElementNode) buildNode, {
+  Key? key,
+  bool initiallyExpanded = false,
+  ValueChanged<bool>? onExpansionChanged,
+}) {
   return ExpansionTile(
-    title: Text(node.stringOf('trigger')),
-    children: [for (final c in node.nodesOf('content')) ctx.buildNode(c)],
+    key: key,
+    initiallyExpanded: initiallyExpanded,
+    onExpansionChanged: onExpansionChanged,
+    title: Text(item.stringOf('trigger')),
+    children: [for (final c in item.nodesOf('content')) buildNode(c)],
   );
+}
+
+// ---------------- Accordion ----------------
+//
+// React 0.18.10 (PR #862, issue #861): the accordion owns one shared
+// open item instead of letting every panel expand independently.
+// The open item is tracked by index, not by value, so a panel stays
+// open while its value is still streaming in.
+
+class _AccordionWidget extends StatefulWidget {
+  const _AccordionWidget({required this.items, required this.buildNode});
+  final List<ElementNode> items;
+  final Widget Function(ElementNode) buildNode;
+  @override
+  State<_AccordionWidget> createState() => _AccordionWidgetState();
+}
+
+class _AccordionWidgetState extends State<_AccordionWidget> {
+  // Null until the first render pass, mirroring React's prevItemCount
+  // ref: a mount with every item present opens the first item, while
+  // a later pass with more items opens the newest one.
+  int? _prevItemCount;
+  var _autoOpenIndex = -1;
+  int? _openIndex;
+  var _userHasInteracted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Ref-style updates during render, mirroring React: the first
+    // pass opens the first item; a later pass with more items opens
+    // the newest one. The updates are idempotent for identical
+    // items, and a user tap disables auto-open from then on.
+    if (!_userHasInteracted) {
+      if (_prevItemCount == null) {
+        if (widget.items.isNotEmpty) _autoOpenIndex = 0;
+      } else if (widget.items.length > _prevItemCount!) {
+        _autoOpenIndex = widget.items.length - 1;
+      }
+      _openIndex = (_autoOpenIndex >= 0 && _autoOpenIndex < widget.items.length) ? _autoOpenIndex : null;
+    }
+    _prevItemCount = widget.items.length;
+    if (widget.items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        for (var i = 0; i < widget.items.length; i++)
+          // The key carries the open state, so a panel remounts (and
+          // takes the new initiallyExpanded) when its open state
+          // changes; the key is index-based, not value-based, so a
+          // panel whose value is still streaming in keeps its state.
+          _accordionItemTile(
+            widget.items[i],
+            widget.buildNode,
+            key: ValueKey('accordion-item-$i-${i == _openIndex ? 'open' : 'closed'}'),
+            initiallyExpanded: i == _openIndex,
+            onExpansionChanged: (expanded) {
+              setState(() {
+                _userHasInteracted = true;
+                _openIndex = expanded ? i : null;
+              });
+            },
+          ),
+      ],
+    );
+  }
 }
 
 Widget _buildSteps(BuildContext context, ElementNode node, RendererContext ctx) {
@@ -2637,30 +2721,124 @@ class _ChipsWidgetState extends State<_ChipsWidget> {
 }
 
 // ---------------- Tabs ----------------
+//
+// React 0.18.10 (PR #820, issue #819): while the model streams, the
+// tabs follow the tab whose content is growing; once streaming ends,
+// content growth (e.g. a Query resolving inside another tab) no
+// longer switches tabs, and a user tap overrides auto-follow.
+
+/// Stable serialization of a value, used to measure a tab's content
+/// size the way React measures JSON.stringify(content).length: the
+/// size grows as the model streams more content into the tab.
+String _serializeValue(Object? value) {
+  if (value == null) return 'null';
+  if (value is String) return jsonEncode(value);
+  if (value is num || value is bool) return value.toString();
+  if (value is ElementNode) {
+    final keys = value.props.keys.toList()..sort();
+    final props = keys.map((k) => '${jsonEncode(k)}:${_serializeValue(value.props[k])}').join(',');
+    return '{"component":${jsonEncode(value.component)},"props":{$props}}';
+  }
+  if (value is ActionValue) return 'Action(${jsonEncode(value.name)},[${value.args.map(_serializeValue).join(',')}])';
+  if (value is QueryFailed) return 'QueryFailed(${jsonEncode(value.tool)})';
+  if (value is QueryLoading) return 'QueryLoading';
+  if (value is List) return '[${value.map(_serializeValue).join(',')}]';
+  if (value is Map) {
+    final keys = value.keys.map((k) => k.toString()).toList()..sort();
+    return '{${keys.map((k) => '${jsonEncode(k)}:${_serializeValue(value[k])}').join(',')}}';
+  }
+  return jsonEncode(value.toString());
+}
 
 class _TabsWidget extends StatefulWidget {
-  const _TabsWidget({required this.items, required this.buildNode});
+  const _TabsWidget({required this.items, required this.buildNode, required this.isStreaming});
   final List<ElementNode> items;
   final Widget Function(ElementNode) buildNode;
+  final bool isStreaming;
   @override
   State<_TabsWidget> createState() => _TabsWidgetState();
 }
 
-class _TabsWidgetState extends State<_TabsWidget> with SingleTickerProviderStateMixin {
+class _TabsWidgetState extends State<_TabsWidget> with TickerProviderStateMixin {
+  // TickerProviderStateMixin (not the single-ticker variant): the
+  // TabController is recreated whenever the tab count changes, and a
+  // SingleTickerProviderStateMixin only ever hands out one ticker.
   TabController? _controller;
+  // Per-tab content sizes from the previous update pass. Seeded at
+  // mount (React's first effect pass), so a mount — or a stream that
+  // delivers every tab in one chunk — never follows, it just shows
+  // the first tab.
+  late Map<String, int> _prevContentSizes;
+  var _userHasInteracted = false;
+  var _applyingFollow = false;
+  var _lastSeenIndex = 0;
+
+  static String _tabKey(ElementNode item, int index) {
+    final value = item.stringOf('value');
+    return value.isNotEmpty ? value : 'index:$index';
+  }
+
+  static Map<String, int> _contentSizes(List<ElementNode> items) {
+    final sizes = <String, int>{};
+    for (var i = 0; i < items.length; i++) {
+      sizes[_tabKey(items[i], i)] = _serializeValue(items[i].nodesOf('content')).length;
+    }
+    return sizes;
+  }
+
   @override
   void initState() {
     super.initState();
+    _prevContentSizes = _contentSizes(widget.items);
     _controller = TabController(length: widget.items.length, vsync: this);
+    _controller!.addListener(_onControllerChanged);
+  }
+
+  /// A swipe in the TabBarView (or any index change this widget did
+  /// not make itself) is a user selection: stop auto-following after
+  /// it. Tab taps mark the interaction directly in TabBar.onTap.
+  void _onControllerChanged() {
+    final controller = _controller;
+    if (controller == null) return;
+    if (!_applyingFollow && controller.index != _lastSeenIndex) {
+      _userHasInteracted = true;
+      _lastSeenIndex = controller.index;
+    }
   }
 
   @override
   void didUpdateWidget(covariant _TabsWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Compare each tab's content size against the previous pass; the
+    // last tab whose content grew is the candidate. Follow it only
+    // while streaming, and never after the user picked a tab.
+    final sizes = _contentSizes(widget.items);
+    int? followIndex;
+    if (!_userHasInteracted && widget.isStreaming) {
+      for (var i = widget.items.length - 1; i >= 0; i--) {
+        final key = _tabKey(widget.items[i], i);
+        if ((sizes[key] ?? 0) > (_prevContentSizes[key] ?? 0)) {
+          followIndex = i;
+          break;
+        }
+      }
+    }
+    _prevContentSizes = sizes;
+    final prev = _controller?.index ?? 0;
     if (oldWidget.items.length != widget.items.length) {
-      final prev = _controller?.index ?? 0;
+      final initialIndex = followIndex ?? (prev < widget.items.length ? prev : 0);
       _controller?.dispose();
-      _controller = TabController(length: widget.items.length, vsync: this, initialIndex: prev < widget.items.length ? prev : 0);
+      _controller = TabController(length: widget.items.length, vsync: this, initialIndex: initialIndex);
+      _controller!.addListener(_onControllerChanged);
+      _lastSeenIndex = initialIndex;
+    } else if (followIndex != null && followIndex != _controller?.index) {
+      // A direct index set, not an animation: the follow is
+      // synchronous (and the listener guard above keeps it from
+      // looking like a user selection).
+      _applyingFollow = true;
+      _controller!.index = followIndex;
+      _applyingFollow = false;
+      _lastSeenIndex = followIndex;
     }
   }
 
@@ -2679,6 +2857,7 @@ class _TabsWidgetState extends State<_TabsWidget> with SingleTickerProviderState
         TabBar(
           controller: controller,
           isScrollable: true,
+          onTap: (_) => _userHasInteracted = true,
           tabs: [for (final item in widget.items) Tab(text: item.stringOf('trigger'))],
         ),
         SizedBox(
